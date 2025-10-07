@@ -1932,7 +1932,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8eebc82428dbf24bbbcd6b967ec751c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  publishFrequencyHz: 5
+  publishFrequencyHz: 50
   topicName: /robot_odom
   robotRigidbody: {fileID: 1151668263881996573}
   FrameId: /map

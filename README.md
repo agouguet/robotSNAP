@@ -1,2 +1,2 @@
-# robotSNAP
-Robot Social Navigation Assessment Platform
+# Robot Social Navigation Assessment Platform (RobotSNAP)
+

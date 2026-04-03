@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 74d485cc6db82285e91298e7731f5e4e, type: 3}
+  m_Name: ONNXModelConfig
+  m_EditorClassIdentifier: 
+  modelPath: Models/policy_lstm
+  useGPU: 1
+  useFallback: 1
+  numSamples: 5
+  updateRate: 10
+  mean: {x: 0, y: 0}
+  std: {x: 1, y: 1}
+  logPredictions: 0
+  visualizePredictions: 1

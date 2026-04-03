@@ -1,14 +1,23 @@
 using UnityEngine;
 using System.Collections.Generic;
-using TMPro;
+using System.IO;
+using RobotSNAP.Core;
+using RobotSNAP.Environment;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
-namespace ROS_DRL
+namespace RobotSNAP
 {
+    /// <summary>
+    /// Main supervisor that manages multiple environments, UI, and simulation settings.
+    /// Orchestrates environment creation, destruction, and configuration.
+    /// </summary>
     [ExecuteAlways]
     public class Supervisor : MonoBehaviour
     {
         private static Supervisor _instance;
-        public static Supervisor instance
+        public static Supervisor Instance
         {
             get
             {
@@ -20,108 +29,242 @@ namespace ROS_DRL
             }
         }
 
-        public ROSClockPublisher clock => ROSClockPublisher.instance;
-
-        [Header("Learning Settings")]
-        public bool inferenceMode = false;
-
+        [Header("Configuration")]
+        [SerializeField] private SimulationConfig defaultConfig;
+        [SerializeField] private GameObject environmentPrefab;
+        
         [Header("View Settings")]
+        [SerializeField] private GameObject soloView;
+        [SerializeField] private GameObject multipleView;
+        
+        [Header("References")]
+        [SerializeField] private Clock clock;
 
-        public GameObject SoloView;
-        public GameObject MultipleView;
-
-        [Header("Environment Settings")]
-        public int numberOfEnv = 10;
-        public GameObject envPrefab;
-        private List<GameObject> envInstances = new List<GameObject>();
-
-        private float fixedDeltaTime;
-        public float targetTimeScale = 2.0f;
-        public TMP_InputField inputEnvNumber;
-        public TMP_Dropdown inputLaserSample;
-        public TMP_InputField inputHumanNumberMin;
-        public TMP_InputField inputHumanNumberMax;
-        public int minValue = 10;
-        public int maxValue = 300;
-        public int selectedMin;
-        public int selectedMax;
-        public bool useTask = true;
-
-        private bool needTotalReset = false;
-
+        [Header("Config Persistence")]
+        [SerializeField] private bool autoSaveOnQuit = false;
+        [SerializeField] private string configSavePath = "Assets/Configs/SavedConfig.asset";
+        [SerializeField] private string configsFolderPath = "Assets/Configs/";
+        
+        [Header("Debug")]
+        [SerializeField] private bool logEnvironmentEvents = true;
+        
+        // State
+        private SimulationConfig _runtimeConfig; // Copie de travail utilisée en jeu
+        private List<GameObject> _environmentInstances = new List<GameObject>();
+        private List<GameManager> _gameManagers = new List<GameManager>();
+        private bool _isQuitting;
+        
+        // Properties
+        public SimulationConfig Config => Application.isPlaying ? _runtimeConfig : defaultConfig;
+        public bool InferenceMode { get; private set; }
+        public int EnvironmentCount => _environmentInstances.Count;
+        public IReadOnlyList<GameObject> Environments => _environmentInstances;
+        public IReadOnlyList<GameManager> GameManagers => _gameManagers;
+        public string ConfigsFolderPath => configsFolderPath;
+        
+        // Events for UI synchronization
+        public event System.Action OnConfigChanged;
+        public event System.Action OnConfigLoaded;
+        public event System.Action OnEnvironmentsChanged;
+        
+        #region Unity Lifecycle
+        
         private void Awake()
         {
             if (_instance != null && _instance != this)
             {
-                Destroy(this.gameObject);
+                Destroy(gameObject);
                 return;
             }
+            
             _instance = this;
-            fixedDeltaTime = 0.02f;
+            
+            // Create default config if needed
+            if (defaultConfig == null)
+            {
+                defaultConfig = ScriptableObject.CreateInstance<SimulationConfig>();
+                defaultConfig.name = "DefaultConfig";
+                Debug.Log("[Supervisor] Created default SimulationConfig");
+            }
+            
+            // Ensure configs folder exists
+            EnsureConfigsFolderExists();
+            
+            // Setup clock
+            if (clock == null)
+            {
+                clock = FindObjectOfType<Clock>();
+                if (clock == null)
+                {
+                    var clockGO = new GameObject("Clock");
+                    clock = clockGO.AddComponent<Clock>();
+                }
+            }
         }
-
+        
         private void Start()
         {
-            Time.timeScale = targetTimeScale;
-            Time.fixedDeltaTime = fixedDeltaTime / Time.timeScale;
-            SoloView.SetActive(inferenceMode);
-            MultipleView.SetActive(!inferenceMode);
-
-
-#if UNITY_EDITOR
-            if (!Application.isPlaying)
-                return;
-#endif
-            CreateEnvironments();
+            if (Application.isPlaying)
+            {
+                // Créer une copie de travail pour les modifications en jeu
+                _runtimeConfig = defaultConfig.Clone();
+                _runtimeConfig.name = "RuntimeConfig";
+                
+                // Appliquer la config
+                ApplyConfigToAll();
+                CreateAllEnvironments();
+            }
+            
+            // Notifier que la config est chargée
+            OnConfigLoaded?.Invoke();
+            
+            if (logEnvironmentEvents)
+            {
+                Debug.Log($"[Supervisor] Started with time scale: {(Config != null ? Config.timeScale : 1f)}");
+            }
         }
-
+        
         private void Update()
         {
-
+            if (Application.isPlaying)
+            {
+                HandleInput();
+            }
+        }
+        
+        private void OnDestroy()
+        {
+            if (!_isQuitting)
+            {
+                DestroyAllEnvironments();
+            }
+        }
+        
+        private void OnApplicationQuit()
+        {
+            _isQuitting = true;
+            
+            // Sauvegarde automatique si activée
+            if (autoSaveOnQuit && Application.isPlaying && _runtimeConfig != null)
+            {
+                SaveDefaultConfig();
+                Debug.Log("[Supervisor] Auto-saved config on quit");
+            }
+            
+            DestroyAllEnvironmentsImmediate();
+        }
+        
+        #endregion
+        
+        #region Config Path Management
+        
+        private void EnsureConfigsFolderExists()
+        {
 #if UNITY_EDITOR
-            if (!Application.isPlaying)
-                return;
+            string folderPath = configsFolderPath.TrimEnd('/');
+            if (!AssetDatabase.IsValidFolder(folderPath))
+            {
+                string[] folders = folderPath.Split('/');
+                string currentPath = "";
+                
+                foreach (string folder in folders)
+                {
+                    string newPath = string.IsNullOrEmpty(currentPath) ? folder : $"{currentPath}/{folder}";
+                    if (!AssetDatabase.IsValidFolder(newPath))
+                    {
+                        if (string.IsNullOrEmpty(currentPath))
+                            AssetDatabase.CreateFolder("Assets", folder);
+                        else
+                            AssetDatabase.CreateFolder(currentPath, folder);
+                    }
+                    currentPath = newPath;
+                }
+                
+                Debug.Log($"[Supervisor] Created configs folder: {configsFolderPath}");
+            }
 #endif
-            // Raccourcis clavier pour test rapide
-            if (Input.GetKeyDown(KeyCode.R))
-                ResetEnvironments();
-
-            if (Input.GetKeyDown(KeyCode.C))
-                CreateEnvironments();
-
-            if (Input.GetKeyDown(KeyCode.D))
-                DestroyEnvironments();
         }
-
-        // 🔧 Crée les environnements
-        public void CreateEnvironments()
+        
+        private string GetFullSavePath()
         {
-            if (envPrefab == null)
+            return configSavePath;
+        }
+        
+        private string GetFullSavePathWithName(string configName)
+        {
+            string fileName = configName.EndsWith(".asset") ? configName : $"{configName}.asset";
+            return Path.Combine(configsFolderPath, fileName).Replace('\\', '/');
+        }
+        
+        #endregion
+        
+        #region Environment Management
+        
+        /// <summary>
+        /// Create all environments
+        /// </summary>
+        public void CreateAllEnvironments()
+        {
+            if (environmentPrefab == null)
             {
-                Debug.LogError("envPrefab is not assigned.");
+                Debug.LogError("[Supervisor] Environment prefab not assigned!");
                 return;
             }
-
-            DestroyEnvironments(); // Évite de dupliquer si on en a déjà
-
-            for (int i = 0; i < numberOfEnv; i++)
+            
+            SimulationConfig configToUse = Application.isPlaying && _runtimeConfig != null ? _runtimeConfig : defaultConfig;
+            
+            if (configToUse == null)
             {
-                GameObject instance = Instantiate(envPrefab, GetEnvPosition(i), Quaternion.identity, this.transform);
-                instance.name = $"Env_{i}";
-                instance.GetComponent<EnvController>().env_id = i;
-                if (numberOfEnv > 1)
-                    instance.GetComponent<EnvController>().use_prefix = true;
-                envInstances.Add(instance);
+                Debug.LogError("[Supervisor] Config is null!");
+                return;
             }
-
-            Debug.Log($"✅ {numberOfEnv} environments created.");
+            
+            DestroyAllEnvironments();
+            
+            for (int i = 0; i < configToUse.environmentCount; i++)
+            {
+                CreateEnvironment(i, configToUse);
+            }
+            
+            OnEnvironmentsChanged?.Invoke();
+            
+            if (logEnvironmentEvents)
+            {
+                Debug.Log($"[Supervisor] Created {configToUse.environmentCount} environments");
+            }
         }
-
-        // 🧹 Détruit tous les environnements
-        public void DestroyEnvironments()
+        
+        private void CreateEnvironment(int index, SimulationConfig configToUse)
         {
-#if UNITY_EDITOR
-            foreach (var env in envInstances)
+            Vector3 position = new Vector3(index * configToUse.environmentSpacing, 0, 0);
+            GameObject instance = Instantiate(environmentPrefab, position, Quaternion.identity, transform);
+            instance.name = $"Environment_{index}";
+            
+            var gameManager = instance.GetComponent<GameManager>();
+            if (gameManager != null)
+            {
+                gameManager.SetEnvironmentId(index);
+                gameManager.ApplyConfig(configToUse);
+                
+                if (configToUse.environmentCount > 1)
+                {
+                    gameManager.SetROSPrefix($"env_{index}");
+                }
+                
+                _gameManagers.Add(gameManager);
+            }
+            
+            _environmentInstances.Add(instance);
+        }
+        
+        /// <summary>
+        /// Destroy all environments
+        /// </summary>
+        public void DestroyAllEnvironments()
+        {
+            if (_environmentInstances.Count == 0) return;
+            
+            foreach (var env in _environmentInstances)
             {
                 if (env != null)
                 {
@@ -131,172 +274,403 @@ namespace ROS_DRL
                         DestroyImmediate(env);
                 }
             }
-#else
-            foreach (var env in envInstances)
+            
+            _environmentInstances.Clear();
+            _gameManagers.Clear();
+            
+            OnEnvironmentsChanged?.Invoke();
+            
+            if (logEnvironmentEvents)
             {
-                if (env != null) Destroy(env);
+                Debug.Log("[Supervisor] Destroyed all environments");
             }
+        }
+        
+        private void DestroyAllEnvironmentsImmediate()
+        {
+            foreach (var env in _environmentInstances)
+            {
+                if (env != null)
+                {
+                    DestroyImmediate(env);
+                }
+            }
+            
+            _environmentInstances.Clear();
+            _gameManagers.Clear();
+        }
+        
+        /// <summary>
+        /// Reset all environments
+        /// </summary>
+        public void ResetAllEnvironments()
+        {
+            foreach (var gameManager in _gameManagers)
+            {
+                if (gameManager != null)
+                {
+                    gameManager.EditorReset();
+                }
+            }
+            
+            if (logEnvironmentEvents)
+            {
+                Debug.Log("[Supervisor] Reset all environments");
+            }
+        }
+        
+        /// <summary>
+        /// Rebuild all environments (after config changes)
+        /// </summary>
+        public void RebuildAllEnvironments()
+        {
+            CreateAllEnvironments();
+        }
+        
+        #endregion
+        
+        #region Configuration
+        
+        /// <summary>
+        /// Update configuration and apply to all environments
+        /// </summary>
+        public void UpdateConfig(SimulationConfig newConfig)
+        {
+            if (newConfig == null) return;
+            
+            SimulationConfig targetConfig = Application.isPlaying && _runtimeConfig != null ? _runtimeConfig : defaultConfig;
+            if (targetConfig == null) return;
+            
+            newConfig.CopyTo(targetConfig);
+            ApplyConfigToAll();
+            
+            // Notifier l'UI du changement
+            OnConfigChanged?.Invoke();
+        }
+        
+        /// <summary>
+        /// Apply current config to all existing environments
+        /// </summary>
+        public void ApplyConfigToAll()
+        {
+            SimulationConfig configToApply = Application.isPlaying && _runtimeConfig != null ? _runtimeConfig : defaultConfig;
+            if (configToApply == null) return;
+            
+            // Apply global settings
+            configToApply.ApplyTimeSettings();
+            
+            // Apply to each GameManager
+            foreach (var gameManager in _gameManagers)
+            {
+                if (gameManager != null)
+                {
+                    gameManager.ApplyConfig(configToApply);
+                }
+            }
+            
+            if (logEnvironmentEvents)
+            {
+                Debug.Log($"[Supervisor] Applied config to {_gameManagers.Count} environments");
+            }
+        }
+        
+        #endregion
+        
+        #region Save/Load Config
+        
+        /// <summary>
+        /// Sauvegarde la config actuelle comme config par défaut
+        /// </summary>
+        public void SaveDefaultConfig()
+        {
+            if (defaultConfig == null)
+            {
+                Debug.LogError("[Supervisor] No default config to save!");
+                return;
+            }
+            
+            SimulationConfig source = Application.isPlaying && _runtimeConfig != null ? _runtimeConfig : defaultConfig;
+            if (source == null) return;
+            
+            source.CopyTo(defaultConfig);
+            
+#if UNITY_EDITOR
+            EditorUtility.SetDirty(defaultConfig);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[Supervisor] Default config saved to: {AssetDatabase.GetAssetPath(defaultConfig)}");
 #endif
-            envInstances.Clear();
-
-            Debug.Log("🗑 All environments destroyed.");
         }
-
-        // 🔄 Reset
-        public void ResetEnvironments()
+        
+        /// <summary>
+        /// Sauvegarde la configuration actuelle dans le chemin par défaut
+        /// </summary>
+        public void SaveCurrentConfig()
         {
-            if (needTotalReset)
+            SaveDefaultConfig();
+        }
+        
+        /// <summary>
+        /// Sauvegarde la configuration dans un fichier JSON
+        /// </summary>
+        public void SaveConfigToJson(string fileName)
+        {
+            string fullPath = Path.Combine(Application.streamingAssetsPath, configsFolderPath, fileName);
+            if (!fullPath.EndsWith(".json")) fullPath += ".json";
+            
+            string directory = Path.GetDirectoryName(fullPath);
+            if (!Directory.Exists(directory))
             {
-                needTotalReset = false;
-                DestroyEnvironments();
-                CreateEnvironments();
+                Directory.CreateDirectory(directory);
             }
-            else
-            { 
-                foreach (var env in envInstances)
+            
+            SimulationConfig source = Application.isPlaying && _runtimeConfig != null ? _runtimeConfig : defaultConfig;
+            source?.SaveToJson(fullPath);
+            
+            Debug.Log($"[Supervisor] Config saved to JSON: {fullPath}");
+        }
+        
+        /// <summary>
+        /// Charge une configuration depuis un fichier JSON
+        /// </summary>
+        public bool LoadConfigFromJson(string fileName)
+        {
+            string fullPath = Path.Combine(Application.streamingAssetsPath, configsFolderPath, fileName);
+            if (!fullPath.EndsWith(".json")) fullPath += ".json";
+            
+            if (!File.Exists(fullPath))
+            {
+                Debug.LogError($"[Supervisor] Config not found: {fullPath}");
+                return false;
+            }
+            
+            SimulationConfig loaded = SimulationConfig.LoadFromJson(fullPath);
+            if (loaded != null)
+            {
+                UpdateConfig(loaded);
+                OnConfigLoaded?.Invoke();
+                return true;
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// Retourne la liste des configs JSON disponibles
+        /// </summary>
+        public List<string> GetAvailableConfigs()
+        {
+            List<string> configs = new List<string>();
+            string fullPath = Path.Combine(Application.streamingAssetsPath, configsFolderPath);
+            
+            if (Directory.Exists(fullPath))
+            {
+                string[] files = Directory.GetFiles(fullPath, "*.json");
+                foreach (string file in files)
                 {
-                    if (env == null) continue;
-                    var datasetEnv = env.GetComponent<EnvController>();
-                    if (datasetEnv != null)
-                    {
-                        datasetEnv.EditorResetScene();
-                    }
+                    configs.Add(Path.GetFileNameWithoutExtension(file));
                 }
             }
+            
+            return configs;
         }
-
-        // Positionne les environnements automatiquement
-        private Vector3 GetEnvPosition(int index)
+        
+        #endregion
+        
+        #region UI Callbacks
+        
+        public void OnEnvironmentCountChanged(int newCount)
         {
-            float spacing = 100f; // Distance entre chaque environnement
-            return new Vector3(index * spacing, 0, 0);
-        }
-
-
-        public void SetEnvNumber()
-        {
-            bool hasValue = int.TryParse(inputEnvNumber.text, out int value);
-
-            if (hasValue)
+            SimulationConfig target = Application.isPlaying && _runtimeConfig != null ? _runtimeConfig : defaultConfig;
+            if (target != null)
             {
-                numberOfEnv = value;
-                needTotalReset = true;
-            }
-            else
-            {
-                Debug.LogWarning("Valeurs invalides (pas des entiers)");
+                target.environmentCount = Mathf.Max(1, newCount);
+                CreateAllEnvironments();
             }
         }
-
-        public void SetHumanNumberForAll()
+        
+        public void OnHumanNumbersChanged(int min, int max)
         {
-            bool minParsed = int.TryParse(inputHumanNumberMin.text, out int parsedMin);
-            bool maxParsed = int.TryParse(inputHumanNumberMax.text, out int parsedMax);
-
-            if (minParsed && maxParsed)
+            SimulationConfig target = Application.isPlaying && _runtimeConfig != null ? _runtimeConfig : defaultConfig;
+            if (target != null)
             {
-                if (parsedMin <= parsedMax)
+                target.minHumans = min;
+                target.maxHumans = max;
+                ApplyConfigToAll();
+            }
+        }
+        
+        public void OnInferenceModeChanged(bool isOn)
+        {
+            InferenceMode = isOn;
+            soloView?.SetActive(InferenceMode);
+            multipleView?.SetActive(!InferenceMode);
+            
+            SimulationConfig target = Application.isPlaying && _runtimeConfig != null ? _runtimeConfig : defaultConfig;
+            if (target != null)
+            {
+                target.inferenceMode = isOn;
+                
+                if (InferenceMode && target.environmentCount != 1)
                 {
-                    bool reset = false;
-                    foreach (var env in envInstances)
-                    {
-                        if (env == null) continue;
-                        var datasetEnv = env.GetComponent<EnvController>();
-                        if (datasetEnv != null)
-                        {
-                            datasetEnv.minNumberOfHumans = parsedMin;
-                            datasetEnv.maxNumberOfHumans = parsedMax;
-                            reset = true;
-                        }
-                    }
-                    // if(reset)
-                    //     ResetEnvironments();
-                }
-                else
-                {
-                    Debug.LogWarning("Min doit être ≤ Max");
+                    target.environmentCount = 1;
+                    CreateAllEnvironments();
                 }
             }
-            else
+            
+            if (logEnvironmentEvents)
             {
-                Debug.LogWarning("Valeurs invalides (pas des entiers)");
+                Debug.Log($"[Supervisor] Inference mode changed to {InferenceMode}");
             }
         }
-
-        public void SetFolderPathForAll(string newFolderPath)
+        
+        public void OnFolderPathChanged(string folderPath)
         {
-            bool reset = false;
-            foreach (var env in envInstances)
+            SimulationConfig target = Application.isPlaying && _runtimeConfig != null ? _runtimeConfig : defaultConfig;
+            if (target != null)
             {
-                if (env == null) continue;
-
-                // Cherche le composant dans l'env instancié
-                var datasetEnv = env.GetComponent<EnvCreatorFromDataset>();
-                if (datasetEnv != null)
-                {
-                    datasetEnv.folderPath = newFolderPath;
-                    reset = true;
-                    Debug.Log($"Set FolderPath for {env.name} to {newFolderPath}");
-                }
-                else
-                {
-                    Debug.LogWarning($"EnvCreatorFromDataset not found on {env.name}");
-                }
+                target.datasetPath = folderPath;
+                ApplyConfigToAll();
             }
-            // if(reset)
-            //     ResetEnvironments();
+            
+            if (logEnvironmentEvents)
+            {
+                Debug.Log($"[Supervisor] Folder path changed to {folderPath}");
+            }
         }
-
-        public void SetLaserSampleForAll()
+        
+        #endregion
+        
+        #region Input Handling
+        
+        private void HandleInput()
         {
-            string selectedText = inputLaserSample.options[inputLaserSample.value].text;
-            bool parsed = int.TryParse(selectedText, out int laserSample);
-            bool reset = false;
-
-            foreach (var env in envInstances)
+            if (Input.GetKeyDown(KeyCode.R))
             {
-                if (env == null) continue;
-
-                // Cherche le composant dans l'env instancié
-                var datasetEnv = env.GetComponent<EnvController>();
-                if (datasetEnv != null)
-                {
-                    datasetEnv.SetLaserSample(laserSample);
-                    reset = true;
-                }
+                ResetAllEnvironments();
             }
-            // if(reset)
-            //     ResetEnvironments();
+            
+            if (Input.GetKeyDown(KeyCode.C))
+            {
+                CreateAllEnvironments();
+            }
+            
+            if (Input.GetKeyDown(KeyCode.Delete))
+            {
+                DestroyAllEnvironments();
+            }
+            
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                clock?.TogglePause();
+            }
         }
-
-        public void SetUseTask(bool isOn)
+        
+        #endregion
+        
+        #region Public API
+        
+        public GameManager GetGameManager(int index)
         {
-            useTask = !useTask;
-            bool reset = false;
-            foreach (var env in envInstances)
-            {
-                if (env == null) continue;
-                var datasetEnv = env.GetComponent<EnvController>();
-                if (datasetEnv != null)
-                {
-                    datasetEnv.useTask = useTask;
-                    reset = true;
-                }
-            }
-            // if(reset)
-            //     ResetEnvironments();
+            if (index < 0 || index >= _gameManagers.Count)
+                return null;
+            
+            return _gameManagers[index];
         }
-
-        public void SetInferenceMode(bool isOn)
+        
+        public GameObject GetEnvironment(int index)
         {
-            inferenceMode = !inferenceMode;
-            SoloView.SetActive(inferenceMode);
-            MultipleView.SetActive(!inferenceMode);
-            if (inferenceMode)
+            if (index < 0 || index >= _environmentInstances.Count)
+                return null;
+            
+            return _environmentInstances[index];
+        }
+        
+        public List<GameManager> GetAllGameManagers()
+        {
+            return new List<GameManager>(_gameManagers);
+        }
+        
+        #endregion
+        
+        #region Editor Utilities
+        
+        [ContextMenu("Create Environments")]
+        private void EditorCreateEnvironments() => CreateAllEnvironments();
+        
+        [ContextMenu("Destroy Environments")]
+        private void EditorDestroyEnvironments() => DestroyAllEnvironments();
+        
+        [ContextMenu("Reset Environments")]
+        private void EditorResetEnvironments() => ResetAllEnvironments();
+        
+        [ContextMenu("Apply Config")]
+        private void EditorApplyConfig() => ApplyConfigToAll();
+        
+        [ContextMenu("Save Default Config")]
+        private void EditorSaveDefaultConfig() => SaveDefaultConfig();
+        
+        [ContextMenu("Save Config to JSON")]
+        private void EditorSaveConfigToJson()
+        {
+            string fileName = $"config_{System.DateTime.Now:yyyyMMdd_HHmmss}";
+            SaveConfigToJson(fileName);
+        }
+        
+        [ContextMenu("Reset to Default Config")]
+        private void EditorResetConfig()
+        {
+            if (defaultConfig != null)
             {
-                inputEnvNumber.text = 1.ToString();
-                SetEnvNumber();
+                var newDefault = ScriptableObject.CreateInstance<SimulationConfig>();
+                newDefault.CopyTo(defaultConfig);
+                
+                if (Application.isPlaying && _runtimeConfig != null)
+                {
+                    newDefault.CopyTo(_runtimeConfig);
+                    ApplyConfigToAll();
+                }
+                
+#if UNITY_EDITOR
+                EditorUtility.SetDirty(defaultConfig);
+                AssetDatabase.SaveAssets();
+#endif
+                
+                OnConfigChanged?.Invoke();
+                Debug.Log("[Supervisor] Config reset to default");
             }
         }
+        
+        [ContextMenu("Log Configuration")]
+        private void EditorLogConfiguration()
+        {
+            SimulationConfig configToLog = Config;
+            
+            if (configToLog == null)
+            {
+                Debug.Log("[Supervisor] Config is null!");
+                return;
+            }
+            
+            Debug.Log($"[Supervisor] Configuration:\n" +
+                      $"  Environments: {configToLog.environmentCount}\n" +
+                      $"  Spacing: {configToLog.environmentSpacing}\n" +
+                      $"  Time Scale: {configToLog.timeScale}\n" +
+                      $"  Inference Mode: {InferenceMode}\n" +
+                      $"  Min Humans: {configToLog.minHumans}\n" +
+                      $"  Max Humans: {configToLog.maxHumans}\n" +
+                      $"  Min Agent Distance: {configToLog.minAgentDistance}\n" +
+                      $"  Dataset Path: {configToLog.datasetPath}\n" +
+                      $"  Active Environments: {_environmentInstances.Count}\n" +
+                      $"  Mode: {(Application.isPlaying ? "Runtime (copy)" : "Editor")}");
+        }
+        
+        [ContextMenu("Log Available Configs")]
+        private void EditorLogAvailableConfigs()
+        {
+            var configs = GetAvailableConfigs();
+            Debug.Log($"[Supervisor] Available configs ({configs.Count}):\n  {(configs.Count > 0 ? string.Join("\n  ", configs) : "none")}");
+        }
+        
+        #endregion
     }
 }

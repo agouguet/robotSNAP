@@ -1259,7 +1259,6 @@ GameObject:
   m_Component:
   - component: {fileID: 4883921903955617024}
   - component: {fileID: 516582703473931064}
-  - component: {fileID: 3620236361729115219}
   m_Layer: 8
   m_Name: base_footprint
   m_TagString: Untagged
@@ -1296,28 +1295,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   IsBaseLink: 0
---- !u!114 &3620236361729115219
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4147719699726587182}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 80c4597ee7b56704db72850b414e48aa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_GlobalFrameIds:
-  - map
-  - odom
-  tf_elements:
-  - {fileID: 7438760112835347714}
-  - {fileID: 8315162350470796948}
-  - {fileID: 1464175444843219932}
-  - {fileID: 3179440118466587603}
-  m_RootGameObject: {fileID: 4147719699726587182}
-  m_PublishRateHz: 20
 --- !u!1 &4188709530651322526
 GameObject:
   m_ObjectHideFlags: 0
@@ -1843,6 +1820,8 @@ GameObject:
   - component: {fileID: 8938137609293910173}
   - component: {fileID: 7406557896309216385}
   - component: {fileID: 4511825116760562859}
+  - component: {fileID: 3745777198318388564}
+  - component: {fileID: 4589272983355140419}
   m_Layer: 8
   m_Name: Freight
   m_TagString: robot
@@ -1894,11 +1873,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77c94dcac174910baa687ec86910c234, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  CommandVelocityTopic: /cmd_vel
-  prefix: 
-  maxTimeDeltaSec: 0.1
+  maxLinearSpeed: 1
+  maxAngularSpeed: 2
+  acceleration: 2
+  deceleration: 3
   radius: 0.25
-  base_link: {fileID: 7438760112835347714}
+  baseLink: {fileID: 7438760112835347714}
   detector: {fileID: 4783570847377917628}
 --- !u!114 &7406557896309216385
 MonoBehaviour:
@@ -1912,14 +1892,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9979b5fcbd7bf415e869fca0c59e8836, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  checkForPrefix: 1
-  prefix: 
+  autoDetectPrefix: 1
+  customPrefix: 
   topicName: /robot_pose
   publishFrequencyHz: 5
   messageType: 2
   sourceTransform: {fileID: 2134897379475526177}
+  useLocalPosition: 0
   frameId: /map
-  isLocal: 1
 --- !u!114 &4511825116760562859
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1932,10 +1912,64 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8eebc82428dbf24bbbcd6b967ec751c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  publishFrequencyHz: 50
+  autoDetectPrefix: 1
+  customPrefix: 
   topicName: /robot_odom
+  publishFrequencyHz: 50
   robotRigidbody: {fileID: 1151668263881996573}
-  FrameId: /map
+  robotTransform: {fileID: 0}
+  frameId: odom
+  childFrameId: base_link
+  publishCovariance: 1
+  positionCovariance: 0.01
+  orientationCovariance: 0.01
+  linearVelocityCovariance: 0.01
+  angularVelocityCovariance: 0.01
+--- !u!114 &3745777198318388564
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7195339433518795282}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2352c6bef25d002490fee4f199e37da, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  autoDetectPrefix: 1
+  customPrefix: 
+  commandVelocityTopic: /cmd_vel
+  linearSpeedMultiplier: 1
+  angularSpeedMultiplier: 1
+  logCommands: 0
+--- !u!114 &4589272983355140419
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7195339433518795282}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 73d83e37eac28d8b49b865b267b5eec7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  controlMode: 0
+  toggleModeKey: 109
+  maxLinearSpeed: 2
+  maxAngularSpeed: 2
+  acceleration: 2
+  deceleration: 3
+  forwardKey: 119
+  backwardKey: 115
+  leftKey: 97
+  rightKey: 100
+  stopKey: 32
+  autoDetectPrefix: 1
+  customPrefix: 
+  cmdVelTopic: /cmd_vel
+  showDebugInfo: 0
 --- !u!1 &7335196152177511065
 GameObject:
   m_ObjectHideFlags: 0
@@ -1991,7 +2025,6 @@ GameObject:
   m_Component:
   - component: {fileID: 2134897379475526177}
   - component: {fileID: 5064563559504109863}
-  - component: {fileID: 3207654228077264701}
   - component: {fileID: 1151668263881996573}
   - component: {fileID: 4617265492558956554}
   - component: {fileID: 2293886963538801853}
@@ -2038,21 +2071,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   IsBaseLink: 1
---- !u!114 &3207654228077264701
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7438760112835347714}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7c6124a519ed7c085a5283c2c101cac1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  tfTopic: /tf
-  prefix: 
-  publishRateHz: 10
 --- !u!54 &1151668263881996573
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -2075,7 +2093,7 @@ Rigidbody:
     m_Bits: 0
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
-  m_UseGravity: 0
+  m_UseGravity: 1
   m_IsKinematic: 0
   m_Interpolate: 0
   m_Constraints: 0
@@ -2120,10 +2138,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc8f24e7a721fb28ba3676031bfa0b1f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  autoDetectPrefix: 1
+  customPrefix: 
   laserTopic: /scan
-  FrameId: base_scan
   publishFrequencyHz: 50
-  prefix: 
+  frameId: laser
+  logPublishEvents: 0
 --- !u!114 &4783570847377917628
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2138,23 +2158,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   radius: 10
   angle: 360
-  agentPool: {fileID: 0}
-  TagFilter: Agent
-  TagFilterArray: []
+  targetTag: 
+  targetTags: []
   targetMask:
     serializedVersion: 2
     m_Bits: 256
   obstructionMask:
     serializedVersion: 2
     m_Bits: 640
-  publishToROS: 1
-  numberOfClosestHumanPublish: 10
-  prefix: 
-  topicName: /agents
-  poseArrayTopic: /agents/pose
-  globalTopic: /agents/global
-  frame: /base_link
-  publishFrequencyHz: 10
+  updateInterval: 0.2
+  autoStart: 1
+  showGizmos: 1
+  logDetections: 0
 --- !u!1 &8140465077602360295
 GameObject:
   m_ObjectHideFlags: 0

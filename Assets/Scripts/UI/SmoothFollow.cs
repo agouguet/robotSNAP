@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace ROS_DRL
+namespace RobotSNAP
 {
     public class SmoothFollow : MonoBehaviour
     {
@@ -23,8 +23,8 @@ namespace ROS_DRL
         void Start()
         {
             camera = GetComponent<Camera>();
-            EnvController foundScript = Utils.FindScriptInParents<EnvController>(transform);
-            if (foundScript != null) { displayIndex = foundScript.env_id; }
+            // EnvController foundScript = Utils.FindScriptInParents<EnvController>(transform);
+            // if (foundScript != null) { displayIndex = foundScript.env_id; }
             // camera.targetDisplay = displayIndex;
             targetZoom = camera.orthographicSize;
         }

@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0bc4f22db86faa366bcf7612a653c290, type: 3}
+  m_Name: SimulationConfig
+  m_EditorClassIdentifier: 
+  environmentCount: 1
+  environmentSpacing: 100
+  datasetPath: Dataset/medium
+  minHumans: 0
+  maxHumans: 0
+  minAgentDistance: 2
+  minPathLength: 3
+  maxPathLength: 0
+  robotMaxLinearSpeed: 2
+  robotMaxAngularSpeed: 2
+  robotLaserSamples: 180
+  robotControlMode: 1
+  humanDefaultSpeed: 0.8
+  humanMaxSpeed: 1
+  humanControllerType: 0
+  humanInteractionRadius: 5
+  timeScale: 1
+  inferenceMode: 0
+  rosPrefix: 
+  rosPublishFrequency: 10
+  rosEnabled: 1

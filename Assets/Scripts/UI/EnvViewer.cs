@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
 
-namespace ROS_DRL
+namespace RobotSNAP
 {
     public class EnvViewer : MonoBehaviour
     {

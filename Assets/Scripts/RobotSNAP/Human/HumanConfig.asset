@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e63fe2959f19b805eb79941006e53dd9, type: 3}
+  m_Name: HumanConfig
+  m_EditorClassIdentifier: 
+  controllerType: 1
+  sfmForce: 5
+  sfmMaxSpeed: 2
+  sfmRelaxationTime: 0.5
+  sfmInteractionRadius: 5
+  onnxModelConfig: {fileID: 11400000, guid: 5ad0a07454eea54048c4fcc8cef4f4f0, type: 2}
+  predictionWeight: 0.1
+  navigationWeight: 0.9
+  useAdaptiveWeighting: 1
+  animationSmoothing: 1
+  idleSpeedThreshold: 0.1
+  angularSpeed: 180
+  goalReachedDistance: 0.2
+  pathUpdateInterval: 0.2
+  showPredictionGizmos: 1
+  predictionColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  trajectoryColor: {r: 0, g: 0, b: 1, a: 1}

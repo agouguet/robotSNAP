@@ -112,7 +112,6 @@ namespace RobotSNAP.Core
                 {
                     human.transform.SetPositionAndRotation(allSpawns[i].position, allSpawns[i].rotation);
                     IHumanController controller = human.GetComponent<IHumanController>();
-                    Debug.Log(allSpawns[i].goalPosition);
                     controller?.SetGoal(allSpawns[i].goalPosition);
                     human.SetActive(true);
                 }
@@ -133,15 +132,18 @@ namespace RobotSNAP.Core
         private SpawnData GenerateRobotSpawn()
         {
             float radius = _navMesh != null ? 10f : 10f;
-            Vector3 startPos = _navMesh?.GetRandomPoint(radius) ?? Random.insideUnitSphere * radius;
+            Vector3 startPos = _navMesh?.GetRandomSpawnPoint(radius) ?? Random.insideUnitSphere * radius;
             startPos.y = 0;
-            
+
+            float randomY = Random.Range(0f, 360f);
+            Quaternion startRotation = Quaternion.Euler(0f, randomY, 0f);
+
             Vector3 goalPos = GetValidGoal(startPos, radius);
             
             return new SpawnData
             {
                 position = startPos,
-                rotation = Quaternion.identity,
+                rotation = startRotation,
                 goalPosition = goalPos,
                 goalRotation = Quaternion.identity,
                 id = "robot",
@@ -157,7 +159,7 @@ namespace RobotSNAP.Core
             
             do
             {
-                startPos = _navMesh?.GetRandomPoint(radius) ?? Random.insideUnitSphere * radius;
+                startPos = _navMesh?.GetRandomSpawnPoint(radius) ?? Random.insideUnitSphere * radius;
                 startPos.y = 0;
                 attempts++;
             } while (IsTooClose(startPos, existing, minAgentDistance) && attempts < 100);
@@ -179,7 +181,7 @@ namespace RobotSNAP.Core
         {
             for (int i = 0; i < 100; i++)
             {
-                Vector3 goal = _navMesh?.GetRandomPoint(radius) ?? Random.insideUnitSphere * radius;
+                Vector3 goal = _navMesh?.GetRandomNavigationPoint(radius) ?? Random.insideUnitSphere * radius;
                 goal.y = 0;
                 
                 float straightDist = Vector3.Distance(start, goal);
@@ -197,7 +199,7 @@ namespace RobotSNAP.Core
                 }
             }
             
-            return start + Vector3.right * 5f;
+            return Vector3.zero;
         }
         
         private bool IsTooClose(Vector3 pos, List<SpawnData> existing, float minDistance)

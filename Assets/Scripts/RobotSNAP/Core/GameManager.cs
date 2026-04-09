@@ -24,30 +24,25 @@ namespace RobotSNAP.Core
         private int _environmentId;
         private SimulationConfig _currentConfig;
         private bool _isInitialized;
+        private bool _isResetting = false;  // Flag pour éviter les doubles reset
+        private Coroutine _currentResetCoroutine = null;
         
         public int EnvironmentId => _environmentId;
         public bool IsInitialized => _isInitialized;
         
         #region Public API
         
-        /// <summary>
-        /// Définit l'ID de l'environnement
-        /// </summary>
         public void SetEnvironmentId(int id)
         {
             _environmentId = id;
         }
         
-        /// <summary>
-        /// Applique la configuration à ce GameManager
-        /// </summary>
         public void ApplyConfig(SimulationConfig config)
         {
             if (config == null) return;
             
             _currentConfig = config;
             
-            // Appliquer au SpawnCoordinator
             if (spawnCoordinator != null)
             {
                 spawnCoordinator.MinHumans = config.minHumans;
@@ -57,15 +52,11 @@ namespace RobotSNAP.Core
                 spawnCoordinator.MaxPathLength = config.maxPathLength;
             }
             
-            // Appliquer au Dataset Creator
-            Debug.Log(datasetCreator);
             if (datasetCreator != null && !string.IsNullOrEmpty(config.datasetPath))
             {
-                Debug.Log(config.datasetPath);
                 datasetCreator.FolderPath = config.datasetPath;
             }
             
-            // Appliquer les paramètres ROS
             if (envROS != null && !string.IsNullOrEmpty(config.rosPrefix))
             {
                 envROS.UpdatePrefix(config.rosPrefix);
@@ -74,17 +65,11 @@ namespace RobotSNAP.Core
             Debug.Log($"[GameManager:{_environmentId}] Config applied");
         }
         
-        /// <summary>
-        /// Définit le préfixe ROS (pour multi-environnements)
-        /// </summary>
         public void SetROSPrefix(string prefix)
         {
             envROS?.UpdatePrefix(prefix);
         }
         
-        /// <summary>
-        /// Reset l'environnement (appelé par l'éditeur ou Supervisor)
-        /// </summary>
         [ContextMenu("Reset Environment")]
         public void EditorReset()
         {
@@ -94,7 +79,7 @@ namespace RobotSNAP.Core
                 return;
             }
             
-            StartCoroutine(ResetSequence());
+            RequestReset();
         }
         
         #endregion
@@ -113,8 +98,6 @@ namespace RobotSNAP.Core
                 envROS.OnResetRequested -= OnResetRequested;
                 envROS.OnPlayStateChanged -= OnPlayStateChanged;
             }
-            
-            Debug.Log($"[GameManager:{_environmentId}] Cleaned up");
         }
         
         #endregion
@@ -125,36 +108,30 @@ namespace RobotSNAP.Core
         {
             Debug.Log($"[GameManager:{_environmentId}] Initializing...");
             
-            // Initialize ROS
             if (envROS != null)
             {
                 envROS.Initialize("");
                 envROS.RegisterResetService(OnResetRequest);
                 envROS.RegisterPausePlayService(OnPlayRequest);
-                
                 envROS.OnResetRequested += OnResetRequested;
                 envROS.OnPlayStateChanged += OnPlayStateChanged;
             }
             
-            // Build environment (dataset or procedural)
             if (environmentBuilder != null)
             {
                 yield return StartCoroutine(environmentBuilder.BuildEnvironment());
             }
             
-            // Build NavMeshes
             if (navMeshManager != null)
             {
                 yield return StartCoroutine(navMeshManager.BuildNavMeshes());
             }
             
-            // Prewarm human pool
             if (humanPool != null)
             {
                 yield return StartCoroutine(humanPool.Prewarm(20));
             }
             
-            // Spawn all agents (robot, humans, goal)
             if (spawnCoordinator != null)
             {
                 yield return StartCoroutine(spawnCoordinator.SpawnAll());
@@ -172,7 +149,6 @@ namespace RobotSNAP.Core
         {
             Debug.Log($"[GameManager:{_environmentId}] Reset requested with dataset: {request.dataset}");
             
-            // Update dataset path if provided
             if (!string.IsNullOrEmpty(request.dataset) && datasetCreator != null)
             {
                 datasetCreator.FolderPath = request.dataset;
@@ -182,10 +158,9 @@ namespace RobotSNAP.Core
                 }
             }
             
-            // Trigger reset
-            if (_isInitialized)
+            if (_isInitialized && !_isResetting)
             {
-                StartCoroutine(ResetSequence());
+                RequestReset();
             }
             
             return new ResetResponse { success = true };
@@ -199,7 +174,9 @@ namespace RobotSNAP.Core
         
         private void OnResetRequested(ResetRequest request)
         {
-            EventBus.Instance.Publish(new ResetRequestEvent { dataset = request.dataset });
+            // Ne pas déclencher de reset ici, juste propager l'événement
+            // L'événement est déjà traité par OnResetRequest
+            Debug.Log($"[GameManager:{_environmentId}] Reset requested event received");
         }
         
         private void OnPlayStateChanged(bool isPlaying)
@@ -209,38 +186,66 @@ namespace RobotSNAP.Core
         
         #endregion
         
-        #region Reset Sequence
+        #region Reset Sequence (CORRIGÉ - sans double appel)
+        
+        private void RequestReset()
+        {
+            if (_isResetting)
+            {
+                Debug.Log($"[GameManager:{_environmentId}] Reset already in progress, ignoring...");
+                return;
+            }
+            
+            if (_currentResetCoroutine != null)
+            {
+                StopCoroutine(_currentResetCoroutine);
+            }
+            
+            _currentResetCoroutine = StartCoroutine(ResetSequence());
+        }
         
         private IEnumerator ResetSequence()
         {
+            if (_isResetting) yield break;
+            
+            _isResetting = true;
+            
             Debug.Log($"[GameManager:{_environmentId}] Starting reset sequence...");
             
-            // Désactiver robot et goal
+            // 1. Désactiver tout ce qui bouge
             if (spawnCoordinator != null)
             {
                 spawnCoordinator.SetActive(false);
             }
             
-            // Reset environment builder
+            // 2. Reset l'environnement builder (détruit l'ancien)
             if (environmentBuilder != null)
             {
                 yield return StartCoroutine(environmentBuilder.Reset());
             }
             
-            // Reset navmesh
-            if (navMeshManager != null)
-            {
-                yield return StartCoroutine(navMeshManager.Reset());
-            }
-            
-            // Attendre un frame
+            // 3. Attendre que le nouvel environnement soit complètement instancié
             yield return null;
             
-            // Re-spawn tout
+            // 4. Maintenant reconstruire le NavMesh
+            if (navMeshManager != null)
+            {
+                Debug.Log($"[GameManager:{_environmentId}] Rebuilding NavMesh...");
+                yield return StartCoroutine(navMeshManager.Reset());
+            }
+
+
+            navMeshManager.GetSpawnSurface().BuildNavMesh();
+            navMeshManager.GetNavigationSurface().BuildNavMesh();
+            
+            // 6. Re-spawn tout
             if (spawnCoordinator != null)
             {
                 yield return StartCoroutine(spawnCoordinator.SpawnAll());
             }
+            
+            _isResetting = false;
+            _currentResetCoroutine = null;
             
             Debug.Log($"[GameManager:{_environmentId}] Reset complete");
         }

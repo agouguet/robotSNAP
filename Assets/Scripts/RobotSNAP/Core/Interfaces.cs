@@ -72,7 +72,9 @@ namespace RobotSNAP.Core
     {
         System.Collections.IEnumerator BuildNavMeshes();
         bool IsReady { get; }
-        Vector3 GetRandomPoint(float radius);
+        Vector3 GetRandomSpawnPoint(float radius);
+        Vector3 GetRandomNavigationPoint(float radius);
+        Vector3 GetRandomPointSimple(float radius);
         float GetPathLength(Vector3 start, Vector3 end);
     }
     
@@ -95,7 +97,7 @@ namespace RobotSNAP.Core
     
     public interface IHumanController
     {
-        void Initialize(float desiredSpeed, float maxSpeed);
+        void Initialize();
         void SetGoal(Vector3 goal);
         void SetPlay(bool isPlaying);
         void Reset();

@@ -109,8 +109,8 @@ namespace RobotSNAP.Human
         {
             switch (type)
             {
-                case MovementControllerType.LegacySFM:
-                    _controller = new LegacySFMController(_config);
+                case MovementControllerType.SFM:
+                    _controller = new SFMController(_config);
                     break;
                 case MovementControllerType.ONNXPrediction:
                     _controller = new ONNXPredictionController(_config);
@@ -119,7 +119,7 @@ namespace RobotSNAP.Human
                     _controller = new HybridController(_config);
                     break;
                 default:
-                    _controller = new LegacySFMController(_config);
+                    _controller = new SFMController(_config);
                     break;
             }
         }
@@ -165,7 +165,7 @@ namespace RobotSNAP.Human
             Vector3 goal3D = new Vector3(_avatar.currentDestination.x, 0, _avatar.currentDestination.y);
             
             // CORRECTION : Utiliser le filtre avec l'agent type
-            if (UnityEngine.AI.NavMesh.CalculatePath(start3D, goal3D, _navMeshFilter, _navMeshPath))
+            if (UnityEngine.AI.NavMesh.CalculatePath(start3D, goal3D, UnityEngine.AI.NavMesh.AllAreas, _navMeshPath))
             {
                 if (_navMeshPath.status == UnityEngine.AI.NavMeshPathStatus.PathComplete)
                 {
@@ -206,7 +206,7 @@ namespace RobotSNAP.Human
             
             Collider[] colliders = Physics.OverlapSphere(
                 new Vector3(_currentPosition.x, 0.5f, _currentPosition.y),
-                _config.sfmInteractionRadius
+                _config.perceptionRadiusAgent
             );
             
             foreach (var collider in colliders)
@@ -217,7 +217,7 @@ namespace RobotSNAP.Human
                     Vector2 otherPos = otherAvatar.GetCurrentPosition2D();
                     float dist = Vector2.Distance(_currentPosition, otherPos);
                     
-                    if (dist < _config.sfmInteractionRadius && dist > 0.01f)
+                    if (dist < _config.perceptionRadiusAgent && dist > 0.01f)
                     {
                         _neighborPositions.Add(otherPos);
                         _neighborVelocities.Add(new Vector2(
@@ -234,7 +234,7 @@ namespace RobotSNAP.Human
                     Vector2 robotPos = new Vector2(robot.transform.position.x, robot.transform.position.z);
                     float dist = Vector2.Distance(_currentPosition, robotPos);
                     
-                    if (dist < _config.sfmInteractionRadius)
+                    if (dist < _config.perceptionRadiusAgent)
                     {
                         _neighborPositions.Add(robotPos);
                         _neighborVelocities.Add(new Vector2(robot.Velocity.x, robot.Velocity.z));

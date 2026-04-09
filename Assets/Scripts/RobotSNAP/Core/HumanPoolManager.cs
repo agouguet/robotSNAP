@@ -124,7 +124,7 @@ namespace RobotSNAP.Core
             instance.name = $"Human_{GetTotalCount()}";
             
             IHumanController controller = instance.GetComponent<IHumanController>();
-            controller?.Initialize(defaultSpeed, defaultMaxSpeed);
+            controller?.Initialize();
             
             return instance;
         }

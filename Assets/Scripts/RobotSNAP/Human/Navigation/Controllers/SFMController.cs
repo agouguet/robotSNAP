@@ -5,23 +5,22 @@ using RobotSNAP.Human;
 namespace RobotSNAP.Movement.Controllers
 {
     /// <summary>
-    /// Contrôleur SFM - Calcule uniquement la force sociale
-    /// La navigation et les collisions sont gérées par HumanMovement
+    /// Contrôleur SFM - Suit le point NavMesh fourni par HumanMovement
     /// </summary>
-    public class LegacySFMController : IMovementController
+    public class SFMController : IMovementController
     {
-        // Paramètres SFM
-        private const float A = 2000f;           // Force d'interaction
-        private const float B = 0.08f;           // Échelle de distance
-        private const float MASS = 80f;          // Masse
-        private const float T = 0.5f;            // Temps de relaxation
-        private const float LATERAL_DAMPENING = 5f;
+        // Constantes physiques
+        private const float MASS = 80f;
+        private const float HUMAN_RADIUS = 0.25f;
+        private const float ROBOT_RADIUS = 0.2f;
         
         private HumanConfig config;
+        private Vector2 previousVelocity;
         
-        public LegacySFMController(HumanConfig config)
+        public SFMController(HumanConfig config)
         {
             this.config = config;
+            previousVelocity = Vector2.zero;
         }
         
         public Vector2 ComputeVelocity(
@@ -32,115 +31,153 @@ namespace RobotSNAP.Movement.Controllers
             Vector2[] neighborVelocities,
             float deltaTime)
         {
-            // Calculer la force d'attraction vers le goal
+            // 1. Force d'attraction vers le point NavMesh
             Vector2 goalForce = CalculateGoalForce(currentPosition, currentVelocity, goalPosition);
             
-            // Calculer la force de répulsion des voisins
-            Vector2 neighborForce = CalculateNeighborForce(currentPosition, currentVelocity, goalPosition, neighbors, neighborVelocities);
+            // 2. Force de répulsion et d'anticipation des voisins
+            Vector2 neighborForce = CalculateNeighborForce(currentPosition, currentVelocity, neighbors, neighborVelocities);
             
             // Force totale
             Vector2 totalForce = goalForce + neighborForce;
             
-            // Dampening latéral
-            totalForce = ApplyLateralDamping(totalForce, currentVelocity);
+            // Appliquer les dampenings
+            totalForce = ApplyDampening(totalForce, currentVelocity);
             
             // Calculer l'accélération
             Vector2 acceleration = totalForce / MASS;
-            
-            // Force minimale pour "décoller" à basse vitesse
-            float idleSpeedThreshold = 0.5f;
-            float minAcceleration = 0.5f;
-            if (currentVelocity.magnitude < idleSpeedThreshold && acceleration.magnitude < minAcceleration)
-            {
-                Vector2 toGoal = (goalPosition - currentPosition).normalized;
-                acceleration = toGoal * minAcceleration;
-            }
             
             // Nouvelle vélocité
             Vector2 newVelocity = currentVelocity + acceleration * deltaTime;
             
             // Limiter la vitesse maximale
-            float maxSpeed = config.sfmMaxSpeed;
-            if (newVelocity.sqrMagnitude > maxSpeed * maxSpeed)
+            if (newVelocity.sqrMagnitude > config.maxSpeed * config.maxSpeed)
             {
-                newVelocity = newVelocity.normalized * maxSpeed;
+                newVelocity = newVelocity.normalized * config.maxSpeed;
             }
             
             // Lissage
-            newVelocity = Vector2.Lerp(currentVelocity, newVelocity, 0.5f);
+            newVelocity = Vector2.Lerp(currentVelocity, newVelocity, config.animationSmoothing);
             
+            previousVelocity = newVelocity;
             return newVelocity;
         }
         
         private Vector2 CalculateGoalForce(Vector2 position, Vector2 velocity, Vector2 goal)
         {
             Vector2 direction = goal - position;
-            if (direction.magnitude < 0.01f) return Vector2.zero;
+            float distance = direction.magnitude;
+            
+            if (distance < config.goalReachedDistance) return Vector2.zero;
             
             direction.Normalize();
-            Vector2 desiredVelocity = direction * config.sfmMaxSpeed;
             
-            return MASS * (desiredVelocity - velocity) / T;
+            // Vitesse désirée = vitesse configurée
+            float desiredSpeed = config.desiredSpeed;
+            
+            Vector2 desiredVelocity = direction * desiredSpeed;
+            
+            // Force d'attraction standard
+            return MASS * (desiredVelocity - velocity) / config.relaxationTime;
         }
         
-        private Vector2 CalculateNeighborForce(Vector2 position, Vector2 velocity, Vector2 goal, Vector2[] neighbors, Vector2[] neighborVelocities)
+        private Vector2 CalculateNeighborForce(Vector2 position, Vector2 velocity, Vector2[] neighbors, Vector2[] neighborVelocities)
         {
             Vector2 totalForce = Vector2.zero;
             
             for (int i = 0; i < neighbors.Length; i++)
             {
-                Vector2 dir = position - neighbors[i];
-                float distance = dir.magnitude;
+                Vector2 toNeighbor = neighbors[i] - position;
+                float distance = toNeighbor.magnitude;
                 
-                if (distance >= config.sfmInteractionRadius || distance < 0.01f)
+                if (distance >= config.perceptionRadiusAgent || distance < 0.01f)
                     continue;
                 
-                dir.Normalize();
-                float overlap = 2 * 0.25f - distance; // RADIUS = 0.25f
-                overlap += 0.5f;
+                Vector2 dir = (position - neighbors[i]).normalized;
+                float combinedRadius = HUMAN_RADIUS + ROBOT_RADIUS;
+                float overlap = combinedRadius - distance;
                 
-                // Force de répulsion exponentielle
-                totalForce += A * Mathf.Exp(overlap / B) * dir;
+                // Force sociale exponentielle
+                float socialForceMagnitude = config.socialForceA * Mathf.Exp(overlap / config.socialForceB);
+                Vector2 socialForce = socialForceMagnitude * dir;
                 
-                // Détection des agents devant et approchant
-                Vector2 goalDir = (goal - position).normalized;
-                Vector2 neighborVel = neighborVelocities.Length > i ? neighborVelocities[i] : Vector2.zero;
-                
-                bool inFront = Vector2.Dot(-dir, goalDir) >= 0.5;
-                bool approaching = Vector2.Dot(goalDir, neighborVel.normalized) < 0;
-                
-                if (inFront && approaching && neighborVel.magnitude > 0.1f)
+                // Force de contact physique
+                Vector2 contactForce = Vector2.zero;
+                if (overlap > 0)
                 {
-                    float sideStepScale = -Vector2.Dot(-dir, goalDir);
-                    totalForce += sideStepScale * A / 10f * Tangent(goalDir);
+                    // Force normale
+                    contactForce += config.contactStiffnessK * overlap * dir;
+                    
+                    // Force tangentielle (frottement)
+                    if (neighborVelocities.Length > i)
+                    {
+                        Vector2 relativeVelocity = velocity - neighborVelocities[i];
+                        Vector2 tangentialVelocity = relativeVelocity - Vector2.Dot(relativeVelocity, dir) * dir;
+                        contactForce += config.contactFrictionKappa * overlap * tangentialVelocity;
+                    }
+                }
+                
+                totalForce += socialForce + contactForce;
+                
+                // Force d'évitement anticipatif (basée sur le temps avant collision)
+                if (neighborVelocities.Length > i)
+                {
+                    Vector2 relativeVelocity = velocity - neighborVelocities[i];
+                    float approachSpeed = -Vector2.Dot(toNeighbor.normalized, relativeVelocity);
+                    
+                    if (approachSpeed > 0.1f)
+                    {
+                        float timeToCollision = distance / approachSpeed;
+                        
+                        // Anticiper la collision si elle arrive dans les 2 secondes
+                        if (timeToCollision < 2.0f && timeToCollision > 0)
+                        {
+                            // Force d'évitement proportionnelle à l'inverse du temps
+                            float avoidanceStrength = config.socialForceA * (1.0f / (timeToCollision + 0.5f));
+                            
+                            // Direction latérale pour contourner
+                            Vector2 lateralDir = new Vector2(-toNeighbor.y, toNeighbor.x).normalized;
+                            float sideSign = Mathf.Sign(Vector2.Dot(toNeighbor, lateralDir));
+                            
+                            Vector2 avoidanceForce = sideSign * avoidanceStrength * lateralDir;
+                            totalForce += avoidanceForce;
+                        }
+                    }
                 }
             }
             
             return totalForce;
         }
         
-        private Vector2 ApplyLateralDamping(Vector2 force, Vector2 velocity)
+        private Vector2 ApplyDampening(Vector2 force, Vector2 velocity)
         {
-            Vector2 forward = velocity.normalized;
-            if (forward.sqrMagnitude < 0.01f) return force;
+            if (velocity.sqrMagnitude < 0.01f) return force;
             
+            Vector2 forward = velocity.normalized;
             Vector2 right = new Vector2(-forward.y, forward.x);
             
             float forwardDot = Vector2.Dot(forward, force);
             float rightDot = Vector2.Dot(right, force);
             
             Vector2 forwardProj = forward * forwardDot;
-            Vector2 rightProj = right * rightDot;
+            Vector2 rightProj = right * rightDot / config.lateralDampening;
             
-            return forwardProj + rightProj / LATERAL_DAMPENING;
+            // Dampening arrière
+            if (forwardDot < 0)
+            {
+                forwardProj /= config.backwardDampening;
+            }
+            
+            return forwardProj + rightProj;
         }
         
-        private Vector2 Tangent(Vector2 vector)
-        {
-            return new Vector2(-vector.y, vector.x);
+        public void Reset() 
+        { 
+            previousVelocity = Vector2.zero;
         }
         
-        public void Reset() { }
-        public float GetConfidence() => 0.5f;
+        public float GetConfidence() 
+        { 
+            return 0.5f; 
+        }
     }
 }

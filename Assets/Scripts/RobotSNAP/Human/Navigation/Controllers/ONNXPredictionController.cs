@@ -61,7 +61,7 @@ namespace RobotSNAP.Movement.Controllers
             predictedDirection.Normalize();
             
             // Calculer la vélocité
-            float speed = config.sfmMaxSpeed * (0.5f + confidence * 0.5f);
+            float speed = config.maxSpeed * (0.5f + confidence * 0.5f);
             return predictedDirection * speed;
         }
         

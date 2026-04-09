@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   environmentCount: 1
   environmentSpacing: 100
-  datasetPath: Dataset/medium
-  minHumans: 0
-  maxHumans: 0
+  datasetPath: Dataset/basic/circle_crowd
+  minHumans: 5
+  maxHumans: 15
   minAgentDistance: 2
   minPathLength: 3
   maxPathLength: 0

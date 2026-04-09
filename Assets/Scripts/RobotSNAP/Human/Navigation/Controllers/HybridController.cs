@@ -8,7 +8,7 @@ namespace RobotSNAP.Movement.Controllers
     /// </summary>
     public class HybridController : RobotSNAP.Movement.Interfaces.IMovementController
     {
-        private LegacySFMController sfmController;
+        private SFMController sfmController;
         private ONNXPredictionController onnxController;
         private HumanConfig config;
         private Vector2 lastHybridMovement;
@@ -16,7 +16,7 @@ namespace RobotSNAP.Movement.Controllers
         public HybridController(HumanConfig config)
         {
             this.config = config;
-            sfmController = new LegacySFMController(config);
+            sfmController = new SFMController(config);
             onnxController = new ONNXPredictionController(config);
         }
 

@@ -9,8 +9,6 @@ namespace RobotSNAP.Human
         [Header("Agent Properties")]
         public HumanConfig humanConfig;
         public string agentName;
-        public float desiredSpeed = 0.8f;
-        public float maxSpeed = 1.0f;
         public bool isStatic = false;
         public float perceptionRadius = 5f;
         
@@ -19,11 +17,6 @@ namespace RobotSNAP.Human
         private static List<GameObject> _avatarsList;
         private GameObject _avatarPrefab;
         private GameObject _avatarObject;
-        
-        [Header("Animation Parameters")]
-        [SerializeField] private RuntimeAnimatorController animationController;
-        [SerializeField] private float animationSmoothing = 0.6f;
-        [SerializeField] private float idleSpeedThreshold = 0.5f;
         
         [Header("Current State")]
         public Vector2 currentDestination;
@@ -88,9 +81,9 @@ namespace RobotSNAP.Human
             
             if (_animator == null) return;
             
-            if (animationController != null)
+            if (humanConfig.animationController != null)
             {
-                _animator.runtimeAnimatorController = animationController;
+                _animator.runtimeAnimatorController = humanConfig.animationController;
             }
             
             _animator.applyRootMotion = false;
@@ -123,9 +116,9 @@ namespace RobotSNAP.Human
             if (_animator == null || !_animator.enabled) return;
             
             Vector3 localVelocity = transform.InverseTransformDirection(currentVelocity3D);
-            float forward = localVelocity.z / animationSmoothing;
-            float strafe = localVelocity.x / animationSmoothing;
-            bool isIdle = currentVelocity3D.magnitude < idleSpeedThreshold;
+            float forward = localVelocity.z / humanConfig.animationSmoothing;
+            float strafe = localVelocity.x / humanConfig.animationSmoothing;
+            bool isIdle = currentVelocity3D.magnitude < humanConfig.idleSpeedThreshold;
             
             _animator.SetFloat("Forward", forward);
             _animator.SetFloat("Strafe", strafe);
@@ -137,11 +130,7 @@ namespace RobotSNAP.Human
         
         #region IHumanController Implementation
         
-        public void Initialize(float desiredSpeed, float maxSpeed)
-        {
-            this.desiredSpeed = desiredSpeed;
-            this.maxSpeed = maxSpeed;
-        }
+        public void Initialize() {}
         
         public void SetGoal(Vector3 goal)
         {

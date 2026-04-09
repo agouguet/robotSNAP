@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e63fe2959f19b805eb79941006e53dd9, type: 3}
+  m_Name: HumanConfig
+  m_EditorClassIdentifier: 
+  showMovementParameters: 1
+  showMovementController: 1
+  showSFMParameters: 1
+  showONNXParameters: 1
+  showHybridParameters: 1
+  showAnimationParameters: 1
+  showNavigationParameters: 1
+  showVisualizationParameters: 0
+  desiredSpeed: 1.3
+  maxSpeed: 2.6
+  controllerType: 0
+  perceptionRadiusAgent: 2.5
+  relaxationTime: 0.25
+  socialForceA: 300
+  socialForceB: 1
+  contactStiffnessK: 120000
+  contactFrictionKappa: 240000
+  wallForceA: 2000
+  wallForceB: 0.08
+  wallContactStiffnessK: 120000
+  wallContactFrictionKappa: 240000
+  tangentialForceA: 2000
+  tangentialForceB: 0.08
+  nextNavMinDistance: 0.3
+  closeEnoughMinDistance: 0.2
+  backwardDampening: 20
+  lateralDampening: 5
+  robotRepulsionDampeningMin: 0.5
+  robotRepulsionDampeningMax: 1
+  onnxModelConfig: {fileID: 11400000, guid: 5ad0a07454eea54048c4fcc8cef4f4f0, type: 2}
+  predictionWeight: 0.1
+  navigationWeight: 0.9
+  useAdaptiveWeighting: 1
+  animationController: {fileID: 9100000, guid: d3b7ebf8605e64140b49960db196f694, type: 2}
+  animationSmoothing: 0.9
+  idleSpeedThreshold: 0.05
+  angularSpeed: 270
+  goalReachedDistance: 0.3
+  pathUpdateInterval: 0.2
+  showPredictionGizmos: 1
+  predictionColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  trajectoryColor: {r: 0, g: 0, b: 1, a: 1}

@@ -1,4 +1,5 @@
 using UnityEngine;
+using RobotSNAP.Human;
 
 namespace RobotSNAP.Movement.Interfaces
 {
@@ -12,13 +13,6 @@ namespace RobotSNAP.Movement.Interfaces
         /// <summary>
         /// Calcule la vélocité désirée en fonction de l'état courant
         /// </summary>
-        /// <param name="currentPosition">Position actuelle (2D)</param>
-        /// <param name="currentVelocity">Vélocité actuelle (2D)</param>
-        /// <param name="goalPosition">Position du goal (2D) - point sur le chemin</param>
-        /// <param name="neighbors">Liste des positions des agents voisins (2D)</param>
-        /// <param name="neighborVelocities">Vélocités des voisins (optionnel)</param>
-        /// <param name="deltaTime">Temps écoulé depuis la dernière frame</param>
-        /// <returns>Vélocité désirée en m/s</returns>
         Vector2 ComputeVelocity(
             Vector2 currentPosition,
             Vector2 currentVelocity,
@@ -35,7 +29,13 @@ namespace RobotSNAP.Movement.Interfaces
         
         /// <summary>
         /// Retourne le niveau de confiance de la prédiction (0-1)
+        /// Pour SFM, retourne toujours 1
         /// </summary>
         float GetConfidence();
+        
+        /// <summary>
+        /// Met à jour les paramètres du contrôleur
+        /// </summary>
+        public void UpdateParameters(HumanConfig config);
     }
 }

@@ -294,6 +294,13 @@
       },
       "url": "https://packages.unity.com"
     },
+    "jp.hadashikick.vyaml": {
+      "version": "https://github.com/hadashiA/VYaml.git?path=VYaml.Unity/Assets/VYaml#0.25.0",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "b06c5ca126852eafdd669c0841f68db98d509dfd"
+    },
     "com.unity.modules.accessibility": {
       "version": "1.0.0",
       "depth": 0,

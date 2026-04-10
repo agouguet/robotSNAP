@@ -1,3 +1,4 @@
+// Scripts/RobotSNAP/Environment/EnvironmentCreatorFromDataset.cs
 using UnityEngine;
 using System;
 using System.Collections;
@@ -11,117 +12,68 @@ using RobotSNAP.Core;
 namespace RobotSNAP.Environment
 {
     /// <summary>
-    /// Créateur d'environnement à partir de dataset (image + JSON)
+    /// Créateur d'environnement à partir d'une image d'occupation (PNG uniquement)
+    /// NE charge PLUS les tâches (positions) - c'est maintenant géré par les scénarios YAML
     /// </summary>
     public class EnvironmentCreatorFromDataset : EnvironmentCreator
     {
         [Header("Dataset Settings")]
-        [SerializeField] private string folderPath = "Dataset";
-        [SerializeField] private float scale = 1f;
-        [SerializeField] private int downscaleFactor = 4;
-        [SerializeField] private float searchRadius = 20f;
+        [SerializeField] private string _folderPath = "Maps";
+        [SerializeField] private float _scale = 1f;
+        [SerializeField] private int _downscaleFactor = 4;
         
         [Header("References")]
-        [SerializeField] private Transform environmentParent;
+        [SerializeField] private Transform _environmentParent;
         
-        private string _jsonPath;
-        private string _mapPath;
-        private string _taskPath;
         private bool[,] _grid;
+        private string _currentMapName;
         
         public string FolderPath
         {
-            get => folderPath;
+            get => _folderPath;
             set
             {
-                folderPath = value;
-                UpdatePaths();
+                _folderPath = value;
             }
         }
+        
+        public string CurrentMapName => _currentMapName;
         
         protected override void Awake()
         {
             base.Awake();
-            UpdatePaths();
-            
-            Debug.Log($"[EnvCreator] Initialized. Paths: JSON={_jsonPath}, PNG={_mapPath}, TASK={_taskPath}");
+            Debug.Log($"[EnvCreator] Initialized. Map folder: {_folderPath}");
         }
         
-        private void UpdatePaths()
-        {
-            // Nettoyer le chemin
-            string cleanPath = folderPath.Replace("Assets/", "").Replace("StreamingAssets/", "");
-            
-            // Construire le chemin complet vers StreamingAssets
-            string basePath = Application.streamingAssetsPath;
-            
-            _jsonPath = Path.Combine(basePath, cleanPath, "json");
-            _mapPath = Path.Combine(basePath, cleanPath, "png");
-            _taskPath = Path.Combine(basePath, cleanPath, "task");
-            
-            // Normaliser les séparateurs de chemin pour Windows
-            _jsonPath = _jsonPath.Replace('\\', '/');
-            _mapPath = _mapPath.Replace('\\', '/');
-            _taskPath = _taskPath.Replace('\\', '/');
-        }
-        
-        public override IEnumerator CreateEnvironment()
+        /// <summary>
+        /// Charge une map spécifique par son nom
+        /// </summary>
+        public IEnumerator LoadMap(string mapName)
         {
             IsEnvironmentReady = false;
             Clear();
             yield return null;
             
-            // Vérifier que les dossiers existent
-            if (!Directory.Exists(_jsonPath))
-            {
-                Debug.LogError($"[EnvCreator] JSON folder not found: {_jsonPath}");
-                yield break;
-            }
-            
-            if (!Directory.Exists(_mapPath))
-            {
-                Debug.LogError($"[EnvCreator] PNG folder not found: {_mapPath}");
-                yield break;
-            }
-            
-            // Charger un fichier aléatoire
-            string name = GetRandomJsonFileName();
-            if (string.IsNullOrEmpty(name))
-            {
-                Debug.LogError("[EnvCreator] No JSON files found!");
-                yield break;
-            }
-            
-            Debug.Log($"[EnvCreator] Loading environment: {name}");
-            
-            // Charger les données JSON
-            MapJsonData mapJson = GetMapJsonFromName(name);
-            if (mapJson == null)
-            {
-                Debug.LogError($"[EnvCreator] Failed to load JSON for: {name}");
-                yield break;
-            }
-            mapJson.ConvertVerts();
-            yield return null;
+            _currentMapName = mapName;
             
             // Charger la texture
-            Texture = GetImageFromName(name);
+            Texture = LoadTexture(mapName);
             if (Texture == null)
             {
-                Debug.LogError($"[EnvCreator] Failed to load PNG for: {name}");
+                Debug.LogError($"[EnvCreator] Failed to load PNG for: {mapName}");
                 yield break;
             }
             
             Debug.Log($"[EnvCreator] Loaded texture: {Texture.width}x{Texture.height}");
             
             // Calculer la résolution
-            Resolution = CalculateResolution(Texture, mapJson) * scale;
+            Resolution = CalculateResolution(Texture);
             
-            // Downscale la texture si nécessaire
-            if (downscaleFactor > 1)
+            // Downscale si nécessaire
+            if (_downscaleFactor > 1)
             {
-                Texture = DownscaleTexture(Texture, downscaleFactor);
-                Resolution *= downscaleFactor;
+                Texture = DownscaleTexture(Texture, _downscaleFactor);
+                Resolution *= _downscaleFactor;
                 Debug.Log($"[EnvCreator] Downscaled to: {Texture.width}x{Texture.height}, Resolution: {Resolution:F3}");
             }
             
@@ -129,77 +81,62 @@ namespace RobotSNAP.Environment
             GenerateEnvironment(Texture, Resolution);
             yield return null;
             
-            // Charger le scénario
-            Scenario = GetScenario(name);
-            if (Scenario != null)
-            {
-                var scenarioCase = Scenario.GetRandomCase();
-                if (scenarioCase != null)
-                {
-                    RobotTask = scenarioCase.GetRandomRobotTask();
-                    if (RobotTask != null)
-                    {
-                        Debug.Log($"[EnvCreator] Robot task loaded: Start={RobotTask.StartPosition}, End={RobotTask.EndPosition}");
-                    }
-                }
-            }
-            
             IsEnvironmentReady = true;
             
-            Debug.Log($"[EnvCreator] Environment created from {name} - Size: {Texture.width}x{Texture.height}, Resolution: {Resolution:F3}");
+            Debug.Log($"[EnvCreator] Environment created from {mapName} - Size: {Texture.width}x{Texture.height}, Resolution: {Resolution:F3}");
+        }
+        
+        /// <summary>
+        /// Charge une map aléatoire
+        /// </summary>
+        public override IEnumerator CreateEnvironment()
+        {
+            string mapName = GetRandomMapName();
+            if (string.IsNullOrEmpty(mapName))
+            {
+                Debug.LogError("[EnvCreator] No map files found!");
+                yield break;
+            }
+            
+            yield return StartCoroutine(LoadMap(mapName));
         }
         
         #region Loading Methods
         
-        private string GetRandomJsonFileName()
+        private string GetMapFolderPath()
         {
-            if (!Directory.Exists(_jsonPath))
+            string basePath = Application.streamingAssetsPath;
+            string path = Path.Combine(basePath, _folderPath);
+            return path.Replace('\\', '/');
+        }
+        
+        private string GetRandomMapName()
+        {
+            string folderPath = GetMapFolderPath();
+            
+            if (!Directory.Exists(folderPath))
             {
-                Debug.LogError($"[EnvCreator] Directory not found: {_jsonPath}");
+                Debug.LogError($"[EnvCreator] Directory not found: {folderPath}");
                 return null;
             }
             
-            string[] files = Directory.GetFiles(_jsonPath, "*.json");
+            string[] files = Directory.GetFiles(folderPath, "*.png");
             if (files.Length == 0)
             {
-                Debug.LogWarning($"[EnvCreator] No JSON files found in: {_jsonPath}");
+                Debug.LogWarning($"[EnvCreator] No PNG files found in: {folderPath}");
                 return null;
             }
             
             int index = UnityEngine.Random.Range(0, files.Length);
             string fileName = Path.GetFileNameWithoutExtension(files[index]);
-            Debug.Log($"[EnvCreator] Selected file: {fileName}");
+            Debug.Log($"[EnvCreator] Selected map: {fileName}");
             return fileName;
         }
         
-        private MapJsonData GetMapJsonFromName(string name)
+        private Texture2D LoadTexture(string mapName)
         {
-            string path = Path.Combine(_jsonPath, name + ".json");
-            path = path.Replace('\\', '/');
-            
-            Debug.Log($"[EnvCreator] Loading JSON from: {path}");
-            
-            if (!File.Exists(path))
-            {
-                Debug.LogError($"[EnvCreator] JSON file not found: {path}");
-                return null;
-            }
-            
-            try
-            {
-                string jsonContent = File.ReadAllText(path);
-                return JsonConvert.DeserializeObject<MapJsonData>(jsonContent);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[EnvCreator] Failed to parse JSON: {e.Message}");
-                return null;
-            }
-        }
-        
-        private Texture2D GetImageFromName(string name)
-        {
-            string path = Path.Combine(_mapPath, name + ".png");
+            string folderPath = GetMapFolderPath();
+            string path = Path.Combine(folderPath, mapName + ".png");
             path = path.Replace('\\', '/');
             
             Debug.Log($"[EnvCreator] Loading PNG from: {path}");
@@ -224,43 +161,14 @@ namespace RobotSNAP.Environment
             }
         }
         
-        private ScenarioData GetScenario(string name)
-        {
-            string path = Path.Combine(_taskPath, name + ".json");
-            path = path.Replace('\\', '/');
-            
-            Debug.Log($"[EnvCreator] Loading task from: {path}");
-            
-            if (!File.Exists(path))
-            {
-                Debug.LogWarning($"[EnvCreator] Task file not found: {path}");
-                return null;
-            }
-            
-            try
-            {
-                string jsonContent = File.ReadAllText(path);
-                return JsonConvert.DeserializeObject<ScenarioData>(jsonContent);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[EnvCreator] Failed to parse task JSON: {e.Message}");
-                return null;
-            }
-        }
-        
         #endregion
         
         #region Environment Generation
         
-        private float CalculateResolution(Texture2D texture, MapJsonData mapJson)
+        private float CalculateResolution(Texture2D texture)
         {
-            int width = texture.width;
-            int height = texture.height;
-            float jsonWidth = mapJson.bbox.Max.x - mapJson.bbox.Min.x;
-            float jsonHeight = mapJson.bbox.Max.y - mapJson.bbox.Min.y;
-            
-            return (jsonWidth / width + jsonHeight / height) / 2f;
+            // Valeur par défaut - peut être ajustée
+            return 0.1f;
         }
         
         private Texture2D DownscaleTexture(Texture2D original, int factor)
@@ -320,15 +228,14 @@ namespace RobotSNAP.Environment
         
         private void GenerateFloor(int width, int height, float resolution, Texture2D texture)
         {
-            Transform parent = environmentParent ?? transform;
+            Transform parent = _environmentParent ?? transform;
             
             if (floor != null) Destroy(floor);
             
             floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.name = "Floor";
             floor.transform.parent = parent;
-            floor.transform.localPosition = new Vector3(0.0f, -0.05f, 0.0f);
-            // floor.transform.localPosition = new Vector3(width * resolution / 2f, -0.05f, height * resolution / 2f);
+            floor.transform.localPosition = new Vector3(width * resolution / 2f, -0.05f, height * resolution / 2f);
             floor.transform.localScale = new Vector3(width * resolution, 0.1f, height * resolution);
             floor.layer = LayerMask.NameToLayer("Floor");
             floor.tag = "Floor";
@@ -340,7 +247,7 @@ namespace RobotSNAP.Environment
         
         private void GenerateWallsOptimized(int width, int height, float resolution)
         {
-            Transform parent = environmentParent ?? transform;
+            Transform parent = _environmentParent ?? transform;
             var combineInstances = new List<CombineInstance>();
             bool[,] visited = new bool[width, height];
             
@@ -366,9 +273,9 @@ namespace RobotSNAP.Environment
                         // Créer un cube temporaire pour le mesh
                         GameObject tempWall = GameObject.CreatePrimitive(PrimitiveType.Cube);
                         tempWall.transform.localPosition = new Vector3(
-                            (x + maxX) * resolution / 2f - width * resolution / 2f,
+                            (x + maxX) * resolution / 2f,
                             wallHeight / 2f,
-                            (y + maxY) * resolution / 2f - height * resolution / 2f
+                            (y + maxY) * resolution / 2f
                         );
                         tempWall.transform.localScale = new Vector3(
                             (maxX - x) * resolution,
@@ -394,7 +301,6 @@ namespace RobotSNAP.Environment
             walls = new GameObject("Walls");
             walls.transform.parent = parent;
             walls.transform.localPosition = Vector3.zero;
-            walls.transform.Rotate(0.0f, 180.0f, 0.0f, Space.Self);
             walls.layer = LayerMask.NameToLayer("Wall");
             walls.tag = "Wall";
             
@@ -417,10 +323,6 @@ namespace RobotSNAP.Environment
                 
                 Debug.Log($"[EnvCreator] Generated {combineInstances.Count} combined wall meshes");
             }
-            else
-            {
-                Debug.LogWarning("[EnvCreator] No walls generated!");
-            }
         }
         
         private bool CheckRow(int startX, int endX, int y)
@@ -430,16 +332,6 @@ namespace RobotSNAP.Environment
                 if (!_grid[x, y]) return false;
             }
             return true;
-        }
-        
-        #endregion
-        
-        #region Cleanup
-        
-        protected override void Clear()
-        {
-            base.Clear();
-            _grid = null;
         }
         
         #endregion

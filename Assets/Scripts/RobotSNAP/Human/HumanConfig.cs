@@ -6,6 +6,7 @@ namespace RobotSNAP.Human
     [CreateAssetMenu(fileName = "HumanConfig", menuName = "RobotSNAP/Human/Config")]
     public class HumanConfig : ScriptableObject
     {
+        [Header("Display Toggles (Editor only)")]
         [SerializeField] private bool showMovementParameters = true;
         [SerializeField] private bool showMovementController = true;
         [SerializeField] private bool showSFMParameters = true;
@@ -15,104 +16,193 @@ namespace RobotSNAP.Human
         [SerializeField] private bool showNavigationParameters = true;
         [SerializeField] private bool showVisualizationParameters = true;
 
-        // Movement Parameters
+        // ==================== MOVEMENT ====================
+        [Header("Movement")]
+        [Tooltip("Vitesse désirée en conditions normales (m/s)")]
         public float desiredSpeed = 0.8f;
-        public float maxSpeed = 1.0f;
 
-        // Movement Controller Selection
+        [Tooltip("Vitesse maximale (m/s)")]
+        public float maxSpeed = 1.2f;
+
+        [Tooltip("Distance de ralentissement avant le but (m)")]
+        public float slowDownDistance = 1.5f;
+
+        // ==================== CONTROLLER SELECTION ====================
+        [Header("Controller Selection")]
+        [Tooltip("Type de contrôleur utilisé : SFM, ONNX ou Hybride")]
         public MovementControllerType controllerType = MovementControllerType.Hybrid;
-        
-        // SFM Parameters
-        [Header("SFM - Perception")]
-        [Tooltip("Rayon de perception des agents et obstacles")]
-        public float perceptionRadiusAgent = 2.5f;
-        
-        [Header("SFM - Social Forces")]
-        [Tooltip("Temps de relaxation (inertie du mouvement)")]
+
+        // ==================== SFM PARAMETERS ====================
+        [Header("SFM - Agent Physical Properties")]
+        [Tooltip("Masse de l'agent (kg)")]
+        public float agentMass = 80f;
+
+        [Tooltip("Rayon de l'agent (m)")]
+        public float agentRadius = 0.25f;
+
+        [Header("SFM - Goal Force")]
+        [Tooltip("Temps de relaxation (inertie)")]
         public float relaxationTime = 0.5f;
-        [Tooltip("Force d'interaction sociale")]
-        public float socialForceA = 1500f / 4f; // 375
-        [Tooltip("Portée de l'interaction sociale")]
-        public float socialForceB = 0.08f * 2f; // 0.16
-        [Tooltip("Rigidité du contact")]
-        public float contactStiffnessK = 1.2E5f;
+
+        [Tooltip("Intensité de la force d'attraction vers le but")]
+        public float goalForceStrength = 10f;
+
+        [Tooltip("Distance à partir de laquelle la force d'attraction s'applique pleinement")]
+        public float goalForceDistance = 5f;
+
+        [Header("SFM - Social Forces")]
+        [Tooltip("Rayon de perception des autres agents (m)")]
+        public float perceptionRadiusAgent = 2.5f;
+
+        [Tooltip("Force d'interaction sociale (A)")]
+        public float socialForceA = 375f;       // 1500/4
+
+        [Tooltip("Portée de l'interaction sociale (B)")]
+        public float socialForceB = 0.16f;      // 0.08*2
+
+        [Tooltip("Intensité de l'alignement avec les voisins")]
+        public float alignmentStrength = 0.3f;
+
+        [Header("SFM - Contact Forces")]
+        [Tooltip("Rigidité du contact (collision)")]
+        public float contactStiffnessK = 120000f;   // 1.2E5
+
         [Tooltip("Frottement de contact")]
-        public float contactFrictionKappa = 2.4E5f;
-        
+        public float contactFrictionKappa = 240000f; // 2.4E5
+
         [Header("SFM - Wall Forces")]
-        [Tooltip("Force d'interaction avec les murs")]
-        public float wallForceA = 600f * 4f; // 2400
-        [Tooltip("Portée de l'interaction avec les murs")]
-        public float wallForceB = 0.04f * 3f; // 0.12
+        [Tooltip("Force d'interaction avec les murs (A)")]
+        public float wallForceA = 2400f;        // 600*4
+
+        [Tooltip("Portée de l'interaction avec les murs (B)")]
+        public float wallForceB = 0.12f;        // 0.04*3
+
         [Tooltip("Rigidité du contact avec les murs")]
-        public float wallContactStiffnessK = 1.2E5f;
+        public float wallContactStiffnessK = 120000f;
+
         [Tooltip("Frottement de contact avec les murs")]
-        public float wallContactFrictionKappa = 2.4E5f;
-        
-        [Header("SFM - Tangential Forces")]
-        [Tooltip("Force tangentielle")]
-        public float tangentialForceA = 2000f;
-        [Tooltip("Portée de la force tangentielle")]
-        public float tangentialForceB = 0.08f;
-        
-        [Header("SFM - Navigation")]
-        [Tooltip("Distance pour atteindre un waypoint")]
-        public float nextNavMinDistance = 0.3f;
-        [Tooltip("Distance pour atteindre le but final")]
-        public float closeEnoughMinDistance = 0.2f;
-        
+        public float wallContactFrictionKappa = 240000f;
+
+        [Header("SFM - Obstacle Forces")]
+        [Tooltip("Rayon de perception des obstacles statiques")]
+        public float obstaclePerceptionRadius = 2f;
+
+        [Tooltip("Force de répulsion des obstacles")]
+        public float obstacleForceStrength = 8f;
+
+        [Tooltip("Portée de la force de répulsion des obstacles")]
+        public float obstacleForceDistance = 0.5f;
+
+        [Header("SFM - Robot Forces")]
+        [Tooltip("Rayon de perception du robot")]
+        public float robotPerceptionRadius = 3f;
+
+        [Tooltip("Force de répulsion du robot")]
+        public float robotRepulsionStrength = 10f;
+
+        [Tooltip("Portée de la force de répulsion du robot")]
+        public float robotForceDistance = 0.8f;
+
         [Header("SFM - Dampening")]
         [Tooltip("Amortissement du mouvement arrière")]
         public float backwardDampening = 20f;
+
         [Tooltip("Amortissement du mouvement latéral")]
         public float lateralDampening = 5f;
+
         [Tooltip("Amortissement min de répulsion des robots")]
         public float robotRepulsionDampeningMin = 0.5f;
+
         [Tooltip("Amortissement max de répulsion des robots")]
         public float robotRepulsionDampeningMax = 1.0f;
-        
-        // ONNX Model Parameters
+
+        // ==================== ONNX PARAMETERS ====================
+        [Header("ONNX Model")]
+        [Tooltip("Configuration du modèle ONNX (asset)")]
         public ONNXModelConfig onnxModelConfig;
-        
-        // Hybrid Parameters
-        [Range(0f, 1f)] public float predictionWeight = 0.6f;
-        [Range(0f, 1f)] public float navigationWeight = 0.4f;
-        public bool useAdaptiveWeighting = true;
-        
-        // Animation Parameters
-        public RuntimeAnimatorController animationController;
-        public float animationSmoothing = 0.6f;
-        public float idleSpeedThreshold = 0.5f;
-        public float angularSpeed = 180f;
-        
-        // Navigation
-        public float goalReachedDistance = 0.2f;
-        public float pathUpdateInterval = 0.2f;
-        
-        // Visualization
-        public bool showPredictionGizmos = true;
-        public Color predictionColor = Color.yellow;
-        public Color trajectoryColor = Color.blue;
-        
-        // Read-only properties
+
+        // Propriétés en lecture seule (déléguées à onnxModelConfig)
         public string onnxModelPath => onnxModelConfig != null ? onnxModelConfig.modelPath : "Models/policy_lstm";
         public bool onnxUseGPU => onnxModelConfig != null ? onnxModelConfig.useGPU : true;
         public int predictionSamples => onnxModelConfig != null ? onnxModelConfig.numSamples : 5;
         public float predictionUpdateRate => onnxModelConfig != null ? onnxModelConfig.updateRate : 10f;
-        
+
+        // ==================== HYBRID PARAMETERS ====================
+        [Header("Hybrid Controller")]
+        [Range(0f, 1f)]
+        [Tooltip("Poids donné à la prédiction ONNX (vs SFM)")]
+        public float predictionWeight = 0.6f;
+
+        [Range(0f, 1f)]
+        [Tooltip("Poids donné à la navigation (waypoint vs but direct)")]
+        public float navigationWeight = 0.4f;
+
+        [Tooltip("Activer l'adaptation dynamique des poids")]
+        public bool useAdaptiveWeighting = true;
+
+        [Tooltip("Taux d'adaptation pour les poids dynamiques")]
+        public float hybridAdaptationRate = 0.05f;
+
+        // ==================== NAVIGATION ====================
+        [Header("Navigation")]
+        [Tooltip("Distance pour considérer le but atteint")]
+        public float goalReachedDistance = 0.2f;
+
+        [Tooltip("Intervalle de mise à jour du chemin NavMesh (secondes)")]
+        public float pathUpdateInterval = 0.2f;
+
+        [Tooltip("Distance minimale avant de passer au prochain waypoint")]
+        public float nextNavMinDistance = 0.3f;
+
+        [Tooltip("Distance pour considérer le but final atteint (fallback)")]
+        public float closeEnoughMinDistance = 0.2f;
+
+        // ==================== ANIMATION ====================
+        [Header("Animation")]
+        [Tooltip("Animator Controller pour l'humain")]
+        public RuntimeAnimatorController animationController;
+
+        [Tooltip("Facteur de lissage pour les animations (Forward/Strafe)")]
+        public float animationSmoothing = 0.6f;
+
+        [Tooltip("Seuil de vitesse pour considérer l'agent à l'arrêt")]
+        public float idleSpeedThreshold = 0.5f;
+
+        [Tooltip("Vitesse angulaire pour la rotation (deg/s)")]
+        public float angularSpeed = 180f;
+
+        // ==================== VISUALIZATION ====================
+        [Header("Visualization")]
+        public bool showPredictionGizmos = true;
+        public Color predictionColor = Color.yellow;
+        public Color trajectoryColor = Color.blue;
+
+        // Validation
         private void OnValidate()
         {
+            // Clamp des valeurs critiques
+            desiredSpeed = Mathf.Max(0.1f, desiredSpeed);
+            maxSpeed = Mathf.Max(desiredSpeed, maxSpeed);
+            slowDownDistance = Mathf.Max(0.2f, slowDownDistance);
+            agentMass = Mathf.Max(1f, agentMass);
+            agentRadius = Mathf.Max(0.1f, agentRadius);
+            relaxationTime = Mathf.Max(0.1f, relaxationTime);
+            perceptionRadiusAgent = Mathf.Max(0.5f, perceptionRadiusAgent);
+            obstaclePerceptionRadius = Mathf.Max(0.5f, obstaclePerceptionRadius);
+            robotPerceptionRadius = Mathf.Max(0.5f, robotPerceptionRadius);
+            goalReachedDistance = Mathf.Max(0.05f, goalReachedDistance);
+            pathUpdateInterval = Mathf.Max(0.05f, pathUpdateInterval);
+            angularSpeed = Mathf.Max(10f, angularSpeed);
+
             if (onnxModelConfig != null)
-            {
                 onnxModelConfig.Validate();
-            }
         }
     }
 
     public enum MovementControllerType
     {
-        SFM,
-        ONNXPrediction,
-        Hybrid
+        SFM,            // Social Force Model
+        ONNXPrediction, // Réseau de neurones ONNX
+        Hybrid          // Fusion adaptative SFM+ONNX
     }
 }

@@ -29,6 +29,12 @@ namespace RobotSNAP
         private float _currentAngularSpeed;
         private Rigidbody _agentRb;
         
+        // Scenario properties
+        private Vector3 _currentGoal;
+        private string _currentBehavior = "normal";
+        private float _currentSpeed = 1.2f;
+        private bool _hasGoal = false;
+        
         // Events for external systems (like ROS bridge)
         public event Action<float, float> OnVelocityCommandReceived;
         public event Action<Vector3, Quaternion> OnMovementUpdated;
@@ -42,6 +48,12 @@ namespace RobotSNAP
         public Vector3 Velocity => _agentRb != null ? _agentRb.linearVelocity : Vector3.zero;
         public Transform RobotTransform => baseLink != null ? baseLink.transform : transform;
         
+        // Scenario properties (public getters)
+        public Vector3 CurrentGoal => _currentGoal;
+        public string CurrentBehavior => _currentBehavior;
+        public float CurrentSpeed => _currentSpeed;
+        public bool HasGoal => _hasGoal;
+        
         #region Unity Lifecycle
         
         private void Awake()
@@ -52,6 +64,12 @@ namespace RobotSNAP
         private void FixedUpdate()
         {
             UpdateMovement();
+            
+            // Scenario-based movement if goal is set
+            if (_hasGoal)
+            {
+                UpdateScenarioMovement();
+            }
         }
         
         #endregion
@@ -124,6 +142,34 @@ namespace RobotSNAP
             OnMovementUpdated?.Invoke(Position, Rotation);
         }
         
+        private void UpdateScenarioMovement()
+        {
+            // Calculate direction to goal
+            Vector3 direction = (_currentGoal - Position).normalized;
+            float distance = Vector3.Distance(Position, _currentGoal);
+            
+            // Slow down when approaching goal
+            float targetSpeed = _currentSpeed;
+            if (distance < 1.0f)
+            {
+                targetSpeed = _currentSpeed * (distance / 1.0f);
+            }
+            
+            // Calculate angular speed to face goal
+            float angleToGoal = Vector3.SignedAngle(transform.forward, direction, Vector3.up);
+            float angularSpeed = Mathf.Clamp(angleToGoal * 2.0f, -maxAngularSpeed, maxAngularSpeed);
+            
+            // Apply movement
+            SetVelocity(targetSpeed, angularSpeed);
+            
+            // Check if goal reached
+            if (distance < 0.2f)
+            {
+                _hasGoal = false;
+                Stop();
+            }
+        }
+        
         #endregion
         
         #region Public API - Command Interface
@@ -165,6 +211,8 @@ namespace RobotSNAP
         public void Reset()
         {
             Stop();
+            _hasGoal = false;
+            _currentGoal = Vector3.zero;
             // detector?.Restart();
         }
         
@@ -181,6 +229,52 @@ namespace RobotSNAP
                 _agentRb.linearVelocity = Vector3.zero;
                 _agentRb.angularVelocity = Vector3.zero;
             }
+        }
+        
+        /// <summary>
+        /// Set the robot's goal position (for scenario-based navigation)
+        /// </summary>
+        public void SetGoal(Vector3 goal)
+        {
+            _currentGoal = goal;
+            _hasGoal = true;
+        }
+        
+        /// <summary>
+        /// Set the robot's behavior (normal, cautious, assertive, socially_aware)
+        /// </summary>
+        public void SetBehavior(string behavior)
+        {
+            _currentBehavior = behavior;
+            
+            // Adjust movement parameters based on behavior
+            switch (behavior.ToLower())
+            {
+                case "cautious":
+                    maxLinearSpeed = 0.8f;
+                    acceleration = 1.5f;
+                    break;
+                case "assertive":
+                    maxLinearSpeed = 1.5f;
+                    acceleration = 3.0f;
+                    break;
+                case "socially_aware":
+                    maxLinearSpeed = 1.2f;
+                    acceleration = 2.0f;
+                    break;
+                default: // normal
+                    maxLinearSpeed = 1.2f;
+                    acceleration = 2.0f;
+                    break;
+            }
+        }
+        
+        /// <summary>
+        /// Set the robot's speed
+        /// </summary>
+        public void SetSpeed(float speed)
+        {
+            _currentSpeed = Mathf.Clamp(speed, 0.5f, 3.0f);
         }
         
         #endregion
@@ -216,6 +310,14 @@ namespace RobotSNAP
             return GetComponentInChildren<LaserScanPublisher>();
         }
         
+        /// <summary>
+        /// Get the agent detector component
+        /// </summary>
+        public AgentDetector GetAgentDetector()
+        {
+            return detector;
+        }
+        
         #endregion
         
         #region Editor Utilities
@@ -232,18 +334,32 @@ namespace RobotSNAP
             Reset();
         }
         
+        [ContextMenu("Set Test Goal")]
+        private void EditorSetTestGoal()
+        {
+            SetGoal(new Vector3(5, 0, 5));
+        }
+        
         private void OnDrawGizmosSelected()
         {
             // Draw robot radius
             Gizmos.color = Color.cyan;
             Gizmos.DrawWireSphere(transform.position, radius);
+            
+            // Draw goal if set
+            if (_hasGoal && Application.isPlaying)
+            {
+                Gizmos.color = Color.green;
+                Gizmos.DrawLine(transform.position, _currentGoal);
+                Gizmos.DrawWireSphere(_currentGoal, 0.2f);
+            }
         }
         
         #endregion
         
         public override string ToString()
         {
-            return gameObject.name;
+            return $"{gameObject.name} (Behavior: {_currentBehavior}, Speed: {_currentSpeed}, Goal: {(_hasGoal ? _currentGoal.ToString() : "none")})";
         }
     }
 }

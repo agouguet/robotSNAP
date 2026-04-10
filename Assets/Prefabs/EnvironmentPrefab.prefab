@@ -61,10 +61,10 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 2618145507695764670}
   - {fileID: 2385248390475829616}
   - {fileID: 5363543955298354729}
   - {fileID: 7524911746166132122}
+  - {fileID: 2618145507695764670}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1869230078879458577
@@ -79,12 +79,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ffb318cf27123d10be277199c932cf8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  environmentBuilder: {fileID: 3023236857669525266}
-  navMeshManager: {fileID: 9096556643226201497}
-  spawnCoordinator: {fileID: 7004666217088170188}
-  humanPool: {fileID: 3667904848397286231}
-  envROS: {fileID: 2285593503786529801}
-  datasetCreator: {fileID: 8980317503815348629}
+  _environmentBuilder: {fileID: 3023236857669525266}
+  _navMeshManager: {fileID: 9096556643226201497}
+  _spawnCoordinator: {fileID: 7004666217088170188}
+  _humanPool: {fileID: 3667904848397286231}
+  _envROS: {fileID: 2285593503786529801}
+  _datasetCreator: {fileID: 8980317503815348629}
+  _autoApplyScenario: 1
 --- !u!1 &5463317844950796959
 GameObject:
   m_ObjectHideFlags: 0
@@ -134,13 +135,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5a4ccc48cbd6691c884f653f6439fb78, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  floorPrefab: {fileID: 3403085933116894176, guid: 2c725069acdb4675a9910bec84f307d4, type: 3}
-  wallPrefab: {fileID: 5142479619637829159, guid: 7b3e71c5162b2b3adb40ce3d569907b5, type: 3}
-  floorRadius: 5
-  seed: 42
-  showGizmos: 1
-  useDatasetCreator: 1
-  datasetCreator: {fileID: 8980317503815348629}
+  _datasetCreator: {fileID: 8980317503815348629}
+  _showGizmos: 1
 --- !u!114 &8980317503815348629
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -157,11 +153,10 @@ MonoBehaviour:
   floorMaterial: {fileID: 2100000, guid: 52b5640647bd1414798ee5815b428449, type: 2}
   wallHeight: 2
   noWalkableArea: -1
-  folderPath: Dataset/basic
-  scale: 1
-  downscaleFactor: 4
-  searchRadius: 20
-  environmentParent: {fileID: 7524911746166132122}
+  _folderPath: Maps
+  _scale: 1
+  _downscaleFactor: 4
+  _environmentParent: {fileID: 7524911746166132122}
 --- !u!114 &9096556643226201497
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -363,14 +358,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4034c513f1da383e3809a71e41ea8ab4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  minPathLength: 3
-  maxPathLength: 0
-  minAgentDistance: 2
-  minHumans: 1
-  maxHumans: 1
-  robotPrefab: {fileID: 7195339433518795282, guid: 8b6f8a2b91d1b10eba9c8a61522f9826, type: 3}
-  goalPrefab: {fileID: 1819810568869333211, guid: cdbfec3b71ca12476ad6f8df4c639a16, type: 3}
-  logSpawnEvents: 0
+  _minPathLength: 3
+  _maxPathLength: 0
+  _minAgentDistance: 2
+  _minHumans: 0
+  _maxHumans: 5
+  _robotPrefab: {fileID: 7195339433518795282, guid: 8b6f8a2b91d1b10eba9c8a61522f9826, type: 3}
+  _goalPrefab: {fileID: 1819810568869333211, guid: cdbfec3b71ca12476ad6f8df4c639a16, type: 3}
+  _logEvents: 1
 --- !u!114 &3667904848397286231
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -383,15 +378,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f958dfca5dabf83e8198b69ce0d577b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  humanPrefab: {fileID: 1779652455186312154, guid: 20605c9df65ce0cc8a6fdbb97ad25e8a, type: 3}
-  defaultPoolSize: 10
-  warmupOnStart: 1
-  poolParent: {fileID: 2578197093100718531}
-  createPoolParentIfMissing: 1
-  poolParentName: HumanPool
-  defaultSpeed: 0.8
-  defaultMaxSpeed: 1
-  logPoolEvents: 0
+  _humanPrefab: {fileID: 1779652455186312154, guid: 20605c9df65ce0cc8a6fdbb97ad25e8a, type: 3}
+  _defaultPoolSize: 20
+  _warmupOnStart: 1
+  _poolParent: {fileID: 2578197093100718531}
+  _createPoolParentIfMissing: 1
+  _poolParentName: HumanPool
+  _defaultSpeed: 1.2
+  _defaultMaxSpeed: 2
+  _defaultControllerType: 0
+  _defaultInteractionRadius: 1.5
+  _defaultPersonalSpace: 0.8
+  _defaultAssertiveness: 0.5
+  _logEvents: 1
 --- !u!1 &8390315431583928309
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,6 +1,8 @@
+// Scripts/RobotSNAP/Environment/EnvironmentCreator.cs
 using UnityEngine;
 using System.Collections;
 using RobotSNAP.Core;
+using RobotSNAP.Core.Scenario;
 
 namespace RobotSNAP.Environment
 {
@@ -24,10 +26,14 @@ namespace RobotSNAP.Environment
         public float Resolution { get; protected set; }
         public Texture2D Texture { get; protected set; }
         
+        /// <summary>
+        /// Scénario chargé (optionnel, pour info)
+        /// </summary>
         public ScenarioData Scenario { get; protected set; }
-        public RobotTaskData RobotTask { get; protected set; }
         
-        public bool HasValidTask => RobotTask != null && RobotTask.IsValid;
+        /// <summary>
+        /// Vérifie si un scénario est chargé
+        /// </summary>
         public bool HasValidScenario => Scenario != null;
         
         protected virtual void Awake()
@@ -37,6 +43,14 @@ namespace RobotSNAP.Environment
         }
         
         public abstract IEnumerator CreateEnvironment();
+        
+        /// <summary>
+        /// Charge un scénario spécifique (pour information)
+        /// </summary>
+        public virtual void SetScenario(ScenarioData scenario)
+        {
+            Scenario = scenario;
+        }
         
         public float GetFloorRadius()
         {
@@ -59,7 +73,6 @@ namespace RobotSNAP.Environment
             if (Texture != null) Destroy(Texture);
             
             Scenario = null;
-            RobotTask = null;
             
             Resources.UnloadUnusedAssets();
             System.GC.Collect();

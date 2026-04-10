@@ -171,7 +171,7 @@ namespace RobotSNAP.ROS
         private sbyte[] GenerateMapFromBuilder(EnvironmentBuilder builder)
         {
             // Create a grid based on environment bounds
-            float floorRadius = builder.GetFloorRadius();
+            float floorRadius = GetFloorRadiusFromEnvironment();
             int gridSize = Mathf.CeilToInt(floorRadius * 2 / cellSize);
             
             _cachedWidth = gridSize;
@@ -289,7 +289,7 @@ namespace RobotSNAP.ROS
         {
             if (environmentBuilder != null)
             {
-                float floorRadius = environmentBuilder.GetFloorRadius();
+                float floorRadius = GetFloorRadiusFromEnvironment();
                 Vector3 center = environmentBuilder.transform.position;
                 return new Vector3(center.x - floorRadius, 0, center.z - floorRadius);
             }
@@ -400,6 +400,16 @@ namespace RobotSNAP.ROS
         private void EditorStopPublishing()
         {
             StopPublishing();
+        }
+
+        private float GetFloorRadiusFromEnvironment()
+        {
+            var envCreator = FindObjectOfType<EnvironmentCreator>();
+            if (envCreator != null)
+            {
+                return envCreator.GetFloorRadius();
+            }
+            return 10f; // valeur par défaut
         }
         
         #endregion

@@ -1,0 +1,92 @@
+name: "Démo Navigation Sociale"
+description: |
+  Scénario de démonstration avec:
+  - Un robot qui traverse la scène
+  - Des humains qui marchent aléatoirement
+  - D'autres qui suivent le robot
+version: "1.0"
+map: "office"   # office.png dans StreamingAssets/Maps/
+
+# ========== POINTS DE RÉFÉRENCE ==========
+points:
+  # Points simples (id: int ou string)
+  1: {x: -8, y: 0, z: 0}
+  2: {x: 0, y: 0, z: 0}
+  3: {x: 8, y: 0, z: 0}
+  
+  entrance: {x: -10, y: 0, z: 5}
+  exit: {x: 10, y: 0, z: -3}
+  center: {x: 0, y: 0, z: 0}
+  
+  # Zones
+  spawn_zone_1:
+    center: {x: -5, y: 0, z: 3}
+    size: {x: 4, y: 0, z: 4}
+  
+  spawn_zone_2:
+    center: {x: 5, y: 0, z: -2}
+    size: {x: 4, y: 0, z: 4}
+  
+  waiting_area:
+    center: {x: 0, y: 0, z: 5}
+    size: {x: 6, y: 0, z: 4}
+
+# ========== SIMULATION ==========
+simulation:
+  duration: 90
+  random_seed: 12345
+  time_scale: 1.0
+
+# ========== ROBOT ==========
+robot:
+  start: "entrance"
+  goal: "exit"
+  behavior: "cautious"
+  speed: 1.0
+
+# ========== HUMAINS ==========
+humans:
+  - id: "walker"
+    count: 4
+    spawn:
+      type: "random"
+      ref: "spawn_zone_1"
+    goal:
+      type: "point"
+      ref: "exit"
+    behavior: "normal"
+    speed: 1.2
+    color: [0.2, 0.6, 1.0]
+
+  - id: "wanderer"
+    count: 3
+    spawn:
+      type: "random"
+      ref: "waiting_area"
+    goal:
+      type: "wander"
+      radius: 5
+    behavior: "social"
+    speed: 0.8
+    color: [1.0, 0.5, 0.0]
+    personality:
+      assertiveness: 0.3
+      personal_space: 0.9
+      reaction_time: 0.4
+
+  - id: "follower"
+    count: 2
+    spawn:
+      type: "formation"
+      formation: "line"
+      spacing: 1.5
+      relative_to: "robot"
+    goal:
+      type: "follow"
+      target: "robot"
+    behavior: "timid"
+    speed: 1.1
+    color: [0.8, 0.2, 0.8]
+    personality:
+      assertiveness: 0.2
+      personal_space: 1.0

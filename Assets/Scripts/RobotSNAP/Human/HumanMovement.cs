@@ -9,6 +9,17 @@ namespace RobotSNAP.Human
     [RequireComponent(typeof(Rigidbody))]
     public class HumanMovement : MonoBehaviour
     {
+        [Header("Movement Settings")]
+        [SerializeField] private float _defaultSpeed = 1.2f;
+        [SerializeField] private float _maxSpeed = 2.0f;
+        
+        [Header("Behavior Settings")]
+        [SerializeField] private string _currentBehavior = "normal";
+        [SerializeField] private float _interactionRadius = 1.5f;
+        [SerializeField] private float _personalSpace = 0.8f;
+        [SerializeField] private float _assertiveness = 0.5f;
+        [SerializeField] private float _reactionTime = 0.3f;
+        
         private HumanAvatar _avatar;
         [SerializeField] private IMovementController _controller;
         private HumanConfig _config;
@@ -28,6 +39,7 @@ namespace RobotSNAP.Human
         private Vector2 _currentPosition;
         private bool _isPlaying = true;
         private MovementControllerType _currentControllerType;
+        private float _currentSpeed;
         
         // Buffer de trajectoire
         private Vector2[] _trajectoryBuffer;
@@ -41,12 +53,49 @@ namespace RobotSNAP.Human
         public bool IsPlaying => _isPlaying;
         public Vector2 CurrentVelocity => _currentVelocity;
         public Vector2 CurrentPosition => _currentPosition;
+        public float CurrentSpeed => _currentSpeed;
+        public string CurrentBehavior => _currentBehavior;
+        
+        #region Unity Lifecycle
         
         private void Awake()
         {
             InitializeComponents();
             InitializeNavMeshFilter();
+            _currentSpeed = _defaultSpeed;
         }
+        
+        private void FixedUpdate()
+        {
+            if (!_isPlaying || _avatar == null || !_avatar.hasDestination) return;
+            
+            _currentPosition = _avatar.GetCurrentPosition2D();
+            _currentVelocity = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
+            
+            UpdateTrajectoryBuffer();
+            UpdateNavMeshPath();
+            DetectNeighbors();
+            
+            Vector2 desiredVelocity = _controller.ComputeVelocity(
+                _currentPosition,
+                _currentVelocity,
+                _currentGoalPoint,
+                _neighborPositions.ToArray(),
+                _neighborVelocities.ToArray(),
+                Time.fixedDeltaTime
+            );
+            
+            // Appliquer la vitesse désirée (limitée par la vitesse courante)
+            Vector2 finalVelocity = desiredVelocity.normalized * _currentSpeed;
+            _rb.linearVelocity = new Vector3(finalVelocity.x, _rb.linearVelocity.y, finalVelocity.y);
+            _avatar.SetVelocity(_rb.linearVelocity);
+            
+            UpdateRotation(finalVelocity);
+        }
+        
+        #endregion
+        
+        #region Initialization
         
         private void InitializeComponents()
         {
@@ -72,12 +121,7 @@ namespace RobotSNAP.Human
         private void InitializeNavMeshFilter()
         {
             _navMeshFilter = new UnityEngine.AI.NavMeshQueryFilter();
-            
-            // Utiliser l'agent type par défaut (Humanoid)
-            // L'ID 0 correspond généralement au premier agent type défini dans les paramètres NavMesh
             _navMeshFilter.agentTypeID = 0;
-            
-            // Inclure toutes les aires par défaut
             _navMeshFilter.areaMask = UnityEngine.AI.NavMesh.AllAreas;
         }
         
@@ -122,33 +166,27 @@ namespace RobotSNAP.Human
                     _controller = new SFMController(_config);
                     break;
             }
+            
+            // Appliquer les paramètres de personnalité au controller
+            if (_controller != null)
+            {
+                ApplyPersonalityToController();
+            }
         }
         
-        private void FixedUpdate()
+        private void ApplyPersonalityToController()
         {
-            if (!_isPlaying || _avatar == null || !_avatar.hasDestination) return;
-            
-            _currentPosition = _avatar.GetCurrentPosition2D();
-            _currentVelocity = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
-            
-            UpdateTrajectoryBuffer();
-            UpdateNavMeshPath();
-            DetectNeighbors();
-            
-            Vector2 desiredVelocity = _controller.ComputeVelocity(
-                _currentPosition,
-                _currentVelocity,
-                _currentGoalPoint,
-                _neighborPositions.ToArray(),
-                _neighborVelocities.ToArray(),
-                Time.fixedDeltaTime
-            );
-            
-            _rb.linearVelocity = new Vector3(desiredVelocity.x, _rb.linearVelocity.y, desiredVelocity.y);
-            _avatar.SetVelocity(_rb.linearVelocity);
-            
-            UpdateRotation(desiredVelocity);
+            if (_controller is ISocialForceAgent sfmController)
+            {
+                sfmController.SetAssertiveness(_assertiveness);
+                sfmController.SetPersonalSpace(_personalSpace);
+                sfmController.SetInteractionRadius(_interactionRadius);
+            }
         }
+        
+        #endregion
+        
+        #region Navigation
         
         private void UpdateTrajectoryBuffer()
         {
@@ -164,7 +202,6 @@ namespace RobotSNAP.Human
             Vector3 start3D = new Vector3(_currentPosition.x, 0, _currentPosition.y);
             Vector3 goal3D = new Vector3(_avatar.currentDestination.x, 0, _avatar.currentDestination.y);
             
-            // CORRECTION : Utiliser le filtre avec l'agent type
             if (UnityEngine.AI.NavMesh.CalculatePath(start3D, goal3D, UnityEngine.AI.NavMesh.AllAreas, _navMeshPath))
             {
                 if (_navMeshPath.status == UnityEngine.AI.NavMeshPathStatus.PathComplete)
@@ -175,7 +212,6 @@ namespace RobotSNAP.Human
             }
             else
             {
-                // Fallback : chemin direct si pas de chemin NavMesh
                 _currentGoalPoint = _avatar.currentDestination;
             }
         }
@@ -257,6 +293,10 @@ namespace RobotSNAP.Human
             }
         }
         
+        #endregion
+        
+        #region Public API - Movement Control
+        
         public void SetPlaying(bool playing)
         {
             _isPlaying = playing;
@@ -286,6 +326,7 @@ namespace RobotSNAP.Human
             _rb.linearVelocity = Vector3.zero;
             _avatar?.SetVelocity(Vector3.zero);
             _pathCorners = new Vector3[0];
+            _currentGoalPoint = Vector2.zero;
         }
         
         public void SwitchController(MovementControllerType newType)
@@ -295,9 +336,128 @@ namespace RobotSNAP.Human
             InitializeController(newType);
         }
         
+        #endregion
+        
+        #region Public API - Scenario System
+        
+        /// <summary>
+        /// Définit la vitesse de déplacement
+        /// </summary>
+        public void SetSpeed(float speed)
+        {
+            _currentSpeed = Mathf.Clamp(speed, 0.5f, _maxSpeed);
+        }
+        
+        /// <summary>
+        /// Définit la vitesse par défaut
+        /// </summary>
+        public void SetDefaultSpeed(float speed)
+        {
+            _defaultSpeed = Mathf.Clamp(speed, 0.5f, _maxSpeed);
+            if (_currentSpeed == 0) _currentSpeed = _defaultSpeed;
+        }
+        
+        /// <summary>
+        /// Définit le comportement (normal, social, timid, aggressive)
+        /// </summary>
+        public void SetBehavior(string behavior)
+        {
+            _currentBehavior = behavior;
+            
+            // Ajuster les paramètres en fonction du comportement
+            switch (behavior.ToLower())
+            {
+                case "social":
+                    _assertiveness = 0.3f;
+                    _personalSpace = 0.9f;
+                    _interactionRadius = 2.0f;
+                    break;
+                case "timid":
+                    _assertiveness = 0.2f;
+                    _personalSpace = 1.0f;
+                    _interactionRadius = 1.8f;
+                    break;
+                case "aggressive":
+                    _assertiveness = 0.8f;
+                    _personalSpace = 0.5f;
+                    _interactionRadius = 1.2f;
+                    break;
+                default: // normal
+                    _assertiveness = 0.5f;
+                    _personalSpace = 0.8f;
+                    _interactionRadius = 1.5f;
+                    break;
+            }
+            
+            ApplyPersonalityToController();
+        }
+        
+        /// <summary>
+        /// Définit le rayon d'interaction
+        /// </summary>
+        public void SetInteractionRadius(float radius)
+        {
+            _interactionRadius = Mathf.Clamp(radius, 0.5f, 3f);
+            ApplyPersonalityToController();
+        }
+        
+        /// <summary>
+        /// Définit l'espace personnel
+        /// </summary>
+        public void SetPersonalSpace(float space)
+        {
+            _personalSpace = Mathf.Clamp(space, 0.3f, 2f);
+            ApplyPersonalityToController();
+        }
+        
+        /// <summary>
+        /// Définit l'assertivité
+        /// </summary>
+        public void SetAssertiveness(float value)
+        {
+            _assertiveness = Mathf.Clamp(value, 0f, 1f);
+            ApplyPersonalityToController();
+        }
+        
+        /// <summary>
+        /// Définit le temps de réaction
+        /// </summary>
+        public void SetReactionTime(float time)
+        {
+            _reactionTime = Mathf.Clamp(time, 0.1f, 1f);
+            if (_controller is ISocialForceAgent sfmController)
+            {
+                sfmController.SetReactionTime(_reactionTime);
+            }
+        }
+        
+        /// <summary>
+        /// Définit le type de controller
+        /// </summary>
+        public void SetControllerType(int type)
+        {
+            MovementControllerType controllerType = (MovementControllerType)Mathf.Clamp(type, 0, 2);
+            if (_currentControllerType != controllerType)
+            {
+                SwitchController(controllerType);
+            }
+        }
+        
+        #endregion
+        
+        #region Public API - Getters
+        
         public IMovementController GetController() => _controller;
         public MovementControllerType GetControllerType() => _currentControllerType;
         public float GetConfidence() => _controller?.GetConfidence() ?? 0f;
+        public float GetInteractionRadius() => _interactionRadius;
+        public float GetPersonalSpace() => _personalSpace;
+        public float GetAssertiveness() => _assertiveness;
+        public float GetReactionTime() => _reactionTime;
+        
+        #endregion
+        
+        #region Debug
         
         private void OnDrawGizmosSelected()
         {
@@ -331,6 +491,14 @@ namespace RobotSNAP.Human
                 Gizmos.color = Color.red;
                 Gizmos.DrawCube(nextGoal3D, new Vector3(0.25f, 0.25f, 0.25f));
             }
+            
+            // Visualiser les paramètres
+            Gizmos.color = new Color(0, 1, 0, 0.2f);
+            Gizmos.DrawWireSphere(transform.position, _personalSpace);
+            Gizmos.color = new Color(0, 0, 1, 0.15f);
+            Gizmos.DrawWireSphere(transform.position, _interactionRadius);
         }
+        
+        #endregion
     }
 }

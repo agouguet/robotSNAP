@@ -64,7 +64,7 @@ namespace RobotSNAP.Core
     public interface IEnvironmentBuilder
     {
         System.Collections.IEnumerator BuildEnvironment();
-        float GetFloorRadius();
+        // float GetFloorRadius();
         bool IsReady { get; }
     }
     
@@ -98,16 +98,13 @@ namespace RobotSNAP.Core
     public interface IHumanController
     {
         void Initialize();
-        void SetGoal(Vector3 goal);
-        void SetPlay(bool isPlaying);
-        void Reset();
         void FullReset();
-        Vector3 GetPosition();
-        Vector3 GetVelocity();
-        Vector3 GetCurrentPosition3D();  // Ajouté
-        Vector2 GetCurrentPosition2D();  // Ajouté
-        bool HasDestination { get; }      // Ajouté
-        void SetVelocity(Vector3 velocity); // Ajouté
+        void SetPlay(bool isPlaying);
+        void SetGoal(Vector3 goal);
+        void SetInteractionRadius(float radius);
+        void SetPersonalSpace(float space);
+        void SetAssertiveness(float value);
+        void SetReactionTime(float time);
     }
     
     public interface IROSBridge

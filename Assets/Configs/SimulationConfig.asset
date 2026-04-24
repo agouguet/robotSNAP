@@ -12,24 +12,36 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0bc4f22db86faa366bcf7612a653c290, type: 3}
   m_Name: SimulationConfig
   m_EditorClassIdentifier: 
-  environmentCount: 1
-  environmentSpacing: 100
-  datasetPath: Dataset/basic/circle_crowd
-  minHumans: 5
-  maxHumans: 15
-  minAgentDistance: 2
-  minPathLength: 3
-  maxPathLength: 0
-  robotMaxLinearSpeed: 2
-  robotMaxAngularSpeed: 2
-  robotLaserSamples: 180
-  robotControlMode: 1
-  humanDefaultSpeed: 0.8
-  humanMaxSpeed: 1
-  humanControllerType: 0
-  humanInteractionRadius: 5
-  timeScale: 1
-  inferenceMode: 0
-  rosPrefix: 
-  rosPublishFrequency: 10
-  rosEnabled: 1
+  _environmentCount: 1
+  _environmentSpacing: 100
+  _datasetPath: Dataset
+  _defaultScenario: default
+  _scenariosFolder: Scenarios
+  _timeScale: 1
+  _fixedTimestep: 0.02
+  _minHumans: 0
+  _maxHumans: 0
+  _minAgentDistance: 1.5
+  _minPathLength: 3
+  _maxPathLength: 15
+  _robotBehavior: normal
+  _robotSpeed: 1.2
+  _robotMaxLinearSpeed: 2
+  _robotMaxAngularSpeed: 2
+  _robotSensorRange: 5
+  _robotControlMode: 0
+  _robotLaserSamples: 180
+  _humanDefaultSpeed: 1.2
+  _humanMaxSpeed: 2
+  _humanControllerType: 0
+  _humanInteractionRadius: 1.5
+  _humanPersonalSpace: 0.8
+  _humanAssertiveness: 0.5
+  _humanReactionTime: 0.3
+  _enableROS: 0
+  _rosMasterURI: http://localhost:11311
+  _rosPrefix: 
+  _rosPublishFrequency: 10
+  _inferenceMode: 0
+  _recordData: 0
+  _outputDirectory: SimulationData

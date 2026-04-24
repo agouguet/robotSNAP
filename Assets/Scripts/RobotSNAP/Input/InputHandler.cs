@@ -40,11 +40,11 @@ namespace RobotSNAP.Core
                 OnCreateRequested?.Invoke();
             }
             
-            if (Input.GetKeyDown(KeyCode.Delete))
-            {
-                OnDestroyRequested?.Invoke();
-                environmentManager?.ClearAllEnvironments();
-            }
+            // if (Input.GetKeyDown(KeyCode.Delete))
+            // {
+            //     OnDestroyRequested?.Invoke();
+            //     environmentManager?.ClearAllEnvironments();
+            // }
             
             if (Input.GetKeyDown(KeyCode.Space))
             {

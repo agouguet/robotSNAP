@@ -41,6 +41,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6626872439011841589}
   - component: {fileID: 1869230078879458577}
+  - component: {fileID: 9138878670313813477}
   m_Layer: 0
   m_Name: EnvironmentPrefab
   m_TagString: Untagged
@@ -79,13 +80,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ffb318cf27123d10be277199c932cf8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _environmentBuilder: {fileID: 3023236857669525266}
+  _gridBuilder: {fileID: 2853346668875565706}
   _navMeshManager: {fileID: 9096556643226201497}
   _spawnCoordinator: {fileID: 7004666217088170188}
   _humanPool: {fileID: 3667904848397286231}
   _envROS: {fileID: 2285593503786529801}
-  _datasetCreator: {fileID: 8980317503815348629}
-  _autoApplyScenario: 1
+--- !u!114 &9138878670313813477
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3952346748747340638}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0557ef894423bd1e08778ffd16b72394, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _loader: {fileID: 0}
+  _gridBuilder: {fileID: 2853346668875565706}
+  _clearExistingHumans: 1
+  _resetRobotPosition: 1
+  _logEvents: 1
 --- !u!1 &5463317844950796959
 GameObject:
   m_ObjectHideFlags: 0
@@ -95,8 +111,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7524911746166132122}
-  - component: {fileID: 3023236857669525266}
-  - component: {fileID: 8980317503815348629}
+  - component: {fileID: 2853346668875565706}
   - component: {fileID: 9096556643226201497}
   - component: {fileID: 518648269625183668}
   - component: {fileID: 4037329500127252662}
@@ -123,7 +138,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 6626872439011841589}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &3023236857669525266
+--- !u!114 &2853346668875565706
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -132,31 +147,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 5463317844950796959}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5a4ccc48cbd6691c884f653f6439fb78, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _datasetCreator: {fileID: 8980317503815348629}
-  _showGizmos: 1
---- !u!114 &8980317503815348629
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5463317844950796959}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 48a5277c3d44e9a9799225b2af935031, type: 3}
+  m_Script: {fileID: 11500000, guid: 81f8dbb8d12bd461d83c4bd8dfc505de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   wallMaterial: {fileID: 2100000, guid: 2a901b7fff3d4fe06ae04d96dfccd319, type: 2}
-  floorMaterial: {fileID: 2100000, guid: 52b5640647bd1414798ee5815b428449, type: 2}
+  floorMaterial: {fileID: 2100000, guid: 3c5489502848999c88bd291f845698c9, type: 2}
   wallHeight: 2
   noWalkableArea: -1
-  _folderPath: Maps
-  _scale: 1
-  _downscaleFactor: 4
-  _environmentParent: {fileID: 7524911746166132122}
 --- !u!114 &9096556643226201497
 MonoBehaviour:
   m_ObjectHideFlags: 0

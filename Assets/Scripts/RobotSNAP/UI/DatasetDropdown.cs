@@ -1,16 +1,14 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
-using TMPro;
+using System.Collections;
 
 namespace RobotSNAP.UI
 {
-    /// <summary>
-    /// Gestionnaire de dropdown pour les datasets
-    /// </summary>
     public class DatasetDropdown : MonoBehaviour
     {
         [Header("References")]
@@ -27,6 +25,7 @@ namespace RobotSNAP.UI
         private List<string> _displayNames = new List<string>();
         private string _currentSelectedPath;
         private int _pendingSelectionIndex = -1;
+        private string _targetPath; // Stocke le chemin cible pour application ultérieure
         
         public event Action<int, string> OnDatasetSelected;
         public TMP_Dropdown Dropdown => dropdown;
@@ -37,8 +36,6 @@ namespace RobotSNAP.UI
             ? _datasetPaths[_pendingSelectionIndex] : null;
         public int DatasetCount => _datasetPaths.Count;
         
-        #region Unity Lifecycle
-        
         private void Awake()
         {
             if (dropdown == null)
@@ -48,25 +45,50 @@ namespace RobotSNAP.UI
         private void Start()
         {
             if (autoLoadOnStart)
-            {
                 RefreshDatasetList();
-            }
+        }
+        
+        private void OnEnable()
+        {
+            StartCoroutine(ApplyTargetSelectionDelayed());
         }
         
         private void OnDestroy()
         {
-            // Nettoyer l'événement
             if (dropdown != null)
                 dropdown.onValueChanged.RemoveListener(OnDropdownValueChanged);
         }
         
-        #endregion
+        private IEnumerator ApplyTargetSelectionDelayed()
+        {
+            yield return null; // attendre un frame pour que l'UI soit prête
+            if (string.IsNullOrEmpty(_targetPath) || _datasetPaths.Count == 0)
+                yield break;
+            
+            string normalizedTarget = _targetPath.Replace('\\', '/').Trim('/');
+            for (int i = 0; i < _datasetPaths.Count; i++)
+            {
+                string candidate = _datasetPaths[i];
+                string relative = GetRelativePathFromStreamingAssets(candidate);
+                if (relative.Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase) ||
+                    candidate.EndsWith(normalizedTarget, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (dropdown.value != i)
+                    {
+                        dropdown.SetValueWithoutNotify(i);
+                        dropdown.RefreshShownValue();
+                        if (dropdown.captionText != null && i < _displayNames.Count)
+                            dropdown.captionText.text = _displayNames[i];
+                    }
+                    _pendingSelectionIndex = i;
+                    _currentSelectedPath = candidate;
+                    if (logEvents)
+                        Debug.Log($"[DatasetDropdown] Applied target selection: {relative}");
+                    break;
+                }
+            }
+        }
         
-        #region Public Methods
-        
-        /// <summary>
-        /// Rafraîchit la liste des datasets
-        /// </summary>
         public void RefreshDatasetList()
         {
             if (dropdown == null)
@@ -75,16 +97,13 @@ namespace RobotSNAP.UI
                 return;
             }
             
-            // Nettoyer l'ancien événement
             dropdown.onValueChanged.RemoveListener(OnDropdownValueChanged);
-            
             dropdown.ClearOptions();
             _datasetPaths.Clear();
             _displayNames.Clear();
             _pendingSelectionIndex = -1;
             
             string rootPath = GetRootPath();
-            
             if (!Directory.Exists(rootPath))
             {
                 Debug.LogWarning($"[DatasetDropdown] Directory not found: {rootPath}");
@@ -94,18 +113,15 @@ namespace RobotSNAP.UI
             }
             
             _datasetPaths = FindMatchingFolders(rootPath);
-            
             if (_datasetPaths.Count == 0)
             {
                 dropdown.AddOptions(new List<string> { "No datasets found" });
                 dropdown.interactable = false;
-                
                 if (logEvents)
                     Debug.LogWarning($"[DatasetDropdown] No valid datasets found in: {rootPath}");
                 return;
             }
             
-            // Créer les noms d'affichage
             _displayNames = _datasetPaths
                 .Select(fullPath => GetRelativePathFromRoot(fullPath, rootPath))
                 .Select(path => path.Replace("\\", "/"))
@@ -113,15 +129,14 @@ namespace RobotSNAP.UI
             
             dropdown.AddOptions(_displayNames);
             dropdown.interactable = true;
-            
-            // Ajouter l'événement pour détecter les changements
             dropdown.onValueChanged.AddListener(OnDropdownValueChanged);
             
-            // Sélectionner le premier par défaut
-            if (_datasetPaths.Count > 0 && string.IsNullOrEmpty(_currentSelectedPath))
+            // Par défaut, sélectionner le premier élément (mais sera écrasé par ApplyTargetSelectionDelayed)
+            if (_datasetPaths.Count > 0)
             {
                 _pendingSelectionIndex = 0;
-                dropdown.value = 0;
+                dropdown.SetValueWithoutNotify(0);
+                dropdown.RefreshShownValue();
                 _currentSelectedPath = _datasetPaths[0];
             }
             
@@ -129,186 +144,119 @@ namespace RobotSNAP.UI
             {
                 Debug.Log($"[DatasetDropdown] Loaded {_datasetPaths.Count} datasets from: {rootPath}");
                 foreach (var name in _displayNames)
-                {
                     Debug.Log($"  - {name}");
-                }
             }
         }
         
-        /// <summary>
-        /// Callback appelé quand l'utilisateur change la sélection dans le dropdown
-        /// </summary>
         private void OnDropdownValueChanged(int index)
         {
-            if (index < 0 || index >= _datasetPaths.Count)
-            {
-                Debug.LogWarning($"[DatasetDropdown] Invalid index: {index}");
-                return;
-            }
-            
+            if (index < 0 || index >= _datasetPaths.Count) return;
             _pendingSelectionIndex = index;
-            
             if (logEvents)
-            {
                 Debug.Log($"[DatasetDropdown] Pending selection changed to: {_displayNames[index]}");
-            }
         }
         
-        /// <summary>
-        /// Applique la sélection en attente
-        /// </summary>
         public void ApplySelection()
         {
             if (_pendingSelectionIndex >= 0 && _pendingSelectionIndex < _datasetPaths.Count)
             {
                 _currentSelectedPath = _datasetPaths[_pendingSelectionIndex];
                 string relativePath = GetRelativePathFromStreamingAssets(_currentSelectedPath);
-                
                 OnDatasetSelected?.Invoke(_pendingSelectionIndex, relativePath);
-                
                 if (logEvents)
-                {
                     Debug.Log($"[DatasetDropdown] Applied: {_displayNames[_pendingSelectionIndex]} -> {relativePath}");
-                }
             }
             else
-            {
                 Debug.LogWarning("[DatasetDropdown] No pending selection to apply");
-            }
         }
         
-        /// <summary>
-        /// Retourne le chemin du dataset en attente
-        /// </summary>
         public string GetPendingPath()
         {
             if (_pendingSelectionIndex >= 0 && _pendingSelectionIndex < _datasetPaths.Count)
             {
                 string fullPath = _datasetPaths[_pendingSelectionIndex];
                 string relativePath = GetRelativePathFromStreamingAssets(fullPath);
-                
                 if (logEvents)
-                {
                     Debug.Log($"[DatasetDropdown] GetPendingPath: {relativePath}");
-                }
-                
                 return relativePath;
             }
-            
             Debug.LogWarning($"[DatasetDropdown] No pending selection. Index: {_pendingSelectionIndex}, Count: {_datasetPaths.Count}");
             return null;
         }
         
-        /// <summary>
-        /// Définit le chemin racine des datasets
-        /// </summary>
+        public void SetSelectedPath(string datasetPath, bool applyImmediately = true)
+        {
+            if (string.IsNullOrEmpty(datasetPath) || _datasetPaths.Count == 0) return;
+
+            string normalizedTarget = datasetPath.Replace('\\', '/').Trim('/').ToLowerInvariant();
+
+            for (int i = 0; i < _datasetPaths.Count; i++)
+            {
+                string candidate = _datasetPaths[i];
+                string relative = GetRelativePathFromStreamingAssets(candidate).Replace('\\', '/').ToLowerInvariant();
+                if (relative == normalizedTarget || candidate.Replace('\\', '/').ToLowerInvariant().EndsWith(normalizedTarget))
+                {
+                    _pendingSelectionIndex = i;
+                    _targetPath = datasetPath;
+                    if (applyImmediately)
+                    {
+                        dropdown.SetValueWithoutNotify(i);
+                        dropdown.RefreshShownValue();
+                        if (dropdown.captionText != null && i < _displayNames.Count)
+                            dropdown.captionText.text = _displayNames[i];
+                        _currentSelectedPath = candidate;
+                    }
+                    return;
+                }
+            }
+            Debug.LogWarning($"[DatasetDropdown] Path not found: {datasetPath}");
+        }
+        
         public void SetRootPath(string path)
         {
             folderPathRelative = path;
             RefreshDatasetList();
         }
         
-        /// <summary>
-        /// Définit la référence du dropdown
-        /// </summary>
         public void SetDropdown(TMP_Dropdown newDropdown)
         {
             if (dropdown != null)
                 dropdown.onValueChanged.RemoveListener(OnDropdownValueChanged);
-            
             dropdown = newDropdown;
-            
             if (dropdown != null)
-            {
                 dropdown.onValueChanged.AddListener(OnDropdownValueChanged);
-            }
-            
             if (autoLoadOnStart)
-            {
                 RefreshDatasetList();
-            }
         }
         
-        #endregion
+        private string GetRootPath() => Path.Combine(Application.streamingAssetsPath, folderPathRelative.Replace("Assets/", ""));
         
-        #region Private Methods
-        
-        private string GetRootPath()
-        {
-            return Path.Combine(Application.streamingAssetsPath, folderPathRelative.Replace("Assets/", ""));
-        }
-        
-        private string GetRelativePathFromRoot(string fullPath, string rootPath)
-        {
-            if (!fullPath.StartsWith(rootPath))
-                return fullPath;
-            
-            string relative = fullPath.Substring(rootPath.Length);
-            return relative.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        }
+        private string GetRelativePathFromRoot(string fullPath, string rootPath) =>
+            fullPath.StartsWith(rootPath) ? fullPath.Substring(rootPath.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) : fullPath;
         
         private string GetRelativePathFromStreamingAssets(string fullPath)
         {
             string streamingPath = Application.streamingAssetsPath;
-            if (!fullPath.StartsWith(streamingPath))
-                return fullPath;
-            
-            string relative = fullPath.Substring(streamingPath.Length);
-            return relative.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return fullPath.StartsWith(streamingPath) ? fullPath.Substring(streamingPath.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) : fullPath;
         }
         
-        /// <summary>
-        /// Recherche récursive des dossiers contenant /png et /json
-        /// </summary>
         private List<string> FindMatchingFolders(string root)
         {
             List<string> results = new List<string>();
-            
             try
             {
                 foreach (string dir in Directory.GetDirectories(root, "*", SearchOption.AllDirectories))
                 {
-                    string pngPath = Path.Combine(dir, "png");
-                    string jsonPath = Path.Combine(dir, "json");
-                    
-                    if (Directory.Exists(pngPath) && Directory.Exists(jsonPath))
-                    {
+                    if (Directory.Exists(Path.Combine(dir, "png")) && Directory.Exists(Path.Combine(dir, "json")))
                         results.Add(dir);
-                    }
                 }
             }
-            catch (Exception e)
-            {
-                Debug.LogError($"[DatasetDropdown] Error scanning directories: {e.Message}");
-            }
-            
+            catch (Exception e) { Debug.LogError($"[DatasetDropdown] Error scanning directories: {e.Message}"); }
             return results;
         }
         
-        #endregion
-        
-        #region Editor Utilities
-        
-        [ContextMenu("Refresh Dataset List")]
-        private void EditorRefresh()
-        {
-            RefreshDatasetList();
-        }
-        
-        [ContextMenu("Log Current Selection")]
-        private void EditorLogSelection()
-        {
-            Debug.Log($"[DatasetDropdown] Current selection: {_currentSelectedPath}");
-            Debug.Log($"[DatasetDropdown] Pending selection index: {_pendingSelectionIndex}");
-            Debug.Log($"[DatasetDropdown] Pending selection path: {PendingSelectionPath}");
-        }
-        
-        [ContextMenu("Apply Selection")]
-        private void EditorApplySelection()
-        {
-            ApplySelection();
-        }
-        
-        #endregion
+        [ContextMenu("Refresh Dataset List")] private void EditorRefresh() => RefreshDatasetList();
+        [ContextMenu("Log Current Selection")] private void EditorLogSelection() => Debug.Log($"[DatasetDropdown] Current: {_currentSelectedPath}, Pending: {_pendingSelectionIndex}, Target: {_targetPath}");
+        [ContextMenu("Apply Selection")] private void EditorApplySelection() => ApplySelection();
     }
 }

@@ -5,101 +5,52 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 using VYaml.Serialization;
+using Newtonsoft.Json;
 
 namespace RobotSNAP.Core.Scenario
 {
-    /// <summary>
-    /// Chargeur de scénarios YAML
-    /// Gère le chargement, le parsing, le caching et l'export des scénarios
-    /// </summary>
     public sealed class ScenarioLoader : MonoBehaviour
     {
-        #region Serialized Fields
-
-        [Header("Paths")]
-        [Tooltip("Dossier contenant les scénarios (relatif à StreamingAssets)")]
-        [SerializeField] private string _scenariosFolder = "Scenarios";
-        
-        [Tooltip("Dossier contenant les maps (relatif à StreamingAssets)")]
-        [SerializeField] private string _mapsFolder = "Maps";
-
         [Header("Settings")]
-        [Tooltip("Active le caching des scénarios chargés")]
         [SerializeField] private bool _enableCaching = true;
-        
-        [Tooltip("Active les logs de débogage")]
         [SerializeField] private bool _logEvents = true;
-        
-        [Tooltip("Extensions de fichiers YAML acceptées")]
         [SerializeField] private string[] _validExtensions = { ".yaml", ".yml" };
-
-        [Header("Fallback")]
-        [Tooltip("Scénario par défaut si aucun n'est trouvé")]
         [SerializeField] private TextAsset _fallbackYamlAsset;
 
-        #endregion
-
-        #region Private Fields
-
-        private readonly Dictionary<string, ScenarioData> _loadedScenarios = new();
-        private readonly Dictionary<string, ScenarioInfo> _scenarioInfoCache = new();
-        private readonly Dictionary<string, Texture2D> _loadedMaps = new();
+        private Dictionary<string, ScenarioData> _loadedScenarios = new();
+        private Dictionary<string, ScenarioInfo> _scenarioInfoCache = new();
+        private Dictionary<string, Texture2D> _loadedMaps = new();
         private string _scenariosPath;
         private string _mapsPath;
         private bool _isInitialized;
 
-        #endregion
-
-        #region Public Properties
-
-        /// <summary>
-        /// Chemin complet du dossier des scénarios
-        /// </summary>
         public string ScenariosPath => _scenariosPath;
-        
-        /// <summary>
-        /// Chemin complet du dossier des maps
-        /// </summary>
         public string MapsPath => _mapsPath;
-        
-        /// <summary>
-        /// Nombre de scénarios en cache
-        /// </summary>
         public int CacheSize => _loadedScenarios.Count;
 
-        #endregion
-
-        #region Events
-
-        /// <summary>
-        /// Événement déclenché quand un scénario est chargé
-        /// </summary>
         public event Action<ScenarioData> OnScenarioLoaded;
-        
-        /// <summary>
-        /// Événement déclenché quand une erreur survient
-        /// </summary>
         public event Action<string> OnScenarioError;
-        
-        /// <summary>
-        /// Événement déclenché quand une map est chargée
-        /// </summary>
         public event Action<string, Texture2D> OnMapLoaded;
 
-        #endregion
-
-        #region Unity Lifecycle
-
-        private void Awake()
+        /// <summary>
+        /// Met à jour les chemins à partir de la SimulationConfig active.
+        /// </summary>
+        public void RefreshPathsFromConfig()
         {
-            InitializePaths();
-        }
+            var config = Supervisor.Instance?.ActiveConfig;
+            if (config == null)
+            {
+                Debug.LogError("[ScenarioLoader] No active SimulationConfig found");
+                return;
+            }
 
-        private void InitializePaths()
-        {
-            _scenariosPath = Path.Combine(Application.streamingAssetsPath, _scenariosFolder);
-            _mapsPath = Path.Combine(Application.streamingAssetsPath, _mapsFolder);
-            
+            // Utiliser les chemins de la config, ou des valeurs par défaut
+            string scenariosFolder = !string.IsNullOrEmpty(config.ScenariosFolder) ? config.ScenariosFolder : "Scenarios";
+            string mapsFolder = !string.IsNullOrEmpty(config.DatasetPath) ? config.DatasetPath : "Dataset";
+
+            _scenariosPath = Path.Combine(Application.streamingAssetsPath, scenariosFolder);
+            _mapsPath = Path.Combine(Application.streamingAssetsPath, mapsFolder);
+
             EnsureDirectoriesExist();
             _isInitialized = true;
         }
@@ -111,15 +62,12 @@ namespace RobotSNAP.Core.Scenario
                 Directory.CreateDirectory(_scenariosPath);
                 if (_logEvents) Debug.Log($"[ScenarioLoader] Created scenarios directory: {_scenariosPath}");
             }
-            
             if (!Directory.Exists(_mapsPath))
             {
                 Directory.CreateDirectory(_mapsPath);
                 if (_logEvents) Debug.Log($"[ScenarioLoader] Created maps directory: {_mapsPath}");
             }
         }
-
-        #endregion
 
         #region Private Helper Methods
 
@@ -205,7 +153,8 @@ namespace RobotSNAP.Core.Scenario
             if (!_isInitialized)
             {
                 OnScenarioError?.Invoke("ScenarioLoader not initialized");
-                return null;
+                RefreshPathsFromConfig();
+                // return null;
             }
             
             // Vérifier le cache
@@ -224,7 +173,7 @@ namespace RobotSNAP.Core.Scenario
                 Debug.LogError($"[ScenarioLoader] {error}");
                 return null;
             }
-            
+            Debug.Log($"[ScenarioLoader] Found scenario file: {filePath}");
             try
             {
                 // Lire et parser
@@ -352,11 +301,7 @@ namespace RobotSNAP.Core.Scenario
             {
                 return LoadScenarioFromAsset(_fallbackYamlAsset);
             }
-            
-            // Créer un scénario par défaut minimal
-            var defaultScenario = CreateMinimalScenario();
-            OnScenarioLoaded?.Invoke(defaultScenario);
-            return defaultScenario;
+            return null;
         }
         
         /// <summary>
@@ -395,6 +340,96 @@ namespace RobotSNAP.Core.Scenario
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Charge une map (texture + bounds) à partir d'un identifiant.
+        /// L'identifiant peut être :
+        /// - "dataset" (ex: "basic") : une map aléatoire de ce dataset
+        /// - "dataset/mapname" (ex: "basic/corner") : la map spécifique
+        /// </summary>
+        public bool LoadMapData(string mapIdentifier, out Texture2D texture, out Bounds bounds)
+        {
+            texture = null;
+            bounds = new Bounds();
+
+            string basePath = Path.Combine(Application.streamingAssetsPath, MapsPath);
+            string mapName = mapIdentifier.Replace('\\', '/').Trim('/');
+
+            string pngPath, jsonPath;
+
+            if (mapName.Contains("/"))
+            {
+                // Format "dataset/mapname"
+                string dataset = mapName.Substring(0, mapName.IndexOf('/'));
+                string map = mapName.Substring(mapName.IndexOf('/') + 1);
+                pngPath = Path.Combine(basePath, dataset, "png", map + ".png");
+                jsonPath = Path.Combine(basePath, dataset, "json", map + ".json");
+            }
+            else
+            {
+                // Choisir une map aléatoire dans le dataset
+                string dataset = mapName;
+                string pngFolder = Path.Combine(basePath, dataset, "png");
+                if (!Directory.Exists(pngFolder))
+                {
+                    Debug.LogError($"[ScenarioLoader] Dataset folder not found: {pngFolder}");
+                    return false;
+                }
+                string[] pngFiles = Directory.GetFiles(pngFolder, "*.png");
+                if (pngFiles.Length == 0)
+                {
+                    Debug.LogError($"[ScenarioLoader] No PNG files in {pngFolder}");
+                    return false;
+                }
+                // Sélection aléatoire
+                int index = UnityEngine.Random.Range(0, pngFiles.Length);
+                string selected = Path.GetFileNameWithoutExtension(pngFiles[index]);
+                pngPath = pngFiles[index];
+                jsonPath = Path.Combine(basePath, dataset, "json", selected + ".json");
+            }
+
+            if (!File.Exists(pngPath) || !File.Exists(jsonPath))
+            {
+                Debug.LogError($"[ScenarioLoader] Map files missing: {pngPath} or {jsonPath}");
+                return false;
+            }
+
+            // Charger texture
+            byte[] pngData = File.ReadAllBytes(pngPath);
+            texture = new Texture2D(2, 2);
+            texture.LoadImage(pngData);
+
+            // Charger JSON
+            string json = File.ReadAllText(jsonPath);
+            var metadata = JsonConvert.DeserializeObject<MapMetadata>(json);
+            if (metadata?.bbox == null)
+            {
+                Debug.LogError($"[ScenarioLoader] Invalid JSON metadata for {mapIdentifier}");
+                return false;
+            }
+
+            float[] min = metadata.bbox.min;
+            float[] max = metadata.bbox.max;
+            Vector3 center = new Vector3((min[0] + max[0]) / 2f, 0, (min[1] + max[1]) / 2f);
+            Vector3 size = new Vector3(max[0] - min[0], 0, max[1] - min[1]);
+            bounds = new Bounds(center, size);
+
+            return true;
+        }
+
+        // Classe interne pour la désérialisation
+        [System.Serializable]
+        private class MapMetadata
+        {
+            public BBox bbox;
+        }
+
+        [System.Serializable]
+        private class BBox
+        {
+            public float[] min;
+            public float[] max;
         }
 
         #endregion
@@ -588,181 +623,6 @@ namespace RobotSNAP.Core.Scenario
             }
         }
         
-        /// <summary>
-        /// Crée un scénario minimal par défaut
-        /// </summary>
-        public ScenarioData CreateMinimalScenario()
-        {
-            var scenario = new ScenarioData
-            {
-                Info = new ScenarioInfo
-                {
-                    Name = "default",
-                    Description = "Default minimal scenario",
-                    Version = "1.0",
-                    Author = "RobotSNAP",
-                    Created = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                    Tags = new[] { "default", "minimal" }
-                },
-                Points = new Dictionary<string, RefPoint>
-                {
-                    ["origin"] = RefPoint.FromVector3(Vector3.zero),
-                    ["goal"] = RefPoint.FromVector3(new Vector3(5, 0, 5))
-                },
-                Simulation = new SimulationConfigData
-                {
-                    Duration = 60f,
-                    RandomSeed = 42,
-                    MinHumans = 3,
-                    MaxHumans = 8
-                },
-                Robot = new RobotScenarioConfig
-                {
-                    StartRef = "origin",
-                    GoalRef = "goal",
-                    Behavior = "normal",
-                    Speed = 1.2f
-                },
-                Humans = new List<HumanScenarioConfig>
-                {
-                    new HumanScenarioConfig
-                    {
-                        Id = "walker",
-                        Count = 3,
-                        Spawn = new SpawnConfig
-                        {
-                            Type = "random",
-                            Reference = "origin"
-                        },
-                        Goal = new GoalConfig
-                        {
-                            Type = "point",
-                            Reference = "goal"
-                        },
-                        Speed = 1.0f
-                    }
-                }
-            };
-            
-            return scenario;
-        }
-        
-        /// <summary>
-        /// Crée un scénario d'exemple complet
-        /// </summary>
-        public ScenarioData CreateExampleScenario()
-        {
-            var scenario = new ScenarioData
-            {
-                Info = new ScenarioInfo
-                {
-                    Name = "example_crossing",
-                    Description = "Example scenario with crossing humans",
-                    Version = "1.0",
-                    Author = "RobotSNAP",
-                    Created = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
-                    Tags = new[] { "example", "crossing", "demo" },
-                    MapImage = "office",
-                    DatasetPath = "ETH"
-                },
-                Points = new Dictionary<string, RefPoint>
-                {
-                    ["entrance"] = RefPoint.FromVector3(new Vector3(-8, 0, 0)),
-                    ["exit"] = RefPoint.FromVector3(new Vector3(8, 0, 0)),
-                    ["center"] = RefPoint.FromVector3(new Vector3(0, 0, 0)),
-                    ["zone_north"] = RefPoint.FromBounds(new Vector3(0, 0, 5), new Vector3(6, 0, 4)),
-                    ["zone_south"] = RefPoint.FromBounds(new Vector3(0, 0, -5), new Vector3(6, 0, 4)),
-                    ["waiting_area"] = RefPoint.FromBounds(new Vector3(3, 0, 2), new Vector3(4, 0, 4))
-                },
-                Simulation = new SimulationConfigData
-                {
-                    Duration = 60f,
-                    RandomSeed = 42,
-                    TimeScale = 1f,
-                    MinHumans = 5,
-                    MaxHumans = 10
-                },
-                Robot = new RobotScenarioConfig
-                {
-                    StartRef = "entrance",
-                    GoalRef = "exit",
-                    Behavior = "normal",
-                    Speed = 1.2f
-                },
-                Humans = new List<HumanScenarioConfig>
-                {
-                    new HumanScenarioConfig
-                    {
-                        Id = "walkers",
-                        Count = 4,
-                        Spawn = new SpawnConfig
-                        {
-                            Type = "random",
-                            Reference = "zone_north"
-                        },
-                        Goal = new GoalConfig
-                        {
-                            Type = "point",
-                            Reference = "exit"
-                        },
-                        Behavior = "normal",
-                        Speed = 1.0f,
-                        Color = new float[] { 0.2f, 0.6f, 1.0f }
-                    },
-                    new HumanScenarioConfig
-                    {
-                        Id = "wanderers",
-                        Count = 3,
-                        Spawn = new SpawnConfig
-                        {
-                            Type = "random",
-                            Reference = "waiting_area"
-                        },
-                        Goal = new GoalConfig
-                        {
-                            Type = "wander",
-                            Radius = 4f
-                        },
-                        Behavior = "social",
-                        Speed = 0.8f,
-                        Color = new float[] { 1.0f, 0.5f, 0.0f },
-                        Personality = new PersonalityConfig
-                        {
-                            Assertiveness = 0.3f,
-                            PersonalSpace = 0.9f,
-                            ReactionTime = 0.4f
-                        }
-                    },
-                    new HumanScenarioConfig
-                    {
-                        Id = "followers",
-                        Count = 2,
-                        Spawn = new SpawnConfig
-                        {
-                            Type = "formation",
-                            Formation = "line",
-                            Spacing = 1.5f,
-                            RelativeTo = "robot"
-                        },
-                        Goal = new GoalConfig
-                        {
-                            Type = "follow",
-                            Target = "robot"
-                        },
-                        Behavior = "timid",
-                        Speed = 1.1f,
-                        Color = new float[] { 0.8f, 0.2f, 0.8f },
-                        Personality = new PersonalityConfig
-                        {
-                            Assertiveness = 0.2f,
-                            PersonalSpace = 1.0f
-                        }
-                    }
-                }
-            };
-            
-            return scenario;
-        }
 
         #endregion
 
@@ -814,22 +674,6 @@ namespace RobotSNAP.Core.Scenario
         #region Editor Utilities
 
         #if UNITY_EDITOR
-        
-        [ContextMenu("Create Example Scenario File")]
-        private void EditorCreateExampleScenarioFile()
-        {
-            var example = CreateExampleScenario();
-            ExportScenario(example, "example_crossing.yaml");
-            Debug.Log("[ScenarioLoader] Created example scenario file");
-        }
-        
-        [ContextMenu("Create Minimal Scenario File")]
-        private void EditorCreateMinimalScenarioFile()
-        {
-            var minimal = CreateMinimalScenario();
-            ExportScenario(minimal, "default.yaml");
-            Debug.Log("[ScenarioLoader] Created minimal scenario file");
-        }
         
         [ContextMenu("Clear All Caches")]
         private void EditorClearCaches() => ClearAllCaches();

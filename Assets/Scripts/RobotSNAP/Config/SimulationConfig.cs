@@ -24,6 +24,15 @@ namespace RobotSNAP.Core
         [Tooltip("Spacing between environments when multiple are active")]
         [SerializeField] private float _environmentSpacing = 20f;
 
+        [Tooltip("Path to the dataset folder (relative to StreamingAssets). Must contain subfolders with png/ and json/")]
+        [SerializeField] private string _datasetPath = "Dataset";
+        
+        [Tooltip("Name of the default scenario to load (without extension)")]
+        [SerializeField] private string _defaultScenario = "default";
+
+        [Tooltip("Folder where scenario YAML files are stored (relative to StreamingAssets)")]
+        [SerializeField] private string _scenariosFolder = "Scenarios";
+
         #endregion
 
         #region Serialized Fields - Time
@@ -109,17 +118,6 @@ namespace RobotSNAP.Core
 
         #endregion
 
-        #region Serialized Fields - Data
-
-        [Header("Data")]
-        [Tooltip("Path to the dataset folder")]
-        [SerializeField] private string _datasetPath = "";
-        
-        [Tooltip("Name of the default scenario to load")]
-        [SerializeField] private string _defaultScenario = "default";
-
-        #endregion
-
         #region Serialized Fields - ROS
 
         [Header("ROS")]
@@ -154,17 +152,11 @@ namespace RobotSNAP.Core
         #region Properties
 
         // Environment
-        public int EnvironmentCount 
-        { 
-            get => _environmentCount; 
-            set => _environmentCount = Mathf.Max(1, value); 
-        }
-        
-        public float EnvironmentSpacing 
-        { 
-            get => _environmentSpacing; 
-            set => _environmentSpacing = Mathf.Max(0, value); 
-        }
+        public int EnvironmentCount { get => _environmentCount; set => _environmentCount = Mathf.Max(1, value); }
+        public float EnvironmentSpacing { get => _environmentSpacing; set => _environmentSpacing = Mathf.Max(0, value); }
+        public string DatasetPath { get => _datasetPath; set => _datasetPath = value ?? ""; }
+        public string DefaultScenario { get => _defaultScenario; set => _defaultScenario = value ?? "default"; }
+        public string ScenariosFolder { get => _scenariosFolder; set => _scenariosFolder = value ?? "Scenarios"; }
         
         // Time
         public float TimeScale 
@@ -303,19 +295,6 @@ namespace RobotSNAP.Core
             set => _humanReactionTime = Mathf.Clamp(value, 0.1f, 1f); 
         }
         
-        // Data
-        public string DatasetPath 
-        { 
-            get => _datasetPath; 
-            set => _datasetPath = value ?? ""; 
-        }
-        
-        public string DefaultScenario 
-        { 
-            get => _defaultScenario; 
-            set => _defaultScenario = value ?? "default"; 
-        }
-        
         // ROS
         public bool EnableROS 
         { 
@@ -393,6 +372,9 @@ namespace RobotSNAP.Core
             // Environment
             target._environmentCount = this._environmentCount;
             target._environmentSpacing = this._environmentSpacing;
+            target._datasetPath = this._datasetPath;
+            target._defaultScenario = this._defaultScenario;
+            target._scenariosFolder = this._scenariosFolder;
             
             // Time
             target._timeScale = this._timeScale;
@@ -490,6 +472,9 @@ namespace RobotSNAP.Core
         {
             _environmentCount = 1;
             _environmentSpacing = 20f;
+            _datasetPath = "Dataset";
+            _defaultScenario = "default";
+            _scenariosFolder = "Scenarios";
             _timeScale = 1f;
             _fixedTimestep = 0.02f;
             _minHumans = 5;

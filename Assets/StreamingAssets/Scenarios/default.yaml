@@ -2,7 +2,7 @@ scenario_info:
   name: "Default"
   description: "Default minimal scenario"
   version: "1.0"
-  map: "office"
+  map: "basic"
 
 points:
   start: {x: 0, y: 0, z: 0}
@@ -17,5 +17,5 @@ robot:
 simulation:
   duration: 60
   random_seed: 42
-  min_humans: 0
-  max_humans: 0
+  min_humans: 1
+  max_humans: 1

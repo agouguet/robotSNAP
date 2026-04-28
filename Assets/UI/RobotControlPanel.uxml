@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="RobotControlPanel" class="panel robot-panel">
+        <ui:Label text="Robot" class="panel-title" />
+        <ui:VisualElement class="robot-info">
+            <ui:Label text="TIAGO Base" name="RobotName" class="robot-name" />
+            <ui:Label text="Configuration par défaut" name="RobotConfig" class="robot-config" />
+            <ui:ProgressBar name="RobotProgress" title="78%" low-value="0" high-value="100" value="78" class="robot-progress" />
+        </ui:VisualElement>
+        <ui:Button text="Configurer le robot" name="ConfigRobotButton" class="button-primary" />
+    </ui:VisualElement>
+</ui:UXML>

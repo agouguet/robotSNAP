@@ -1,0 +1,24 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Template name="BottomControls" src="project://database/Assets/UI/BottomControls.uxml?fileID=9197481963319205126&amp;guid=51faec565b8368625b02bc070529ee9c&amp;type=3#BottomControls"/>
+    <ui:Template name="Sidebar" src="project://database/Assets/UI/Sidebar.uxml?fileID=9197481963319205126&amp;guid=c13731eb285ae0729a9f9a6f6118ce39&amp;type=3#Sidebar"/>
+    <ui:Template name="SimulationOverlay" src="project://database/Assets/UI/SimulationOverlay.uxml?fileID=9197481963319205126&amp;guid=9122e17034a60205eac9e6ee17f6bb80&amp;type=3#SimulationOverlay"/>
+    <ui:Template name="SimulationView" src="project://database/Assets/UI/SimulationState.uxml?fileID=9197481963319205126&amp;guid=4eb8246bb1a0234e587cbed5f9918faa&amp;type=3#SimulationState"/>
+    <ui:Template name="TopBar" src="project://database/Assets/UI/TopBar.uxml?fileID=9197481963319205126&amp;guid=f8ab7480e4b015c7ea8318f70a2efd51&amp;type=3#TopBar"/>
+    <Style src="project://database/Assets/UI/MainWindow.uss?fileID=7433441132597879392&amp;guid=a8f8b32c4d27d9bedaf2031c6a9bf7d5&amp;type=3#MainWindow"/>
+    <ui:VisualElement name="MainContainer" style="flex-direction: row; align-items: flex-start; height: auto; flex-grow: 1;">
+        <ui:Image source="project://database/Assets/UI/render_texture.renderTexture?fileID=8400000&amp;guid=8a7a365aa88f4b6d58c75122a98aacce&amp;type=2#render_texture" scale-mode="ScaleToFit" name="Image" tabindex="0" style="flex-grow: 1; align-items: auto; align-content: auto; height: auto; width: auto; flex-shrink: -5; overflow: visible; position: absolute; top: 0; left: 0; right: 0; bottom: 0;"/>
+        <ui:Instance template="Sidebar" name="SideBar" style="height: 100%; flex-grow: 1; flex-shrink: 1;"/>
+        <ui:VisualElement name="RightArea" style="flex-grow: 1000; flex-direction: column; height: auto; align-items: stretch; justify-content: flex-start; align-self: auto; align-content: auto;">
+            <ui:Instance template="TopBar" name="TopBar"/>
+            <ui:VisualElement name="CentralSplit" style="flex-direction: row; flex-grow: 2;">
+                <ui:VisualElement name="Center" style="flex-grow: 1;">
+                    <ui:Instance template="SimulationOverlay" name="SimulationOverlay" style="flex-grow: 1;"/>
+                    <ui:Instance template="BottomControls" name="SimulationControlPanel" style="height: auto; flex-grow: 0; justify-content: center; align-self: center; width: 100%;"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="RightBar" style="flex-grow: 0; width: auto;">
+                    <ui:Instance template="SimulationView" name="SimulationState" style="flex-grow: 1; align-items: auto; align-content: auto; justify-content: center;"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

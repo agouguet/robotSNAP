@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="VisualizationPanel" class="panel">
+        <ui:Label text="Visualisations" class="panel-title" />
+        <ui:Toggle name="ToggleTrajPlan" label="Trajectoire planifiée" class="viz-toggle" />
+        <ui:Toggle name="ToggleTrajExec" label="Trajectoire exécutée" class="viz-toggle" />
+        <ui:Toggle name="ToggleIntentZones" label="Zones d'intention" class="viz-toggle" />
+        <ui:Toggle name="ToggleDetections" label="Détections" class="viz-toggle" />
+        <ui:Toggle name="ToggleOccMap" label="Carte d'occupation" class="viz-toggle" />
+    </ui:VisualElement>
+</ui:UXML>

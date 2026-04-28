@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="LogsPanel" class="panel">
+        <ui:Label text="Logs événements" class="panel-title" />
+        <ui:ScrollView name="LogsScrollView" class="logs-scroll">
+            <ui:ListView name="LogsListView" class="logs-list" />
+            <!-- Vous pouvez aussi pré-remplir avec des labels si vous ne voulez pas de ListView -->
+            <!-- Exemple statique : 
+            <ui:Label text="00:02:45 Début de la simulation" class="log-entry" />
+            <ui:Label text="00:02:46 Humain détecté à gauche" class="log-entry" />
+            ... -->
+        </ui:ScrollView>
+    </ui:VisualElement>
+</ui:UXML>

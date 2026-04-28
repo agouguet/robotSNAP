@@ -1,0 +1,40 @@
+.sidebar {
+    width: 280px;
+    transition: width 0.2s ease;
+}
+
+.sidebar-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 8px;
+}
+
+.collapse-button {
+    background-color: transparent;
+    border-width: 0;
+    color: #2d9cdb;
+    font-size: 16px;
+    width: 30px;
+    cursor: pointer;
+}
+
+.sidebar-content {
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Version réduite (gérée par script via une classe sur .sidebar) */
+.sidebar.collapsed {
+    width: 70px;
+}
+
+.sidebar.collapsed .app-title {
+    font-size: 14px;
+    text-align: center;
+}
+
+.sidebar.collapsed .sidebar-content {
+    display: none;
+}

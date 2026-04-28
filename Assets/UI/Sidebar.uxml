@@ -1,0 +1,44 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/Sidebar.uss?fileID=7433441132597879392&amp;guid=4bc6cac0b3df5db18b452b1cd0e087ac&amp;type=3#Sidebar"/>
+    <ui:VisualElement name="Sidebar" class="sidebar" style="flex-grow: 1;">
+        <!-- En-tête toujours visible -->
+        <ui:VisualElement name="SidebarHeader" class="sidebar-header">
+            <ui:Label text="SOCIOBOT" name="AppTitle" class="app-title"/>
+            <ui:Button name="CollapseButton" text="◀" class="collapse-button" />
+        </ui:VisualElement>
+        
+        <!-- Contenu pliable (masqué lorsque réduit) -->
+        <ui:VisualElement name="SidebarContent" class="sidebar-content">
+            <ui:Label text="Social Navigation Benchmark" name="AppSubtitle" class="app-subtitle"/>
+            <ui:VisualElement class="separator"/>
+            <ui:Label text="Simulateur" class="section-title"/>
+            <ui:VisualElement class="menu-group">
+                <ui:Label text="Analyse / Résultats" class="menu-item"/>
+                <ui:Label text="Scénarios" class="menu-item"/>
+                <ui:Label text="Robots" class="menu-item"/>
+                <ui:Label text="Environnements" class="menu-item"/>
+                <ui:Label text="Enregistrements" class="menu-item"/>
+                <ui:Label text="Agents (Humains)" class="menu-item"/>
+                <ui:Label text="Paramètres" class="menu-item"/>
+                <ui:Label text="Profil" class="menu-item"/>
+                <ui:Label text="Documentation" class="menu-item"/>
+                <ui:Label text="Aide &amp; Support" class="menu-item"/>
+            </ui:VisualElement>
+            <ui:VisualElement class="separator"/>
+            <ui:VisualElement class="active-scenario">
+                <ui:Label text="Scénario actif" class="section-title"/>
+                <ui:Label text="Hall d'accueil – Heure de pointe" class="scenario-name"/>
+                <ui:VisualElement class="scenario-details">
+                    <ui:Label text="Environnement : Office Building 01" class="detail-line"/>
+                    <ui:Label text="Robots : TIAGo Base" class="detail-line"/>
+                </ui:VisualElement>
+                <ui:Button text="Changer de scénario" class="button-link"/>
+            </ui:VisualElement>
+            <ui:VisualElement class="separator"/>
+            <ui:VisualElement class="bottom-actions">
+                <ui:Toggle name="DarkModeToggle" label="Mode sombre" class="toggle-dark"/>
+                <!-- Le bouton "Réduire le menu" a été déplacé dans l'en-tête -->
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

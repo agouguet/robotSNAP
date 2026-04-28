@@ -1,0 +1,5 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:VisualElement class="panel" style="flex-grow: 1; width: 280px;">
+        <ui:Label text="Label"/>
+    </ui:VisualElement>
+</ui:UXML>

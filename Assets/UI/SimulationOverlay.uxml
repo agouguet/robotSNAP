@@ -5,7 +5,7 @@
             <ui:Button text="3D" name="3DButton" style="width: 64px; height: 64px; align-items: flex-end;"/>
             <ui:Button text="2D" name="2DButton" style="width: 64px; height: 64px; align-items: flex-end;"/>
             <ui:VisualElement style="flex-grow: 1;"/>
-            <ui:Button text="" name="FullScreenButton" style="width: 64px; height: 64px; align-items: flex-end; background-image: resource(&quot;UI/icons/fullscreen&quot;);"/>
+            <ui:Button text="" name="FullScreenButton" style="width: 64px; height: 64px; align-items: flex-end; background-image: resource(&quot;UI/icons/fullscreen&quot;); -unity-text-outline-color: rgba(0, 0, 0, 0); background-color: rgb(188, 188, 188); -unity-background-image-tint-color: rgb(58, 56, 56);"/>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

@@ -1,5 +1,5 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <ui:Template name="BottomControls" src="project://database/Assets/UI/BottomControls.uxml?fileID=9197481963319205126&amp;guid=51faec565b8368625b02bc070529ee9c&amp;type=3#BottomControls"/>
+    <ui:Template name="BottomPanel" src="project://database/Assets/UI/BottomPanel.uxml?fileID=9197481963319205126&amp;guid=50e9224592b3143ecaccb1326e9d54d4&amp;type=3#BottomPanel"/>
     <ui:Template name="Sidebar" src="project://database/Assets/UI/Sidebar.uxml?fileID=9197481963319205126&amp;guid=c13731eb285ae0729a9f9a6f6118ce39&amp;type=3#Sidebar"/>
     <ui:Template name="SimulationOverlay" src="project://database/Assets/UI/SimulationOverlay.uxml?fileID=9197481963319205126&amp;guid=9122e17034a60205eac9e6ee17f6bb80&amp;type=3#SimulationOverlay"/>
     <ui:Template name="SimulationView" src="project://database/Assets/UI/SimulationState.uxml?fileID=9197481963319205126&amp;guid=4eb8246bb1a0234e587cbed5f9918faa&amp;type=3#SimulationState"/>
@@ -13,7 +13,7 @@
             <ui:VisualElement name="CentralSplit" style="flex-direction: row; flex-grow: 2;">
                 <ui:VisualElement name="Center" style="flex-grow: 1;">
                     <ui:Instance template="SimulationOverlay" name="SimulationOverlay" style="flex-grow: 1;"/>
-                    <ui:Instance template="BottomControls" name="SimulationControlPanel" style="height: auto; flex-grow: 0; justify-content: center; align-self: center; width: 100%;"/>
+                    <ui:Instance template="BottomPanel" name="BottomPanel" style="flex-grow: 0; height: auto;"/>
                 </ui:VisualElement>
                 <ui:VisualElement name="RightBar" style="flex-grow: 0; width: auto;">
                     <ui:Instance template="SimulationView" name="SimulationState" style="flex-grow: 1; align-items: auto; align-content: auto; justify-content: center;"/>

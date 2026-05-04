@@ -1,0 +1,29 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:VisualElement name="BottomTabsPanel" class="bottom-tabs-panel" style="height: auto; background-size: auto auto;">
+        <ui:VisualElement name="TabsToolbar" class="tabs-toolbar">
+            <ui:Button text="Vue Capteur" name="TabSensor" class="tab-button active"/>
+            <ui:Button text="Console" name="TabConsole" class="tab-button"/>
+            <ui:Button text="Logs" name="TabLogs" class="tab-button"/>
+        </ui:VisualElement>
+        <ui:VisualElement name="TabContentContainer" class="tab-content">
+            <ui:VisualElement name="SensorContent" class="tab-pane active">
+                <ui:Label text="[ Capteurs : Lidar, Caméra, IMU ]"/>
+                <ui:Slider label="Zoom" low-value="0.1" high-value="2" value="1"/>
+                <ui:VisualElement style="height: 100px; background-color: rgb(44, 49, 58);">
+                    <ui:Label text="Visualisation capteur (à implémenter)"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="ConsoleContent" class="tab-pane" style="display: none;">
+                <ui:ScrollView name="ConsoleScroll">
+                    <ui:Label text="&gt; Simulation prête" class="console-line"/>
+                    <ui:Label text="&gt; Scénario chargé : Hall d&apos;accueil" class="console-line"/>
+                    <ui:Label text="&gt; Robot connecté" class="console-line"/>
+                </ui:ScrollView>
+                <ui:TextField name="ConsoleInput" placeholder="Entrer une commande..." style="margin-top: 4px;"/>
+            </ui:VisualElement>
+            <ui:VisualElement name="LogsContent" class="tab-pane" style="display: none;">
+                <ui:ListView name="LogsListView"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

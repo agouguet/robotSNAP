@@ -72,7 +72,7 @@
     font-family: "Courier New", monospace;
     font-size: 10px;
     padding: 2px 6px;
-    border-bottom: 1px solid var(--border);
+    /* border-bottom: 1px solid var(--border); */
 }
 
 /* Boutons */
@@ -97,8 +97,8 @@
 
 .top-bar {
     padding: 12px 16px;
-    border-bottom-width: 1px;
-    border-bottom-color: var(--border);
+    /* border-bottom-width: 1px;
+    border-bottom-color: var(--border); */
     background-color: var(--bg-secondary);
 }
 
@@ -202,7 +202,7 @@
     font-family: monospace;
     font-size: 10px;
     padding: 2px 4px;
-    border-bottom: 1px solid var(--border);
+    /* border-bottom: 1px solid var(--border); */
 }
 
 .robot-panel {
@@ -240,4 +240,77 @@
 
 .speed-slider {
     width: 120px;
+}
+
+.bottom-tabs-panel {
+    margin: 8px;
+    background-color: var(--panel-bg);
+    border-width: 1px;
+    border-color: var(--border);
+    border-radius: 6px;
+    flex-direction: column;
+}
+
+.tabs-toolbar {
+    flex-direction: row;
+    background-color: var(--bg-secondary);
+    /* border-bottom-width: 1px;
+    border-bottom-color: var(--border); */
+}
+
+.tab-button {
+    background-color: transparent;
+    border-width: 0;
+    padding: 8px 16px;
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.tab-button.active {
+    color: var(--accent);
+    /* border-bottom-width: 2px;
+    border-bottom-color: var(--accent); */
+    background-color: rgba(45, 156, 219, 0.1);
+}
+
+.tab-pane {
+    padding: 8px;
+    overflow: auto;
+}
+
+.console-line {
+    font-family: monospace;
+    font-size: 11px;
+    padding: 2px 4px;
+    /* border-bottom: 1px solid var(--border); */
+    color: #a0ffa0;
+}
+
+/* Style pour le conteneur de la barre d'onglets */
+.tabs-toolbar {
+    flex-direction: row;
+    background-color: var(--bg-secondary);
+    /* border-bottom-width: 1px;
+    border-bottom-style: solid;
+    border-bottom-color: var(--border); */
+}
+
+/* Style pour chaque bouton d'onglet */
+.tab-button {
+    background-color: transparent;
+    border-width: 0;
+    padding: 8px 16px;
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Style pour l'onglet actif */
+.tab-button.active {
+    color: var(--accent);
+    /* border-bottom-width: 2px;
+    border-bottom-style: solid;
+    border-bottom-color: var(--accent); */
+    background-color: rgba(45, 156, 219, 0.1);
 }

@@ -6603,11 +6603,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1187733929}
   - component: {fileID: 1187733928}
-  - component: {fileID: 1187733934}
-  - component: {fileID: 1187733933}
-  - component: {fileID: 1187733931}
   - component: {fileID: 1187733930}
-  - component: {fileID: 1187733932}
   m_Layer: 5
   m_Name: HUD
   m_TagString: Untagged
@@ -6660,73 +6656,13 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1187733927}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1ae9e3e96a6183a81ab144d08915ab38, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MainUIController
   uiDocument: {fileID: 1187733928}
   simulationCamera: {fileID: 559886696}
---- !u!114 &1187733931
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1187733927}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 915aab141efb56601a44fe26c0aed97f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SimulationCameraView
-  uiDocument: {fileID: 1187733928}
-  simulationCamera: {fileID: 559886696}
---- !u!114 &1187733932
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1187733927}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 09d423abc2c17b0428be28dfada2df05, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SimulationOverlayController
-  uiDocument: {fileID: 1187733928}
---- !u!114 &1187733933
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1187733927}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c397dc8d3aac4142ba80d20420aba630, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SidebarController
-  uiDocument: {fileID: 1187733928}
---- !u!114 &1187733934
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1187733927}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f50d8414aaa25e354b3172947fc13135, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MainViewController
-  uiDocument: {fileID: 1187733928}
-  simulatorTemplate: {fileID: 9197481963319205126, guid: cbda52829e825662596fd6c254609f8a, type: 3}
-  analysisTemplate: {fileID: 9197481963319205126, guid: 2b86ae5dcf00d15ed91ccae8bcee7048, type: 3}
-  scenariosTemplate: {fileID: 9197481963319205126, guid: 563e018f355fbaa4b8fc0e4eb9fbb36c, type: 3}
-  agentsTemplate: {fileID: 9197481963319205126, guid: d20c6a226458dec558f24aa4c1f7951c, type: 3}
-  settingsTemplate: {fileID: 9197481963319205126, guid: aaf00acd492670b71a341560a2f14ec6, type: 3}
-  profileTemplate: {fileID: 9197481963319205126, guid: faccaab2119fccee08ecc0789f1a7330, type: 3}
-  documentationTemplate: {fileID: 9197481963319205126, guid: 109ae220853593f0b8bd177e8900bbc5, type: 3}
 --- !u!1 &1212460514
 GameObject:
   m_ObjectHideFlags: 0

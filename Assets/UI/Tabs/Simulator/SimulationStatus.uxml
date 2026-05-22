@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:VisualElement class="dashboard-panel">
+        <ui:Label text="ROBOT STATUS" class="panel-title-corner" />
+        <ui:VisualElement class="panel-inner">
+            <ui:Label text="Battery: 78%" class="metric-line" />
+            <ui:Label text="Speed: 0.48 m/s" class="metric-line" />
+            <ui:Label text="Linear Vel.: 0.48 m/s" class="metric-line" />
+            <ui:Label text="Angular Vel.: 0.12 rad/s" class="metric-line" />
+            <ui:Label text="Sensors: All OK" class="metric-line" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

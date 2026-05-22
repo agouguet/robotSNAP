@@ -13,11 +13,11 @@ public class MainUIController : MonoBehaviour
     // Sidebar
     private VisualElement _sidebar;
     private VisualElement _sidebarContent;
+    private VisualElement _collapseContainer;
+    private Label _collapseLabel;
     private Button _collapseButton;
     private Toggle _darkModeToggle;
     private bool _isSidebarCollapsed = false;
-    private const float ExpandedWidth = 280f;
-    private const float CollapsedWidth = 70f;
 
     // Caméra UI
     private VisualElement _cameraView;
@@ -43,8 +43,20 @@ public class MainUIController : MonoBehaviour
         _sidebar = root.Q<VisualElement>("Sidebar");
         _sidebarContent = root.Q<VisualElement>("SidebarContent");
         _collapseButton = root.Q<Button>("CollapseButton");
+        _collapseContainer = root.Q<VisualElement>("CollapseContainer");
+        
         if (_collapseButton != null)
             _collapseButton.clicked += ToggleSidebar;
+        
+        Debug.Log($"Collapse container found: {_collapseContainer != null}");
+        if (_collapseContainer != null)
+            _collapseContainer.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.target == _collapseButton)
+                    return;
+                Debug.Log("Collapse container clicked");
+                ToggleSidebar();
+            });
 
         // --- Mode sombre ---
         _darkModeToggle = root.Q<Toggle>("DarkModeToggle");
@@ -52,7 +64,7 @@ public class MainUIController : MonoBehaviour
             _darkModeToggle.RegisterValueChangedCallback(evt => ToggleDarkMode(evt.newValue));
 
         // --- Caméra View ---
-        _cameraView = root.Q<VisualElement>("CameraView");
+        _cameraView = root.Q<VisualElement>("CameraContainer");
         if (_cameraView != null)
         {
             // Si aucune caméra n'est assignée dans l'inspecteur, on en crée une dynamique
@@ -110,16 +122,21 @@ public class MainUIController : MonoBehaviour
         _isSidebarCollapsed = !_isSidebarCollapsed;
         if (_isSidebarCollapsed)
         {
-            _sidebar.style.width = CollapsedWidth;
-            _sidebarContent.style.display = DisplayStyle.None;
+            _sidebar.AddToClassList("collapsed");
             _collapseButton.text = "▶";
         }
         else
         {
-            _sidebar.style.width = ExpandedWidth;
-            _sidebarContent.style.display = DisplayStyle.Flex;
+            _sidebar.RemoveFromClassList("collapsed");
             _collapseButton.text = "◀";
         }
+    }
+
+    private void OnCollapseContainerClicked(ClickEvent evt)
+    {
+        // Évite de réagir si le clic vient d'un élément interne qui aurait déjà traité l'événement
+        // (mais comme on n'a pas d'autre callback, ce n'est pas obligatoire)
+        ToggleSidebar();
     }
 
     // ==================== MODE SOMBRE ====================

@@ -1,6 +1,0 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <ui:VisualElement name="TopBar" class="top-bar">
-        <ui:Label text="Simulateur" name="SimulatorTitle" class="simulator-title"/>
-        <ui:Label text="Testez et évaluez des solutions de navigation robotique sociale dans des environnements réalistes." name="SimulatorDesc" class="simulator-desc"/>
-    </ui:VisualElement>
-</ui:UXML>

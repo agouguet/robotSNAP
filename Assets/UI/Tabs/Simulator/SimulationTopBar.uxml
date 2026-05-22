@@ -1,0 +1,6 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:VisualElement name="TopBar" class="top-bar" style="height: 100px; align-content: flex-end; align-self: flex-start;">
+        <ui:Label text="Simulator" name="SimulatorTitle" class="simulator-title" style="flex-grow: 1; align-content: center; -unity-text-align: middle-left;"/>
+        <ui:Label text="Test and evaluate social robotic navigation solutions in realistic environments." name="SimulatorDesc" class="simulator-desc" style="flex-grow: 1; -unity-text-align: middle-left;"/>
+    </ui:VisualElement>
+</ui:UXML>

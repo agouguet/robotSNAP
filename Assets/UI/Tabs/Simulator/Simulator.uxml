@@ -1,0 +1,19 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Template name="BottomPanel" src="project://database/Assets/UI/Tabs/Simulator/SimulationSensorPanel.uxml?fileID=9197481963319205126&amp;guid=50e9224592b3143ecaccb1326e9d54d4&amp;type=3#SimulationSensorPanel"/>
+    <ui:Template name="SimulationOverlay" src="project://database/Assets/UI/Tabs/Simulator/SimulationOverlay.uxml?fileID=9197481963319205126&amp;guid=9122e17034a60205eac9e6ee17f6bb80&amp;type=3#SimulationOverlay"/>
+    <ui:Template name="SimulationView" src="project://database/Assets/UI/Tabs/Simulator/SimulationStatus.uxml?fileID=9197481963319205126&amp;guid=4eb8246bb1a0234e587cbed5f9918faa&amp;type=3#SimulationStatus"/>
+    <ui:Template name="TopBar" src="project://database/Assets/UI/Tabs/Simulator/SimulationTopBar.uxml?fileID=9197481963319205126&amp;guid=f8ab7480e4b015c7ea8318f70a2efd51&amp;type=3#SimulationTopBar"/>
+
+    <ui:VisualElement style="flex-grow: 1; height: 100%; flex-direction: column; min-height: 0;">
+        <ui:Instance template="TopBar" style="flex-shrink: 0;"/>
+        <ui:VisualElement name="CentralSplit" style="flex-grow: 1; flex-direction: row; min-height: 0;">
+            <ui:VisualElement name="Center" style="flex-grow: 1; min-height: 0; flex-direction: column;">
+                <ui:Instance template="SimulationOverlay" style="flex-grow: 1; min-height: 0;"/>
+                <ui:Instance template="BottomPanel" style="flex-shrink: 0;"/>
+            </ui:VisualElement>
+            <ui:VisualElement name="RightBar" style="width: 20%; min-height: 0;">
+                <ui:Instance template="SimulationView" style="flex-grow: 1;"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

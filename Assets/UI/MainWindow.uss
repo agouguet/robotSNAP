@@ -1,16 +1,36 @@
-/* Palette */
+/* ========================================
+   VARIABLES GLOBALES (thème)
+   ======================================== */
 :root {
-    --bg-primary: #1a1e24;
+    --bg-primary: #08101E;
     --bg-secondary: #0f1117;
     --panel-bg: rgba(30, 34, 42, 0.85);
     --text-primary: #e0e0e0;
     --text-secondary: #8c8f96;
-    --accent: #2d9cdb;
+    --accent: #022864;
     --accent-glow: rgba(45, 156, 219, 0.2);
     --border: #2c313a;
 }
 
-/* Style global */
+.dark-mode {
+    --bg-primary: #0a0c10;
+    --text-primary: #cccccc;
+    /* etc. */
+}
+
+/* ========================================
+   STYLES GLOBAUX
+   ======================================== */
+.root {
+    background-color: var(--bg-primary);
+    background-size: cover;
+}
+
+.root, #MainContainer, #MainContent {
+    height: 100%;
+    width: 100%;
+}
+
 .unity-label {
     color: var(--text-primary);
     font-size: 12px;
@@ -25,57 +45,6 @@
     margin: 4px;
 }
 
-/* Menu latéral */
-#Sidebar {
-    width: 260px;
-    background-color: var(--bg-secondary);
-    border-right-width: 1px;
-    border-right-color: var(--border);
-    padding: 16px 8px;
-}
-
-#Sidebar .unity-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--accent);
-}
-
-#Sidebar .menu-item {
-    padding: 6px 12px;
-    margin: 2px 0;
-    border-radius: 4px;
-}
-
-#Sidebar .menu-item:hover {
-    background-color: var(--accent-glow);
-}
-
-/* Cartes métriques */
-.metric-card {
-    background-color: rgba(0, 0, 0, 0.4);
-    border-width: 1px;
-    border-color: var(--accent);
-    border-radius: 4px;
-    padding: 8px;
-    text-align: center;
-}
-
-.metric-value {
-    font-size: 24px;
-    color: var(--accent);
-    -unity-font-style: bold;
-}
-
-/* Logs - style console */
-#LogsPanel .unity-list-view__item {
-    font-family: "Courier New", monospace;
-    font-size: 10px;
-    padding: 2px 6px;
-    /* border-bottom: 1px solid var(--border); */
-}
-
-/* Boutons */
 .unity-button {
     background-color: #2c313a;
     border-width: 0;
@@ -93,23 +62,23 @@
     color: #1a1e24;
 }
 
+/* ========================================
+   COMPOSANTS PRINCIPAUX
+   ======================================== */
 
-
+/* Top Bar */
 .top-bar {
     padding: 12px 16px;
-    /* border-bottom-width: 1px;
-    border-bottom-color: var(--border); */
-    background-color: var(--bg-secondary);
 }
 
 .simulator-title {
-    font-size: 18px;
+    font-size: 26px;
     -unity-font-style: bold;
     color: var(--text-primary);
 }
 
 .simulator-desc {
-    font-size: 12px;
+    font-size: 16px;
     color: var(--text-secondary);
     margin-top: 4px;
 }
@@ -121,9 +90,12 @@
 
 .view-button {
     background-color: #2c313a;
-    margin-left: 6px;
     padding: 4px 12px;
     border-radius: 4px;
+    width: 64px; 
+    height: 64px; 
+    margin: 16px; 
+    border-radius: 8px;
 }
 
 .view-button.active {
@@ -131,6 +103,17 @@
     color: #111;
 }
 
+.full-screen-button{
+    width: 64px; 
+    height: 64px; 
+    margin: 16px; 
+    pointer-events: auto; 
+    background-size: contain; 
+    background-color: rgb(8, 16, 30); 
+    border-radius: 8px;
+}
+
+/* Panneau de simulation */
 .simulation-view {
     background-color: #0a0c10;
     border-radius: 6px;
@@ -147,10 +130,11 @@
 .simulation-status {
     margin-top: 12px;
     padding: 8px;
-    background-color: rgba(0,0,0,0.4);
+    background-color: rgba(0, 0, 0, 0.4);
     border-radius: 4px;
 }
 
+/* Métriques (cartes) */
 .metrics-row {
     flex-direction: row;
     justify-content: space-between;
@@ -166,13 +150,16 @@
     border-color: var(--border);
     border-radius: 4px;
     align-items: center;
+    text-align: center;
 }
 
 .metric-value {
     font-size: 22px;
     color: var(--accent);
+    -unity-font-style: bold;
 }
 
+/* Panneaux génériques */
 .panel {
     background-color: var(--panel-bg);
     border-width: 1px;
@@ -190,10 +177,7 @@
     margin-bottom: 8px;
 }
 
-.viz-toggle {
-    margin: 2px 0;
-}
-
+/* Logs */
 .logs-scroll {
     max-height: 200px;
 }
@@ -202,9 +186,28 @@
     font-family: monospace;
     font-size: 10px;
     padding: 2px 4px;
-    /* border-bottom: 1px solid var(--border); */
 }
 
+#LogsPanel .unity-list-view__item {
+    font-family: "Courier New", monospace;
+    font-size: 10px;
+    padding: 2px 6px;
+}
+
+/* Console (onglet) */
+.console-line {
+    font-family: monospace;
+    font-size: 11px;
+    padding: 2px 4px;
+    color: #a0ffa0;
+}
+
+/* Vizualisations toggles */
+.viz-toggle {
+    margin: 2px 0;
+}
+
+/* Robot panel */
 .robot-panel {
     flex-direction: row;
     justify-content: space-between;
@@ -222,6 +225,10 @@
 .robot-progress {
     margin-top: 6px;
     width: 150px;
+}
+
+.simulation-overlay {
+    padding: 0px 8px 16px 8px;
 }
 
 .bottom-controls {
@@ -242,6 +249,7 @@
     width: 120px;
 }
 
+/* Panneau à onglets (bas) */
 .bottom-tabs-panel {
     margin: 8px;
     background-color: var(--panel-bg);
@@ -254,8 +262,6 @@
 .tabs-toolbar {
     flex-direction: row;
     background-color: var(--bg-secondary);
-    /* border-bottom-width: 1px;
-    border-bottom-color: var(--border); */
 }
 
 .tab-button {
@@ -269,8 +275,6 @@
 
 .tab-button.active {
     color: var(--accent);
-    /* border-bottom-width: 2px;
-    border-bottom-color: var(--accent); */
     background-color: rgba(45, 156, 219, 0.1);
 }
 
@@ -279,38 +283,82 @@
     overflow: auto;
 }
 
-.console-line {
-    font-family: monospace;
-    font-size: 11px;
-    padding: 2px 4px;
-    /* border-bottom: 1px solid var(--border); */
-    color: #a0ffa0;
-}
-
-/* Style pour le conteneur de la barre d'onglets */
-.tabs-toolbar {
-    flex-direction: row;
-    background-color: var(--bg-secondary);
-    /* border-bottom-width: 1px;
-    border-bottom-style: solid;
-    border-bottom-color: var(--border); */
-}
-
-/* Style pour chaque bouton d'onglet */
-.tab-button {
-    background-color: transparent;
-    border-width: 0;
-    padding: 8px 16px;
-    margin: 0;
+.view-dropdown {
+    background-color: rgb(8, 16, 30);
+    border-radius: 8px;
+    color: rgb(165, 215, 255);
     font-size: 12px;
-    color: var(--text-secondary);
+    height: 32px;
+    min-width: 80px;
+    padding: 0 8px;
+    border-width: 0;
 }
 
-/* Style pour l'onglet actif */
-.tab-button.active {
-    color: var(--accent);
-    /* border-bottom-width: 2px;
-    border-bottom-style: solid;
-    border-bottom-color: var(--accent); */
-    background-color: rgba(45, 156, 219, 0.1);
+.view-dropdown .unity-base-text-field__input {
+    color: rgb(165, 215, 255);
+    text-align: center;
+}
+
+.view-dropdown .unity-popup-field__arrow {
+    color: rgb(165, 215, 255);
+    width: 16px;
+}
+
+
+/* Panneau de base */
+.dashboard-panel {
+    position: relative;
+    background-color: rgba(16, 20, 28, 0.7);
+    border: 1px solid rgba(45, 156, 219, 0.4);
+    border-radius: 12px;
+    margin: 16px 12px;
+    padding: 16px 12px 12px 12px;
+    transition: border 0.2s, box-shadow 0.2s;
+}
+
+/* Légère illumination au survol */
+.dashboard-panel:hover {
+    border-color: rgba(45, 156, 219, 0.9);
+    background-color: rgba(16, 20, 28, 0.85);
+}
+
+/* TITRE POSITIONNÉ DANS LE COIN SUPÉRIEUR GAUCHE, À CHEVAL SUR LA BORDURE */
+.panel-title-corner {
+    position: absolute;
+    top: -12px;
+    left: 16px;
+    background-color: #0f1117;   /* couleur de fond du titre */
+    padding: 0 10px;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #a5d7ff;              /* cyan clair */
+    border-radius: 20px;
+    /* Effet glow */
+    text-shadow: 0 0 5px rgba(45, 156, 219, 0.6),
+                 0 0 8px rgba(45, 156, 219, 0.3);
+    /* Petite bordure discrète autour du texte */
+    border: 1px solid rgba(45, 156, 219, 0.3);
+    backdrop-filter: blur(2px);
+    z-index: 2;
+}
+
+/* Contenu interne */
+.panel-inner {
+    flex-direction: column;
+    margin-top: 6px;
+}
+
+/* Style des lignes de métriques */
+.metric-line {
+    color: #e0e4ec;
+    font-size: 12px;
+    margin-bottom: 6px;
+    -unity-font-style: normal;
+}
+
+/* Option : ajouter une petite icône ou un séparateur */
+.metric-line:first-of-type {
+    margin-top: 4px;
 }

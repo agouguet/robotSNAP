@@ -353,6 +353,7 @@ namespace RobotSNAP.Core
         
         private IEnumerator GenerateAllSpawns()
         {
+            Debug.Log("[SpawnCoordinator] Generating all spawns...");
             if (_isSpawning) yield break;
             _isSpawning = true;
             
@@ -362,6 +363,7 @@ namespace RobotSNAP.Core
             
             // Generate robot spawn
             SpawnData robotSpawn = GenerateRobotSpawn();
+            Debug.Log($"[SpawnCoordinator] Generated robot spawn at {robotSpawn.position} with goal at {robotSpawn.goalPosition}");
             
             // Spawn robot
             yield return SpawnRobot(robotSpawn);
@@ -376,6 +378,8 @@ namespace RobotSNAP.Core
             });
             
             ActivateRobotAndGoal();
+
+            Debug.Log($"[SpawnCoordinator] All spawns generated. Robot at {robotSpawn.position}, Goal at {robotSpawn.goalPosition}");
             
             _isSpawning = false;
         }

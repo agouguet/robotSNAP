@@ -3,7 +3,7 @@
     <ui:Template name="SimulationOverlay" src="project://database/Assets/UI/Tabs/Simulator/SimulationOverlay.uxml?fileID=9197481963319205126&amp;guid=9122e17034a60205eac9e6ee17f6bb80&amp;type=3#SimulationOverlay"/>
     <ui:Template name="SimulationView" src="project://database/Assets/UI/Tabs/Simulator/SimulationStatus.uxml?fileID=9197481963319205126&amp;guid=4eb8246bb1a0234e587cbed5f9918faa&amp;type=3#SimulationStatus"/>
     <ui:Template name="TopBar" src="project://database/Assets/UI/Tabs/Simulator/SimulationTopBar.uxml?fileID=9197481963319205126&amp;guid=f8ab7480e4b015c7ea8318f70a2efd51&amp;type=3#SimulationTopBar"/>
-
+    <Style src="project://database/Assets/UI/Tabs/Simulator/Simulation.uss?fileID=7433441132597879392&amp;guid=8dabadea5cb3a8233888f77252c53c13&amp;type=3#Simulation"/>
     <ui:VisualElement style="flex-grow: 1; height: 100%; flex-direction: column; min-height: 0;">
         <ui:Instance template="TopBar" style="flex-shrink: 0;"/>
         <ui:VisualElement name="CentralSplit" style="flex-grow: 1; flex-direction: row; min-height: 0;">

@@ -1,6 +1,27 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <ui:VisualElement name="TopBar" class="top-bar" style="height: 100px; align-content: flex-end; align-self: flex-start;">
-        <ui:Label text="Simulator" name="SimulatorTitle" class="simulator-title" style="flex-grow: 1; align-content: center; -unity-text-align: middle-left;"/>
-        <ui:Label text="Test and evaluate social robotic navigation solutions in realistic environments." name="SimulatorDesc" class="simulator-desc" style="flex-grow: 1; -unity-text-align: middle-left;"/>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="TopBar" class="top-bar" style="flex-direction: row; align-items: center; justify-content: space-between; height: auto; min-height: 100px; padding: 12px 20px;">
+        <!-- Zone gauche : titre + description -->
+        <ui:VisualElement style="flex-direction: column; flex-grow: 1;">
+            <ui:Label text="Simulator" name="SimulatorTitle" class="simulator-title"/>
+            <ui:Label text="Test and evaluate social robotic navigation solutions in realistic environments." name="SimulatorDesc" class="simulator-desc"/>
+        </ui:VisualElement>
+        
+        <!-- Zone droite : boutons -->
+        <ui:VisualElement style="flex-direction: row; align-items: center;">
+            <!-- Bouton Load Scenario (normal) -->
+            <ui:Button name="LoadScenarioButton" class="action-button">
+                <ui:VisualElement class="button-icon" style="background-image: url('project://database/Assets/UI/Icons/folder.png?...');"/>
+                <ui:Label text="Load scenario" class="button-label"/>
+            </ui:Button>
+            
+            <!-- Split Button (Start / Dropdown) -->
+            <ui:VisualElement name="SplitButtonContainer" class="split-button-container">
+                <ui:Button name="StartSimulationButton" class="split-button-primary">
+                    <ui:VisualElement class="button-icon" style="background-image: url('project://database/Assets/UI/Icons/play.png?...');"/>
+                    <ui:Label text="Start simulation" class="button-label"/>
+                </ui:Button>
+                <ui:Button name="DropdownArrowButton" class="split-button-arrow" text="▼" />
+            </ui:VisualElement>
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

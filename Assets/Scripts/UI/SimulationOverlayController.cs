@@ -62,9 +62,6 @@ public class SimulationOverlayController : MonoBehaviour
 
     private void OnViewChanged(string viewName)
     {
-        Debug.Log($"Changement de vue : {viewName}");
-        // Ici, appliquer la modification à la caméra (orthographique/perspective, position, rotation...)
-        // Exemple simple :
         Camera cam = GetComponent<Camera>(); // ou trouvez la caméra de simulation autrement
         if (cam != null)
         {
@@ -83,7 +80,6 @@ public class SimulationOverlayController : MonoBehaviour
 
     private void ToggleFullscreen()
     {
-        // Votre logique plein écran (cacher la sidebar, agrandir la caméra, etc.)
-        Debug.Log("Toggle fullscreen");
+
     }
 }

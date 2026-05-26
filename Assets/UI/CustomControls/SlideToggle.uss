@@ -1,0 +1,81 @@
+.slide-toggle .unity-base-field__label {
+    min-width: 0;
+    /* ou une valeur spécifique, par exemple : */
+    /* min-width: 60px; */
+    margin-right: 8px;   /* pour un meilleur espacement */
+    flex-grow: 1;
+}
+
+/* Style for the track (background) of the slide toggle */
+.slide-toggle__input {
+    background-color: var(--unity-colors-slider_groove-background); /* Default color */
+    width: 30px;
+    min-width: 30px;
+    max-width: 30px;
+    height: 16px;
+    min-height: 16px;
+    max-height: 16px;
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    overflow: visible;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-right-color: var(--unity-colors-slider_thumb-border);
+    border-top-color: var(--unity-colors-slider_thumb-border);
+    border-bottom-color: var(--unity-colors-slider_thumb-border);
+    border-left-color: var(--unity-colors-slider_thumb-border);
+    max-height: 16px;
+    margin: 0px 8px 0 8px;
+    transition-property: background-color;
+    transition-duration: 0.5s;
+}
+
+/* Style for the sliding knob */
+.slide-toggle__input-knob {
+    height: 16px;
+    width: 16px;
+    background-color: var(--unity-colors-slider_thumb-background);
+    position: absolute;
+    border-top-left-radius: 25px;
+    border-bottom-left-radius: 25px;
+    border-top-right-radius: 25px;
+    border-bottom-right-radius: 25px;
+    top: -1px;
+    transition-property: translate, background-color;
+    transition-duration: 0.5s, 0.5s;
+    translate: -1px 0; /* Initial position of the knob */
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: var(--unity-colors-slider_thumb-border);
+    border-right-color: var(--unity-colors-slider_thumb-border);
+    border-top-color: var(--unity-colors-slider_thumb-border);
+    border-bottom-color: var(--unity-colors-slider_thumb-border);
+}
+
+/* Style for the checked (on) state of the track */
+.slide-toggle__input--checked {
+    background-color: var(--accent-soft);
+}
+
+/* Style for the knob when the toggle is checked (on) */
+.slide-toggle__input--checked > .slide-toggle__input-knob {
+    translate: 13px 0; /* Position of the knob when checked */
+}
+
+/* Style for the knob when the toggle has focus */
+.slide-toggle:focus .slide-toggle__input-knob {
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: var(--unity-colors-input_field-border-focus);
+    border-right-color: var(--unity-colors-input_field-border-focus);
+    border-top-color: var(--unity-colors-input_field-border-focus);
+    border-bottom-color: var(--unity-colors-input_field-border-focus);
+}

@@ -127,6 +127,7 @@ namespace RobotSNAP.Core.Scenario
             int envCount = Supervisor.Instance?.ActiveConfig?.EnvironmentCount ?? 1;
             for (int i = 0; i < envCount; i++)
             {
+                Debug.Log($"Creating environment {i + 1}/{envCount} for scenario '{scenarioName}'");
                 var gm = CreateEnvironment(i);
                 if (gm != null)
                     _gameManagers.Add(gm);
@@ -142,7 +143,7 @@ namespace RobotSNAP.Core.Scenario
         private GameManager CreateEnvironment(int index)
         {
             if (_environmentPrefab == null) return null;
-            Vector3 position = new Vector3(index * 20f, 0, 0); // espacement par défaut, à rendre configurable
+            Vector3 position = new Vector3(index * 20f, 0, 0);
             GameObject instance = Instantiate(_environmentPrefab, position, Quaternion.identity, transform);
             instance.name = $"Environment_{index}";
             var gm = instance.GetComponent<GameManager>();

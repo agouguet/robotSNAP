@@ -29,7 +29,6 @@ public class SimulationCameraView : MonoBehaviour
                 _cameraContainer = uiDocument.rootVisualElement.Q<VisualElement>("CameraContainer");
                 if (_cameraContainer != null)
                 {
-                    Debug.Log("CameraContainer trouvé, initialisation de la caméra.");
                     InitializeCamera();
                 }
             }
@@ -44,7 +43,6 @@ public class SimulationCameraView : MonoBehaviour
             GameObject camGO = new GameObject("SimulationCamera");
             _activeCamera = camGO.AddComponent<Camera>();
             _activeCamera.clearFlags = CameraClearFlags.Skybox;
-            Debug.Log("Caméra de simulation créée dynamiquement.");
         }
         else
         {
@@ -92,8 +90,6 @@ public class SimulationCameraView : MonoBehaviour
 
         // Appliquer la texture en arrière-plan du VisualElement
         _cameraContainer.style.backgroundImage = Background.FromRenderTexture(_currentRenderTexture);
-        
-        Debug.Log($"RenderTexture créée : {w}x{h}");
     }
 
     private void OnDisable()

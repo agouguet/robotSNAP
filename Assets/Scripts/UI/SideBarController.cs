@@ -1,23 +1,19 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using RobotSNAP.UI; // si vous avez mis SlideToggle dans ce namespace
 
 public class SidebarController : MonoBehaviour
 {
     [Header("UI Document")]
     [SerializeField] private UIDocument uiDocument;
 
-    // Événements déclenchés quand la vue change ou que le mode sombre alterne
-    public System.Action<string> OnViewChanged;   // "Simulator", "Analysis", ...
+    public System.Action<string> OnViewChanged;
     public System.Action<bool> OnDarkModeToggled;
 
-    // Éléments UI
     private VisualElement _sidebar;
     private Button _collapseButton;
     private VisualElement _collapseContainer;
-    private Button _darkModeButton;   // c'est un Button, pas un Toggle
-    private bool _isDarkMode = false;
-
-    // Gestion du collapse
+    private SlideToggle _darkModeToggle;   // utilisez SlideToggle au lieu de Toggle
     private bool _isSidebarCollapsed = false;
 
     private void OnEnable()
@@ -27,47 +23,61 @@ public class SidebarController : MonoBehaviour
 
         var root = uiDocument.rootVisualElement;
 
-        // Récupération des éléments
         _sidebar = root.Q<VisualElement>("Sidebar");
         _collapseButton = root.Q<Button>("CollapseButton");
         _collapseContainer = root.Q<VisualElement>("CollapseContainer");
-        _darkModeButton = root.Q<Button>("DarkModeToggle");
+        _darkModeToggle = root.Q<SlideToggle>("DarkModeToggle");   // Récupération du SlideToggle
 
-        // Abonnement au collapse (bouton + conteneur entier)
+        // Collapse
         if (_collapseButton != null)
             _collapseButton.clicked += ToggleSidebar;
-
         if (_collapseContainer != null)
             _collapseContainer.RegisterCallback<ClickEvent>(evt =>
             {
-                // Ne pas réagir si le clic vient directement du bouton (déjà traité)
                 if (evt.target == _collapseButton) return;
                 ToggleSidebar();
             });
 
-        // Abonnement au mode sombre
-        if (_darkModeButton != null)
-            _darkModeButton.clicked += ToggleDarkMode;
+        // Dark Mode avec SlideToggle
+        if (_darkModeToggle != null)
+        {
+            // Abonnement au changement de valeur
+            _darkModeToggle.RegisterValueChangedCallback(evt => ToggleDarkMode(evt.newValue));
+            
+            // Optionnel : restaurer l'état sauvegardé (ex: PlayerPrefs)
+            bool isDark = PlayerPrefs.GetInt("DarkMode", 0) == 1;
+            _darkModeToggle.SetValueWithoutNotify(isDark);
+            ToggleDarkMode(isDark);
+        }
 
-        // Abonnement aux clics sur les éléments du menu
-        RegisterMenuItems(root);
+        // Menu items
+        RegisterMenuItems();
     }
 
-    private void RegisterMenuItems(VisualElement root)
+    private void ToggleDarkMode(bool isOn)
     {
-        // Récupère tous les boutons ayant la classe "menu-item"
-        var menuItems = root.Query<Button>(className: "menu-item").ToList();
-        foreach (var btn in menuItems)
+        var root = uiDocument.rootVisualElement;
+        if (isOn)
+            root.AddToClassList("dark-mode");
+        else
+            root.RemoveFromClassList("dark-mode");
+
+        PlayerPrefs.SetInt("DarkMode", isOn ? 1 : 0);
+        
+        OnDarkModeToggled?.Invoke(isOn);
+    }
+
+    private void RegisterMenuItems()
+    {
+        var root = uiDocument.rootVisualElement;
+        // Recherche directe de tous les boutons avec la classe "menu-item" dans l'arbre complet
+        var allMenuButtons = root.Query<Button>(className: "menu-item").ToList();
+        foreach (var btn in allMenuButtons)
         {
-            // Exclure le bouton DarkModeToggle (il a aussi la classe menu-item)
             if (btn.name == "DarkModeToggle") continue;
-
-            // Trouver le label à l'intérieur pour connaître le texte de la vue
-            var label = btn.Q<Label>("menu-label"); // attention: le nom n'est pas "menu-label" mais la classe? Dans l'UXML, il a class="menu-label" mais pas de name.
-            // On peut utiliser la classe :
-            label = btn.Q<Label>(className: "menu-label");
+            // Récupérer le label par sa classe (pas de nom)
+            var label = btn.Q<Label>(className: "menu-label");
             string viewName = label?.text ?? btn.name;
-
             btn.clicked += () => SetActiveView(btn, viewName);
         }
     }
@@ -86,7 +96,6 @@ public class SidebarController : MonoBehaviour
 
         // Déclencher l'événement
         OnViewChanged?.Invoke(viewName);
-        Debug.Log($"Changement de vue : {viewName}");
     }
 
     private void ToggleSidebar()
@@ -102,23 +111,6 @@ public class SidebarController : MonoBehaviour
             _sidebar.RemoveFromClassList("collapsed");
             _collapseButton.text = "◀";   // flèche pour replier
         }
-    }
-
-    private void ToggleDarkMode()
-    {
-        _isDarkMode = !_isDarkMode;
-        var root = uiDocument.rootVisualElement;
-        if (_isDarkMode)
-            root.AddToClassList("dark-mode");
-        else
-            root.RemoveFromClassList("dark-mode");
-
-        // Optionnel : changer le texte/icône du bouton
-        var label = _darkModeButton.Q<Label>(className: "menu-label");
-        if (label != null)
-            label.text = _isDarkMode ? "Light Mode" : "Dark Mode";
-
-        OnDarkModeToggled?.Invoke(_isDarkMode);
     }
 
     // Méthode publique pour plier/déplier la sidebar depuis un autre script

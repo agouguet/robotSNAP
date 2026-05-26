@@ -48,13 +48,11 @@ public class MainUIController : MonoBehaviour
         if (_collapseButton != null)
             _collapseButton.clicked += ToggleSidebar;
         
-        Debug.Log($"Collapse container found: {_collapseContainer != null}");
         if (_collapseContainer != null)
             _collapseContainer.RegisterCallback<ClickEvent>(evt =>
             {
                 if (evt.target == _collapseButton)
                     return;
-                Debug.Log("Collapse container clicked");
                 ToggleSidebar();
             });
 

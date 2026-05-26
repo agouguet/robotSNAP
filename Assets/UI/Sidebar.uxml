@@ -1,16 +1,20 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xmlns:custom="RobotSNAP.UI" editor-extension-mode="False">
     <Style src="project://database/Assets/UI/Sidebar.uss?fileID=7433441132597879392&amp;guid=4bc6cac0b3df5db18b452b1cd0e087ac&amp;type=3#Sidebar"/>
+    <Style src="project://database/Assets/UI/CustomControls/SlideToggle.uss?fileID=7433441132597879392&amp;guid=9cdd4c5e7488ef4da8f1627d75a681f3&amp;type=3#SlideToggle"/>
     <ui:VisualElement name="Sidebar" class="sidebar">
-        <ui:VisualElement class="sidebar-top" style="padding-left: 8px; padding-right: 8px; height: 100px; margin-top: 0; margin-bottom: 0; padding-top: 5px;">
-            <ui:VisualElement name="AppLogo" class="app-logo" style="background-image: url(&quot;project://database/Assets/UI/Icons/robotsnap_icon_V2.png?fileID=2800000&amp;guid=bd7a26d8c556ec6f2bdf00217f241285&amp;type=3#robotsnap_icon_V2&quot;);"/>
-            <ui:VisualElement class="branding" style="flex-grow: 1;">
-                <ui:VisualElement name="VisualElement" class="branding-text" style="flex-grow: 1; padding-top: 16px; padding-bottom: 16px;">
-                    <ui:Label text="Robot" class="app-title" style="padding-bottom: 0; padding-top: 0; font-size: 42px; color: rgb(165, 215, 255); margin-bottom: 0; margin-top: 0; -unity-text-align: middle-left; -unity-text-auto-size: none;"/>
-                    <ui:Label text="SNAP" class="app-title" style="padding-bottom: 0; padding-top: 0; -unity-text-outline-color: rgb(236, 163, 63); color: rgb(236, 163, 63); font-size: 42px; margin-top: 0; margin-bottom: 0; -unity-text-align: middle-left; white-space: normal; text-overflow: clip;"/>
+        <!-- Conteneur interne qui sera animé avec scale -->
+        <ui:VisualElement name="SidebarInner" class="sidebar-inner" style="overflow: hidden; flex-grow: 1;">
+            <!-- Tout le contenu original de la sidebar -->
+            <ui:VisualElement class="sidebar-top" style="padding-left: 8px; padding-right: 8px; height: 100px; margin-top: 0; margin-bottom: 0; padding-top: 5px;">
+                <ui:VisualElement name="AppLogo" class="app-logo" style="background-image: url(&quot;project://database/Assets/UI/Icons/robotsnap_icon_V2.png?fileID=2800000&amp;guid=bd7a26d8c556ec6f2bdf00217f241285&amp;type=3#robotsnap_icon_V2&quot;);"/>
+                <ui:VisualElement class="branding" style="flex-grow: 1;">
+                    <ui:VisualElement name="VisualElement" class="branding-text" style="flex-grow: 1; padding-top: 16px; padding-bottom: 16px;">
+                        <ui:Label text="Robot" class="app-title robot-title" style="padding-bottom: 0; padding-top: 0; font-size: 42px; color: rgb(165, 215, 255); margin-bottom: 0; margin-top: 0; -unity-text-align: middle-left; -unity-text-auto-size: none;"/>
+                        <ui:Label text="SNAP" class="app-title snap-title" style="padding-bottom: 0; padding-top: 0; -unity-text-outline-color: rgb(236, 163, 63); color: rgb(236, 163, 63); font-size: 42px; margin-top: 0; margin-bottom: 0; -unity-text-align: middle-left; white-space: normal; text-overflow: clip;"/>
+                    </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
-        </ui:VisualElement>
-        <ui:VisualElement name="SidebarContent" class="sidebar-content" style="padding-top: 0;">
+            <ui:VisualElement name="SidebarContent" class="sidebar-content" style="padding-top: 0;">
             <ui:VisualElement class="separator" style="margin-top: 5px; margin-bottom: 5px;"/>
             <ui:VisualElement class="menu-group" style="background-size: auto auto;">
                 <ui:Button class="menu-item active">
@@ -50,14 +54,14 @@
                 </ui:Button>
             </ui:VisualElement>
             <ui:VisualElement style="flex-grow: 1;"/>
-            <ui:VisualElement class="bottom-actions">
-                <ui:Button name="DarkModeToggle" class="menu-item" style="height: auto;">
-                    <ui:VisualElement class="menu-icon help-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/dark.png?fileID=2800000&amp;guid=895b89a7b37c36d35a5b071cc3054685&amp;type=3#dark&quot;);"/>
-                    <ui:Label text="Dark Mode" class="menu-label" style="-unity-text-align: middle-left;"/>
-                </ui:Button>
-                <ui:VisualElement name="CollapseContainer" class="collapse-container">
-                    <ui:Label name="CollapseLabel" text="Collapse" class="collapse-label"/>
-                    <ui:Button name="CollapseButton" text="◀" enabled="true" class="collapse-button-icon"/>
+                <ui:VisualElement class="bottom-actions">
+                    <ui:VisualElement name="DarkModeContainer" class="menu-item dark-mode-container">
+                        <RobotSNAP.UI.SlideToggle label="Dark Mode" name="DarkModeToggle" icon-texture="project://database/Assets/UI/Icons/dark.png?fileID=2800000&amp;guid=895b89a7b37c36d35a5b071cc3054685&amp;type=3#dark" class="dark-mode-switch" style="flex-grow: 1;"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="CollapseContainer" class="collapse-container">
+                        <ui:Label name="CollapseLabel" text="Collapse" class="collapse-label"/>
+                        <ui:Button name="CollapseButton" text="◀" enabled="true" class="collapse-button-icon"/>
+                    </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

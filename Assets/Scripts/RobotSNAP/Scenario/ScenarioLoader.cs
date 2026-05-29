@@ -698,10 +698,14 @@ namespace RobotSNAP.Core.Scenario
 
         private Vector3 GetPositionFromRef(ScenarioData scenario, string reference)
         {
+            // Debug.Log($"[ScenarioLoader] Resolving position for reference: '{reference}'");
             if (string.IsNullOrEmpty(reference)) return Vector3.zero;
             
             if (scenario.Points != null && scenario.Points.TryGetValue(reference, out var point))
+            {
+                Debug.Log($"[ScenarioLoader] Found point for reference '{reference}': {point} at {point.ToVector3()}");
                 return point.ToVector3();
+            }
             
             // Essayer comme ID entier
             if (int.TryParse(reference, out int id) && scenario.Points != null)

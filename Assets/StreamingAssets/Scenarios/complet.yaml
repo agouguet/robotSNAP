@@ -1,0 +1,143 @@
+scenario_info:
+  name: "Complexe Urbain"
+  description: "Scénario complet avec robot, humains variés, zones de spawn et objectifs"
+  version: "2.1"
+  author: "RobotSNAP Team"
+  created: "2025-03-15"
+  tags: ["city", "navigation", "social_forces"]
+  map: "maps/urban_center"
+  dataset: "datasets/pedestrian_flow"
+
+points:
+  # Points simples (x, y, z)
+  start_robot: {x: 0, y: 0, z: 0}
+  goal_robot: {x: 25, y: 0, z: 15}
+  bus_stop: {x: 10, y: 0, z: 8}
+  park_center: {x: 20, y: 0, z: 5}
+  # Zones (centre + taille)
+  spawn_zone_north:
+    center: {x: 5, y: 0, z: 25}
+    size: {x: 8, y: 1, z: 6}
+  waiting_area:
+    center: {x: 15, y: 0, z: 12}
+    size: {x: 4, y: 1, z: 4}
+  # Notation alternative avec center/size explicites
+  danger_zone:
+    center: {x: 18, y: 0, z: 18}
+    size: {x: 6, y: 1, z: 6}
+
+simulation:
+  duration: 120.0          # secondes
+  random_seed: 12345       # -1 = basé sur tickcount
+  time_scale: 1.0
+  min_humans: 8
+  max_humans: 25
+
+robot:
+  start: "start_robot"
+  goal: "goal_robot"
+  behavior: "cautious"
+  speed: 1.2
+
+humans:
+  # Groupe 1 : simples piétons spawn aléatoire dans une zone
+  - id: "pedestrians"
+    count: 5
+    spawn:
+      type: "random"
+      ref: "spawn_zone_north"
+    goal:
+      type: "point"
+      ref: "bus_stop"
+    behavior: "normal"
+    speed: 0.9
+    color: [0.2, 0.6, 0.8]     # RGB (0-1)
+    personality:
+      assertiveness: 0.3
+      personal_space: 0.9
+      reaction_time: 0.4
+    movement_controller:
+      type: "SFM"
+      sfm_params:
+        force_strength: 10.0
+        social_force: 5.0
+        obstacle_force: 8.0
+        goal_force: 12.0
+        relaxation_time: 0.5
+        interaction_radius: 2.0
+
+  # Groupe 2 : formation en ligne suivant le robot
+  - id: "followers"
+    count: 3
+    spawn:
+      type: "formation"
+      ref: "start_robot"          # centre de la formation
+      formation: "line"
+      spacing: 1.2
+      relative_to: "robot"        # la formation suivra le robot
+    goal:
+      type: "follow"
+      target: "robot"
+    behavior: "attentive"
+    speed: 1.1
+    color: [0.9, 0.3, 0.1]
+    personality:
+      assertiveness: 0.7
+      personal_space: 0.6
+      reaction_time: 0.2
+    movement_controller:
+      type: "Hybrid"
+      onnx_model: "models/follower_2024.onnx"
+      sfm_params:
+        force_strength: 8.0
+        social_force: 4.0
+        obstacle_force: 6.0
+        goal_force: 10.0
+        relaxation_time: 0.4
+        interaction_radius: 2.5
+      hybrid_weights:
+        onnx_weight: 0.8
+        sfm_weight: 0.2
+        adaptation_rate: 0.05
+
+  # Groupe 3 : rassemblement erratique (wander) dans une zone
+  - id: "loiterers"
+    count: 4
+    spawn:
+      type: "point"
+      ref: "park_center"
+    goal:
+      type: "wander"
+      radius: 6.0
+    behavior: "relaxed"
+    speed: 0.6
+    color: [0.1, 0.8, 0.2]
+    personality:
+      assertiveness: 0.2
+      personal_space: 1.2
+      reaction_time: 0.8
+    movement_controller:
+      type: "ONNX"
+      onnx_model: "models/wander_net.onnx"
+      # Pas de sfm_params ni hybrid_weights nécessaires
+
+  # Groupe 4 : immobile (stay) à un point précis
+  - id: "guards"
+    count: 2
+    spawn:
+      type: "point"
+      ref: "danger_zone"    # le point d'une zone (son centre)
+    goal:
+      type: "stay"
+    behavior: "static"
+    speed: 0.0
+    color: [0.5, 0.5, 0.5]
+    personality:
+      assertiveness: 0.9
+      personal_space: 0.4
+      reaction_time: 0.2
+    movement_controller:
+      type: "SFM"
+      sfm_params:
+        goal_force: 20.0     # très forte force pour rester sur place
+        relaxation_time: 0.2

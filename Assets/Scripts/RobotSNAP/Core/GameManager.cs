@@ -21,7 +21,7 @@ namespace RobotSNAP.Core
         [Header("Core Components")]
         [SerializeField] private GridEnvironmentBuilder _gridBuilder;
         [SerializeField] private NavMeshManager _navMeshManager;
-        [SerializeField] private SpawnCoordinator _spawnCoordinator;
+        // [SerializeField] private SpawnCoordinator _spawnCoordinator;
         [SerializeField] private HumanPoolManager _humanPool;
         [SerializeField] private EnvROS _envROS;
 
@@ -36,7 +36,7 @@ namespace RobotSNAP.Core
         public bool IsInitialized => _isInitialized;
         public GridEnvironmentBuilder GridBuilder => _gridBuilder;
         public NavMeshManager NavMeshManager => _navMeshManager;
-        public SpawnCoordinator SpawnCoordinator => _spawnCoordinator;
+        // public SpawnCoordinator SpawnCoordinator => _spawnCoordinator;
         public HumanPoolManager HumanPool => _humanPool;
         public EnvROS EnvROS => _envROS;
 
@@ -44,6 +44,7 @@ namespace RobotSNAP.Core
         public event Action<int> OnInitialized;
         public event Action<int> OnResetStarted;
         public event Action<int> OnResetCompleted;
+        public event Action OnScenarioDurationReached;
         public event Action<int, string> OnError;
 
         #region Unity Lifecycle
@@ -97,10 +98,10 @@ namespace RobotSNAP.Core
             }
 
             // 3. Spawn initial des agents (positions par défaut, sera écrasé par le scénario)
-            if (_spawnCoordinator != null)
-            {
-                yield return StartCoroutine(_spawnCoordinator.SpawnAll());
-            }
+            // if (_spawnCoordinator != null)
+            // {
+            //     yield return StartCoroutine(_spawnCoordinator.SpawnAll());
+            // }
 
             _isInitialized = true;
             OnInitialized?.Invoke(_environmentId);
@@ -118,19 +119,15 @@ namespace RobotSNAP.Core
             if (config == null) return;
             _currentConfig = config;
 
-            if (_spawnCoordinator != null)
-            {
-                _spawnCoordinator.MinHumans = config.MinHumans;
-                _spawnCoordinator.MaxHumans = config.MaxHumans;
-                _spawnCoordinator.MinAgentDistance = config.MinAgentDistance;
-                _spawnCoordinator.MinPathLength = config.MinPathLength;
-                _spawnCoordinator.MaxPathLength = config.MaxPathLength;
-            }
-
             if (_envROS != null && !string.IsNullOrEmpty(config.RosPrefix))
                 _envROS.UpdatePrefix(config.RosPrefix);
 
             Debug.Log($"[GameManager:{_environmentId}] Config applied");
+        }
+
+        public void NotifyScenarioDurationReached()
+        {
+            OnScenarioDurationReached?.Invoke();
         }
 
         public void SetROSPrefix(string prefix) => _envROS?.UpdatePrefix(prefix);
@@ -192,7 +189,7 @@ namespace RobotSNAP.Core
             Debug.Log($"[GameManager:{_environmentId}] Starting reset sequence...");
 
             // Désactiver les agents en mouvement
-            if (_spawnCoordinator != null) _spawnCoordinator.SetActive(false);
+            // if (_spawnCoordinator != null) _spawnCoordinator.SetActive(false);
 
             // Réinitialiser le NavMesh (si nécessaire) – on ne reconstruit pas la carte
             if (_navMeshManager != null)
@@ -204,7 +201,7 @@ namespace RobotSNAP.Core
             }
 
             // Respawnder les agents (positions par défaut)
-            if (_spawnCoordinator != null) yield return StartCoroutine(_spawnCoordinator.SpawnAll());
+            // if (_spawnCoordinator != null) yield return StartCoroutine(_spawnCoordinator.SpawnAll());
 
             _isResetting = false;
             _currentResetCoroutine = null;
@@ -231,7 +228,7 @@ namespace RobotSNAP.Core
         }
 
         public Robot GetRobot() => GetComponentInChildren<Robot>();
-        public void ClearAllAgents() => _spawnCoordinator?.ClearAll();
+        // public void ClearAllAgents() => _spawnCoordinator?.ClearAll();
 
         #endregion
 

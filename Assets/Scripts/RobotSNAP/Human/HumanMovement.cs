@@ -454,6 +454,9 @@ namespace RobotSNAP.Human
         public float GetPersonalSpace() => _personalSpace;
         public float GetAssertiveness() => _assertiveness;
         public float GetReactionTime() => _reactionTime;
+        public bool HasGoal => _avatar != null && _avatar.hasDestination;
+        public Vector2 GoalPosition2D => _avatar != null ? _avatar.currentDestination : Vector2.zero;
+        public float InteractionRadius => _interactionRadius;
         
         #endregion
         

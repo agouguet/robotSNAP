@@ -58,9 +58,9 @@ ArticulationBody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 717995862006935159}
   m_Enabled: 1
-  serializedVersion: 5
+  serializedVersion: 6
   m_Mass: 0.001
-  m_ParentAnchorPosition: {x: 0, y: 0, z: 0}
+  m_ParentAnchorPosition: {x: 0, y: 0.198, z: 0.2645}
   m_ParentAnchorRotation: {x: 0, y: -0.7071068, z: 0, w: 0.7071068}
   m_AnchorPosition: {x: 0, y: 0, z: 0}
   m_AnchorRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
@@ -389,12 +389,12 @@ ArticulationBody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1464175444843219932}
   m_Enabled: 0
-  serializedVersion: 5
-  m_Mass: 4.3542
-  m_ParentAnchorPosition: {x: 0.18738, y: 0.0605, z: 0.0012913942}
-  m_ParentAnchorRotation: {x: 0, y: 0, z: 3.0615e-17, w: 1}
-  m_AnchorPosition: {x: 0, y: 0, z: 0}
-  m_AnchorRotation: {x: 0, y: 0, z: 0, w: 1}
+  serializedVersion: 6
+  m_Mass: 0.0000001
+  m_ParentAnchorPosition: {x: 1.18738, y: 0.0605, z: 0.0012914}
+  m_ParentAnchorRotation: {x: 0.008726535, y: 2.6716287e-19, z: 3.0613835e-17, w: 0.9999619}
+  m_AnchorPosition: {x: 1, y: 0, z: 0}
+  m_AnchorRotation: {x: 0.008726535, y: 0, z: 0, w: 0.9999619}
   m_MatchAnchors: 1
   m_ArticulationJointType: 2
   m_LinearX: 0
@@ -720,7 +720,7 @@ ArticulationBody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3179440118466587603}
   m_Enabled: 0
-  serializedVersion: 5
+  serializedVersion: 6
   m_Mass: 0.008336346
   m_ParentAnchorPosition: {x: 0, y: 0.2878, z: 0.23499998}
   m_ParentAnchorRotation: {x: 0, y: 0, z: -0.7071069, w: 0.70710677}
@@ -871,7 +871,7 @@ ArticulationBody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3239410436682377487}
   m_Enabled: 0
-  serializedVersion: 5
+  serializedVersion: 6
   m_Mass: 0.001
   m_ParentAnchorPosition: {x: 0, y: 0.198, z: 0.2645}
   m_ParentAnchorRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
@@ -1157,7 +1157,7 @@ ArticulationBody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4083510463850059681}
   m_Enabled: 0
-  serializedVersion: 5
+  serializedVersion: 6
   m_Mass: 0.0019613043
   m_ParentAnchorPosition: {x: -0.23892, y: 0.31127, z: -0.12465}
   m_ParentAnchorRotation: {x: 0, y: 0, z: -0.0000018179417, w: 1.0000001}
@@ -1875,11 +1875,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxLinearSpeed: 1
   maxAngularSpeed: 2
-  acceleration: 2
-  deceleration: 3
   radius: 0.25
   baseLink: {fileID: 7438760112835347714}
   detector: {fileID: 4783570847377917628}
+  keepParentAtOrigin: 1
 --- !u!114 &7406557896309216385
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1916,7 +1915,7 @@ MonoBehaviour:
   customPrefix: 
   topicName: /robot_odom
   publishFrequencyHz: 50
-  robotRigidbody: {fileID: 1151668263881996573}
+  robotRigidbody: {fileID: 0}
   robotTransform: {fileID: 0}
   frameId: odom
   childFrameId: base_link
@@ -1959,8 +1958,6 @@ MonoBehaviour:
   toggleModeKey: 109
   maxLinearSpeed: 2
   maxAngularSpeed: 2
-  acceleration: 2
-  deceleration: 3
   forwardKey: 273
   backwardKey: 274
   leftKey: 276
@@ -1969,6 +1966,7 @@ MonoBehaviour:
   autoDetectPrefix: 1
   customPrefix: 
   cmdVelTopic: /cmd_vel
+  rosCommandTimeout: 0.5
   showDebugInfo: 0
 --- !u!1 &7335196152177511065
 GameObject:
@@ -2025,10 +2023,10 @@ GameObject:
   m_Component:
   - component: {fileID: 2134897379475526177}
   - component: {fileID: 5064563559504109863}
-  - component: {fileID: 1151668263881996573}
   - component: {fileID: 4617265492558956554}
   - component: {fileID: 2293886963538801853}
   - component: {fileID: 4783570847377917628}
+  - component: {fileID: 1823713686775619087}
   m_Layer: 8
   m_Name: base_link
   m_TagString: robot
@@ -2071,33 +2069,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   IsBaseLink: 1
---- !u!54 &1151668263881996573
-Rigidbody:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7438760112835347714}
-  serializedVersion: 4
-  m_Mass: 70
-  m_Drag: 0
-  m_AngularDrag: 0.05
-  m_CenterOfMass: {x: 0, y: 0, z: 0}
-  m_InertiaTensor: {x: 1, y: 1, z: 1}
-  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ImplicitCom: 1
-  m_ImplicitTensor: 1
-  m_UseGravity: 1
-  m_IsKinematic: 0
-  m_Interpolate: 0
-  m_Constraints: 0
-  m_CollisionDetection: 0
 --- !u!114 &4617265492558956554
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2170,6 +2141,33 @@ MonoBehaviour:
   autoStart: 1
   showGizmos: 1
   logDetections: 0
+--- !u!54 &1823713686775619087
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7438760112835347714}
+  serializedVersion: 5
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
 --- !u!1 &8140465077602360295
 GameObject:
   m_ObjectHideFlags: 0
@@ -2273,12 +2271,12 @@ ArticulationBody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8315162350470796948}
   m_Enabled: 0
-  serializedVersion: 5
-  m_Mass: 4.3542
-  m_ParentAnchorPosition: {x: -0.18738, y: 0.0605, z: 0.0012913942}
-  m_ParentAnchorRotation: {x: 0, y: 0, z: 3.0615e-17, w: 1}
-  m_AnchorPosition: {x: 0, y: 0, z: 0}
-  m_AnchorRotation: {x: 0, y: 0, z: 0, w: 1}
+  serializedVersion: 6
+  m_Mass: 0.0000001
+  m_ParentAnchorPosition: {x: 0.81262, y: 0.0605, z: 0.0012914}
+  m_ParentAnchorRotation: {x: 0.008726535, y: 2.6716287e-19, z: 3.0613835e-17, w: 0.9999619}
+  m_AnchorPosition: {x: 1, y: 0, z: 0}
+  m_AnchorRotation: {x: 0.008726535, y: 0, z: 0, w: 0.9999619}
   m_MatchAnchors: 1
   m_ArticulationJointType: 2
   m_LinearX: 0

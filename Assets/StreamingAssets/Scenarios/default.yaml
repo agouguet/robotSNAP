@@ -2,10 +2,10 @@ scenario_info:
   name: "Default"
   description: "Default minimal scenario"
   version: "1.0"
-  map: "basic/frontal"
+  map: "basic/corner"
 
 points:
-  start: {x: 0, y: 0, z: 0}
+  start: {x: -5, y: 0, z: 0}
   end: {x: 5, y: 0, z: 0}
 
 robot:
@@ -15,7 +15,8 @@ robot:
   speed: 1.2
 
 simulation:
-  duration: 60
+  duration: 0.1
   random_seed: 42
-  min_humans: 0
-  max_humans: 0
+  time_scale: 1.0
+  min_humans: 1
+  max_humans: 1

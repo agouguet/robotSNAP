@@ -1,0 +1,180 @@
+/* ===== PLEIN ÉCRAN ===== */
+.full-screen-button {
+    width: 64px;
+    height: 64px;
+    background-size: contain;
+    background-color: var(--bg-secondary);
+    -unity-background-image-tint-color: var(--icon-tint);
+    border-radius: 8px;
+    border-width: 0;
+    right: 30px;
+    bottom: 30px;
+}
+
+/* ===== DROPDOWN VUE (haut droite) ===== */
+.view-dropdown-container {
+    top: 30px;
+    right: 30px;
+}
+
+.view-button {
+    background-color: var(--button-bg);
+    width: 64px;
+    height: 64px;
+    margin: 0px;
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 20px;
+    border-width: 0;
+}
+.view-button.active {
+    background-color: var(--accent);
+    color: white;
+}
+.view-menu {
+    position: absolute;
+    top: 100%;           /* place le menu juste en dessous du bouton */
+    left: 0;             /* aligné à gauche du bouton */
+    margin-top: 1px;     /* petit espace optionnel */
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--border-color);
+    min-width: 64px;
+    z-index: 10;
+    flex-direction: column;
+}
+
+.menu-option {
+    background-color: transparent;
+    border-width: 0;
+    padding: 8px 12px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+.menu-option:hover {
+    background-color: rgba(255,255,255,0.1);
+}
+
+/* ===== MINI-MAP ===== */
+.minimap-container {
+    left: 30px;
+    bottom: 30px;
+    width: 200px;
+    height: 200px;
+    background-color: rgba(0, 0, 0, 0.7);
+    border-radius: 12px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--border-color);
+    overflow: hidden;
+}
+.minimap-title {
+    position: absolute;
+    top: 4px;
+    left: 8px;
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+.minimap-image {
+    width: 100%;
+    height: 100%;
+    background-color: #1a2a3a;
+}
+
+/* ===== BARRE DE FOCUS AGENT (bas centre) – style métriques ===== */
+.agent-focus-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--panel-bg);
+    border-radius: 20px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--border-color);
+    padding: 3px 6px;
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    width: auto;
+    min-width: 450px;
+    min-height: 70px;
+    margin-left: -260px;
+}
+
+.focus-block {
+    flex-direction: column;
+    align-items: center;
+    margin: 0 10px;
+    height: 60px;
+}
+.block-label {
+    font-size: 11px;
+    font-weight: normal;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 0px 4px 0px 2px;
+    align-self: flex-start;
+}
+.block-value {
+    font-size: 20px;
+    font-weight: bold;
+    color: var(--text-secondary);
+    margin: 0px 4px 0px 2px;
+    align-self: flex-start;
+}
+.separator-vertical {
+    width: 2px;
+    height: 50px;
+    background-color: var(--border-color);
+}
+.focus-controls {
+    flex-direction: row;
+    align-items: center;
+}
+.agent-nav-button {
+    background-color: var(--button-bg);
+    border-width: 0;
+    border-radius: 24px;
+    width: 36px;
+    height: 36px;
+    color: var(--text-secondary);
+    font-size: 18px;
+    padding: 0;
+    margin: 0 4px;
+}
+.agent-nav-button:hover {
+    background-color: var(--button-hover);
+}
+.agent-dropdown {
+    background-color: rgba(0,0,0,0);
+    border-radius: 0px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    padding: 0px 0px;
+    border-width: 0;
+    min-width: 120px;
+    height: 40px;
+}
+.agent-dropdown .unity-base-field__input {
+    background-color: rgba(0,0,0,0);
+    border-width: 0;
+    height: 100%;
+    padding: 0 0;
+}
+.agent-dropdown .unity-base-popup-field__arrow {
+    display: none;
+}
+.agent-dropdown .unity-base-popup-field__text {
+    height: 100%;
+    min-width: 100px;
+}
+.agent-dropdown .unity-base-text-field__input {
+    color: var(--text-secondary);
+    text-align: center;
+}
+.agent-dropdown .unity-popup-field__arrow {
+    color: var(--text-secondary);
+}
+

@@ -12,13 +12,16 @@ namespace RobotSNAP.Core.Scenario
     /// <summary>
     /// Applique un scénario YAML à un GameManager.
     /// Gère la carte (via GridEnvironmentBuilder), le positionnement du robot,
-    /// la configuration des humains, les objectifs, formations et comportements.
+    /// la configuration des humains (via le HumanPoolManager), les objectifs, formations et comportements.
     /// </summary>
     public sealed class ScenarioApplier : MonoBehaviour
     {
         [Header("References")]
         [SerializeField] private ScenarioLoader _loader;
         [SerializeField] private GridEnvironmentBuilder _gridBuilder;
+
+        [Header("Prefabs")]
+        [SerializeField] private GameObject _robotPrefab; 
 
         [Header("Settings")]
         [SerializeField] private bool _clearExistingHumans = true;
@@ -95,7 +98,7 @@ namespace RobotSNAP.Core.Scenario
             // 1. Charger et construire la carte
             yield return StartCoroutine(BuildMapFromScenario());
 
-            // 2. Nettoyer les agents existants
+            // 2. Nettoyer les humains existants (les retourner au pool)
             if (_clearExistingHumans)
             {
                 yield return StartCoroutine(ClearExistingHumans());
@@ -105,13 +108,13 @@ namespace RobotSNAP.Core.Scenario
             // 3. Attendre que le GameManager soit prêt
             yield return StartCoroutine(WaitForGameManagerReady());
 
-            // 4. Appliquer la configuration de simulation (seed, time scale, etc.)
+            // 4. Appliquer la configuration de simulation (seed, time scale, durée)
             ApplySimulationConfig();
 
-            // 5. Positionner le robot
+            // 5. Positionner et configurer le robot
             yield return StartCoroutine(SetupRobot());
 
-            // 6. Configurer les humains
+            // 6. Configurer les humains via le pool
             yield return StartCoroutine(SetupHumans());
 
             if (_logEvents) Debug.Log($"[ScenarioApplier] Scenario application complete: {_currentScenario.Name}");
@@ -131,7 +134,6 @@ namespace RobotSNAP.Core.Scenario
                 yield break;
             }
 
-            
             if (_loader.LoadMapData(_currentScenario.MapImage, out Texture2D texture, out Bounds bounds))
             {
                 if (texture == null)
@@ -141,25 +143,29 @@ namespace RobotSNAP.Core.Scenario
                 }
                 _gridBuilder.BuildFromTexture(texture, bounds);
             }
-            // Optionnel : attendre un frame pour que le NavMesh soit généré (si fait ailleurs)
             yield return null;
         }
 
         private IEnumerator ClearExistingHumans()
         {
-            var spawnCoordinator = GetSpawnCoordinator();
-            if (spawnCoordinator != null)
+            var poolManager = _gameManager?.HumanPool;
+            if (poolManager != null)
             {
-                // Si SpawnCoordinator a une méthode ClearAll, l'appeler
-                var clearMethod = spawnCoordinator.GetType().GetMethod("ClearAll");
-                clearMethod?.Invoke(spawnCoordinator, null);
+                poolManager.ReturnAllHumans();
+                if (_logEvents) Debug.Log("[ScenarioApplier] Cleared all humans via pool.");
+            }
+            else
+            {
+                var humans = FindObjectsOfType<HumanAvatar>();
+                foreach (var h in humans)
+                    Destroy(h.gameObject);
+                if (_logEvents) Debug.Log($"[ScenarioApplier] Destroyed {humans.Length} humans directly.");
             }
             yield return null;
         }
 
         private IEnumerator WaitForGameManagerReady()
         {
-            // Attendre que le GameManager soit initialisé
             while (!_gameManager.IsInitialized)
                 yield return null;
             yield return new WaitForSeconds(0.1f);
@@ -167,32 +173,29 @@ namespace RobotSNAP.Core.Scenario
 
         private void ApplySimulationConfig()
         {
-            var simConfig = _currentScenario.Simulation;
-            if (simConfig == null) return;
+            var globalConfig = Supervisor.Instance?.ActiveConfig;
+            if (globalConfig == null) return;
 
-            int seed = simConfig.RandomSeed == -1 ? System.Environment.TickCount : simConfig.RandomSeed;
+            int seed = globalConfig.RandomSeed == -1 ? System.Environment.TickCount : globalConfig.RandomSeed;
             UnityEngine.Random.InitState(seed);
-            Time.timeScale = simConfig.TimeScale;
+            Time.timeScale = globalConfig.TimeScale;
 
-            var spawnCoordinator = GetSpawnCoordinator();
-            if (spawnCoordinator != null)
+            float duration = _currentScenario.Duration;
+            if (duration > 0)
             {
-                SetPropertyIfExists(spawnCoordinator, "MinHumans", simConfig.MinHumans);
-                SetPropertyIfExists(spawnCoordinator, "MaxHumans", simConfig.MaxHumans);
+                StartCoroutine(HandleSimulationDuration(duration));
             }
 
-            if (simConfig.Duration > 0)
-                _gameManager.Invoke(nameof(GameManager.EditorReset), simConfig.Duration);
-
             if (_logEvents)
-                Debug.Log($"[ScenarioApplier] Simulation config: seed={seed}, duration={simConfig.Duration}s, timeScale={simConfig.TimeScale}");
+                Debug.Log($"[ScenarioApplier] Simulation config: seed={seed}, duration={duration}s, timeScale={globalConfig.TimeScale}");
         }
 
-        private void SetPropertyIfExists(object target, string propertyName, object value)
+        private IEnumerator HandleSimulationDuration(float duration)
         {
-            var prop = target.GetType().GetProperty(propertyName);
-            if (prop != null && prop.CanWrite)
-                prop.SetValue(target, value);
+            yield return new WaitForSeconds(duration);
+            _gameManager?.NotifyScenarioDurationReached();
+            Supervisor.Instance?.Pause();
+            if (_logEvents) Debug.Log($"[ScenarioApplier] Duration {duration}s reached. Simulation paused.");
         }
 
         private IEnumerator SetupRobot()
@@ -200,8 +203,16 @@ namespace RobotSNAP.Core.Scenario
             var robot = FindRobot();
             if (robot == null)
             {
-                OnApplicationError?.Invoke("Robot not found");
-                yield break;
+                if (_robotPrefab == null)
+                {
+                    OnApplicationError?.Invoke("Robot prefab not assigned and no robot found in scene.");
+                    yield break;
+                }
+                robot = Instantiate(_robotPrefab);
+                robot.transform.parent = _gameManager.transform;
+                robot.tag = "Robot";
+                robot.name = "Robot";
+                if (_logEvents) Debug.Log("[ScenarioApplier] Created new robot from prefab.");
             }
 
             var robotConfig = _currentScenario.Robot;
@@ -214,7 +225,11 @@ namespace RobotSNAP.Core.Scenario
             if (_resetRobotPosition)
             {
                 Vector3 startPos = ResolvePosition(robotConfig.StartRef);
-                robot.transform.position = startPos;
+                var robotComponent = robot.GetComponent<Robot>();
+                if (robotComponent != null)
+                    robotComponent.SetBaseLinkPosition(startPos);
+                else
+                    robot.transform.position = startPos;   // fallback
                 if (_logEvents) Debug.Log($"[ScenarioApplier] Robot position set to {startPos}");
             }
 
@@ -259,33 +274,41 @@ namespace RobotSNAP.Core.Scenario
                 yield break;
             }
 
-            var spawnCoordinator = GetSpawnCoordinator();
-            if (spawnCoordinator == null)
+            var poolManager = _gameManager?.HumanPool;
+            if (poolManager == null)
             {
-                OnApplicationError?.Invoke("SpawnCoordinator not found");
+                OnApplicationError?.Invoke("HumanPoolManager not found in GameManager");
                 yield break;
             }
 
-            // Demander au SpawnCoordinator de spawner les humains (sans positions, juste les instances)
-            var spawnMethod = spawnCoordinator.GetType().GetMethod("SpawnHumansOnly");
-            if (spawnMethod != null)
-                yield return StartCoroutine((IEnumerator)spawnMethod.Invoke(spawnCoordinator, null));
-            else
-                yield return StartCoroutine(spawnCoordinator.SpawnAll());
+            // Calculer le nombre total d'humains
+            int totalHumans = 0;
+            foreach (var config in _currentScenario.Humans)
+                totalHumans += config.Count;
 
-            yield return null;
+            if (totalHumans == 0) yield break;
 
-            var allHumans = FindObjectsOfType<HumanAvatar>();
-            if (allHumans.Length == 0)
+            // Récupérer les instances depuis le pool
+            List<HumanAvatar> allHumans = new List<HumanAvatar>();
+            for (int i = 0; i < totalHumans; i++)
             {
-                Debug.LogWarning("[ScenarioApplier] No humans found after spawn");
-                yield break;
+                GameObject humanGO = poolManager.GetHuman();
+                if (humanGO != null)
+                {
+                    humanGO.SetActive(true);
+                    var human = humanGO.GetComponent<HumanAvatar>();
+                    if (human != null)
+                        allHumans.Add(human);
+                }
             }
 
+            yield return null; // laisser Unity stabiliser
+
+            // Configurer chaque humain selon sa définition YAML
             int humanIndex = 0;
             foreach (var config in _currentScenario.Humans)
             {
-                for (int i = 0; i < config.Count && humanIndex < allHumans.Length; i++)
+                for (int i = 0; i < config.Count && humanIndex < allHumans.Count; i++)
                 {
                     var human = allHumans[humanIndex];
                     if (human != null)
@@ -302,6 +325,7 @@ namespace RobotSNAP.Core.Scenario
 
         private void ConfigureHuman(HumanAvatar human, HumanScenarioConfig config, int index, int total)
         {
+            // Positionnement
             if (config.Spawn != null)
             {
                 Vector3 spawnPos = ResolveSpawnPosition(config.Spawn, index, total);
@@ -309,18 +333,54 @@ namespace RobotSNAP.Core.Scenario
                     human.transform.position = spawnPos;
             }
 
+            // Objectif
             if (config.Goal != null)
                 ResolveAndSetGoal(human, config.Goal);
 
+            // Paramètres de base
             human.SetSpeed(config.Speed);
             if (!string.IsNullOrEmpty(config.Behavior))
                 human.SetBehavior(config.Behavior);
 
+            // Couleur
             if (config.Color != null && config.Color.Length >= 3)
                 SetHumanColor(human, new Color(config.Color[0], config.Color[1], config.Color[2]));
 
+            // Personnalité (assertiveness, personal space, reaction time)
             if (config.Personality != null)
                 SetHumanPersonality(human, config.Personality);
+
+            // Contrôleur de mouvement (SFM, ONNX, Hybrid) et paramètres SFM avancés
+            if (config.MovementController != null)
+                SetHumanMovementController(human, config.MovementController);
+        }
+
+        private void SetHumanMovementController(HumanAvatar human, MovementControllerConfig movementConfig)
+        {
+            var movement = human.GetComponent<HumanMovement>();
+            if (movement == null) return;
+
+            // Déterminer le type de contrôleur (0=SFM, 1=ONNX, 2=Hybrid)
+            int controllerType = 0;
+            switch (movementConfig.Type?.ToLower())
+            {
+                case "sfm": controllerType = 0; break;
+                case "onnx": controllerType = 1; break;
+                case "hybrid": controllerType = 2; break;
+                default: controllerType = 0; break;
+            }
+            movement.SetControllerType(controllerType);
+
+            // Les paramètres SFM personnalisés (force_strength, social_force, etc.)
+            // ne sont pas directement exposés dans HumanMovement actuellement.
+            // On pourrait étendre HumanMovement pour les passer au contrôleur SFM.
+            // Pour l'instant, on ignore ces valeurs ou on les loggue.
+            if (movementConfig.SFMParameters != null && _logEvents)
+            {
+                Debug.Log($"[ScenarioApplier] SFM advanced parameters provided but not yet applied to {human.name}. " +
+                          $"Values: ForceStrength={movementConfig.SFMParameters.ForceStrength}, " +
+                          $"SocialForce={movementConfig.SFMParameters.SocialForce}, etc.");
+            }
         }
 
         private Vector3 ResolveSpawnPosition(SpawnConfig spawn, int index, int total)
@@ -428,8 +488,5 @@ namespace RobotSNAP.Core.Scenario
                 movement.SetReactionTime(personality.ReactionTime);
             }
         }
-
-        private SpawnCoordinator GetSpawnCoordinator() =>
-            _gameManager != null ? _gameManager.GetComponentInChildren<SpawnCoordinator>() : null;
     }
 }

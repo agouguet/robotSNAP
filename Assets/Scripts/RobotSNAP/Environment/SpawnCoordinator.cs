@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using RobotSNAP.Core.Scenario;
+using RobotSNAP.Human;
 
 namespace RobotSNAP.Core
 {
@@ -131,12 +132,64 @@ namespace RobotSNAP.Core
                 {
                     SpawnData humanSpawn = GenerateHumanSpawnFromConfig(config, i, config.Count, humanIndex);
                     
-                    GameObject human = _humanPool.GetHuman(config);
+                    // Récupérer une instance humaine brute depuis le pool (non configurée)
+                    GameObject human = _humanPool.GetHuman();
                     if (human != null)
                     {
                         human.transform.SetPositionAndRotation(humanSpawn.position, humanSpawn.rotation);
-                        var controller = human.GetComponent<IHumanController>();
-                        controller?.SetGoal(humanSpawn.goalPosition);
+                        
+                        var humanAvatar = human.GetComponent<HumanAvatar>();
+                        if (humanAvatar != null)
+                        {
+                            // Position déjà faite, on applique la configuration métier
+                            humanAvatar.SetSpeed(config.Speed);
+                            if (!string.IsNullOrEmpty(config.Behavior))
+                                humanAvatar.SetBehavior(config.Behavior);
+                            
+                            // Couleur
+                            if (config.Color != null && config.Color.Length >= 3)
+                            {
+                                var renderer = humanAvatar.GetComponentInChildren<Renderer>();
+                                if (renderer != null)
+                                    renderer.material.color = new Color(config.Color[0], config.Color[1], config.Color[2]);
+                            }
+                            
+                            // Personnalité
+                            if (config.Personality != null)
+                            {
+                                var movement = humanAvatar.GetComponent<HumanMovement>();
+                                if (movement != null)
+                                {
+                                    movement.SetAssertiveness(config.Personality.Assertiveness);
+                                    movement.SetPersonalSpace(config.Personality.PersonalSpace);
+                                    movement.SetReactionTime(config.Personality.ReactionTime);
+                                }
+                            }
+                            
+                            // Objectif
+                            var controller = human.GetComponent<IHumanController>();
+                            if (controller != null && humanSpawn.goalPosition != Vector3.zero)
+                                controller.SetGoal(humanSpawn.goalPosition);
+                            
+                            // Type de contrôleur (SFM, ONNX, Hybrid) si spécifié
+                            if (config.MovementController != null)
+                            {
+                                var movement = humanAvatar.GetComponent<HumanMovement>();
+                                if (movement != null)
+                                {
+                                    int controllerType = 0;
+                                    switch (config.MovementController.Type?.ToLower())
+                                    {
+                                        case "sfm": controllerType = 0; break;
+                                        case "onnx": controllerType = 1; break;
+                                        case "hybrid": controllerType = 2; break;
+                                    }
+                                    movement.SetControllerType(controllerType);
+                                    // Ici vous pourriez aussi appliquer les paramètres SFM personnalisés
+                                }
+                            }
+                        }
+                        
                         human.SetActive(true);
                     }
                     
@@ -471,7 +524,7 @@ namespace RobotSNAP.Core
                 {
                     Destroy(_currentRobot);
                 }
-                
+                Debug.Log($"[SpawnCoordinator] Spawning robot at {data.position} with goal at {data.goalPosition}");
                 _currentRobot = Instantiate(_robotPrefab, data.position, data.rotation);
                 _currentRobot.transform.parent = transform;
                 _currentRobot.SetActive(false);
@@ -495,6 +548,7 @@ namespace RobotSNAP.Core
                     Destroy(_currentGoal);
                 }
                 
+                Debug.Log($"[SpawnCoordinator] Spawning goal at {data.goalPosition}");
                 _currentGoal = Instantiate(_goalPrefab, data.goalPosition, data.goalRotation);
                 _currentGoal.transform.parent = transform;
                 _currentGoal.SetActive(false);

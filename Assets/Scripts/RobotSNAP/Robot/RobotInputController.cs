@@ -6,7 +6,8 @@ namespace RobotSNAP
 {
     /// <summary>
     /// Contrôleur de robot avec support clavier et ROS.
-    /// Permet de basculer entre les modes de contrôle.
+    /// Délègue le mouvement au composant Robot (qui gère le lissage).
+    /// Possède un mode "Scenario" pour ne pas interférer avec la navigation autonome.
     /// </summary>
     public class RobotInputController : MonoBehaviour
     {
@@ -17,8 +18,6 @@ namespace RobotSNAP
         [Header("Keyboard Settings")]
         [SerializeField] private float maxLinearSpeed = 2f;
         [SerializeField] private float maxAngularSpeed = 2f;
-        [SerializeField] private float acceleration = 2f;
-        [SerializeField] private float deceleration = 3f;
         
         [Header("Keyboard Keys")]
         [SerializeField] private KeyCode forwardKey = KeyCode.W;
@@ -31,25 +30,27 @@ namespace RobotSNAP
         [SerializeField] private bool autoDetectPrefix = true;
         [SerializeField] private string customPrefix = "";
         [SerializeField] private string cmdVelTopic = "/cmd_vel";
+        [SerializeField] private float rosCommandTimeout = 0.5f;
         
         [Header("Debug")]
         [SerializeField] private bool showDebugInfo = false;
         
         private Robot _robot;
         private EnvROS _envROS;
-        private float _targetLinearSpeed;
-        private float _targetAngularSpeed;
-        private float _currentLinearSpeed;
-        private float _currentAngularSpeed;
         private bool _isRosSubscribed;
         private string _fullCmdVelTopic;
+        private float _lastRosCommandTime;
         
-        // Mode de contrôle
+        // Commandes cibles (brutes, sans lissage)
+        private float _targetLinear;
+        private float _targetAngular;
+        
         public enum ControlMode
         {
             Keyboard,   // Contrôle clavier uniquement
             ROS,        // Contrôle ROS uniquement
-            Hybrid      // Les deux (ROS prioritaire si message reçu)
+            Hybrid,     // ROS prioritaire avec timeout, sinon clavier
+            Scenario    // Pas de contrôle externe (robot autonome via SetGoal)
         }
         
         public ControlMode CurrentMode => controlMode;
@@ -63,33 +64,42 @@ namespace RobotSNAP
         
         private void Update()
         {
-            // Gestion du changement de mode
+            // Changement de mode
             if (Input.GetKeyDown(toggleModeKey))
-            {
                 ToggleControlMode();
-            }
             
-            // Contrôle clavier
+            // Pas de traitement en mode Scenario
+            if (controlMode == ControlMode.Scenario)
+                return;
+            
+            // Entrées clavier (pour modes Keyboard et Hybrid)
             if (controlMode == ControlMode.Keyboard || controlMode == ControlMode.Hybrid)
-            {
                 HandleKeyboardInput();
-            }
         }
         
         private void FixedUpdate()
         {
-            // Appliquer le mouvement
-            ApplyMovement();
+            // Pas de commande en mode Scenario
+            if (controlMode == ControlMode.Scenario)
+                return;
+            
+            // En mode Hybrid, gérer le timeout ROS
+            if (controlMode == ControlMode.Hybrid && Time.time - _lastRosCommandTime > rosCommandTimeout)
+            {
+                // Timeout : utiliser le clavier (ou arrêter)
+                if (showDebugInfo && Time.frameCount % 60 == 0)
+                    Debug.Log("[RobotInputController] ROS timeout, fallback to keyboard");
+                HandleKeyboardInput(); // recalcule _targetLinear/Angular
+            }
+            
+            // Envoyer la commande au robot (le robot fera son propre lissage)
+            _robot.SetVelocity(_targetLinear, _targetAngular);
         }
         
         private void OnDestroy()
         {
-            // Nettoyer la subscription ROS
             if (_envROS != null && _isRosSubscribed)
-            {
-                // Note: ROSConnection n'a pas de Unsubscribe, on laisse juste
                 _isRosSubscribed = false;
-            }
         }
         
         #endregion
@@ -98,7 +108,6 @@ namespace RobotSNAP
         
         private void Initialize()
         {
-            // Récupérer le composant Robot
             _robot = GetComponent<Robot>();
             if (_robot == null)
             {
@@ -107,49 +116,37 @@ namespace RobotSNAP
                 return;
             }
             
-            // Récupérer EnvROS pour les commandes ROS
-            _envROS = FindObjectOfType<EnvROS>();
+            // Récupérer la configuration du robot (pour les vitesses max, mais on garde nos propres max pour le contrôle)
+            // On pourrait les lire depuis _robot, mais on laisse indépendant pour plus de flexibilité.
             
+            _envROS = FindObjectOfType<EnvROS>();
             if (_envROS != null && (controlMode == ControlMode.ROS || controlMode == ControlMode.Hybrid))
-            {
                 SubscribeToROS();
-            }
-            else if (controlMode == ControlMode.ROS || controlMode == ControlMode.Hybrid)
-            {
+            else if ((controlMode == ControlMode.ROS || controlMode == ControlMode.Hybrid))
                 Debug.LogWarning($"[{name}] EnvROS not found! ROS control will not work.");
-            }
             
             if (showDebugInfo)
-            {
                 Debug.Log($"[{name}] Initialized with mode: {controlMode}");
-            }
         }
         
         private void SubscribeToROS()
         {
             if (_envROS == null) return;
             
-            // Détecter le préfixe
             string prefix = "";
             if (autoDetectPrefix && _envROS != null)
-            {
                 prefix = _envROS.Prefix;
-            }
             else if (!string.IsNullOrEmpty(customPrefix))
-            {
                 prefix = customPrefix;
-            }
             
-            _fullCmdVelTopic = string.IsNullOrEmpty(prefix) ? cmdVelTopic : $"/{prefix}{cmdVelTopic}";
+            // Construire le topic complet (éviter double slash)
+            _fullCmdVelTopic = string.IsNullOrEmpty(prefix) ? cmdVelTopic : $"/{prefix.TrimStart('/')}{cmdVelTopic}";
             
-            // S'abonner au topic cmd_vel
             _envROS.RegisterSubscriber<RosMessageTypes.Geometry.TwistMsg>(_fullCmdVelTopic, OnRosCommandReceived);
             _isRosSubscribed = true;
             
             if (showDebugInfo)
-            {
                 Debug.Log($"[{name}] Subscribed to ROS topic: {_fullCmdVelTopic}");
-            }
         }
         
         #endregion
@@ -161,13 +158,11 @@ namespace RobotSNAP
             float linear = 0f;
             float angular = 0f;
             
-            // Mouvement avant/arrière
             if (Input.GetKey(forwardKey))
                 linear = maxLinearSpeed;
             else if (Input.GetKey(backwardKey))
                 linear = -maxLinearSpeed;
             
-            // Rotation gauche/droite
             if (Input.GetKey(leftKey))
                 angular = -maxAngularSpeed;
             else if (Input.GetKey(rightKey))
@@ -178,43 +173,15 @@ namespace RobotSNAP
             {
                 linear = 0f;
                 angular = 0f;
-                _currentLinearSpeed = 0f;
-                _currentAngularSpeed = 0f;
             }
             
-            // Mettre à jour les cibles
-            _targetLinearSpeed = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed);
-            _targetAngularSpeed = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
-            
-            // En mode hybrid, on n'écrase que si pas de commande ROS récente
-            // (la commande ROS gère ses propres cibles)
-        }
-        
-        private void ApplyMovement()
-        {
-            // Accélération/décélération progressive
-            _currentLinearSpeed = Mathf.MoveTowards(
-                _currentLinearSpeed,
-                _targetLinearSpeed,
-                (_targetLinearSpeed > _currentLinearSpeed ? acceleration : deceleration) * Time.fixedDeltaTime
-            );
-            
-            _currentAngularSpeed = Mathf.MoveTowards(
-                _currentAngularSpeed,
-                _targetAngularSpeed,
-                (_targetAngularSpeed > _currentAngularSpeed ? acceleration : deceleration) * Time.fixedDeltaTime
-            );
-            
-            // Appliquer au robot
-            _robot.SetVelocity(_currentLinearSpeed, _currentAngularSpeed);
+            _targetLinear = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed);
+            _targetAngular = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
         }
         
         #endregion
         
         #region ROS Control
-        
-        private float _lastRosCommandTime;
-        private float _rosCommandTimeout = 0.5f; // Timeout en secondes
         
         private void OnRosCommandReceived(RosMessageTypes.Geometry.TwistMsg msg)
         {
@@ -224,20 +191,15 @@ namespace RobotSNAP
             
             if (controlMode == ControlMode.ROS)
             {
-                // Mode ROS uniquement
-                _targetLinearSpeed = (float)msg.linear.x;
-                _targetAngularSpeed = -(float)msg.angular.z;
+                // Mode ROS : appliquer directement
+                _targetLinear = Mathf.Clamp((float)msg.linear.x, -maxLinearSpeed, maxLinearSpeed);
+                _targetAngular = Mathf.Clamp(-(float)msg.angular.z, -maxAngularSpeed, maxAngularSpeed);
             }
             else if (controlMode == ControlMode.Hybrid)
             {
-                // Mode hybride : ROS prend le dessus si commande récente
-                _targetLinearSpeed = (float)msg.linear.x;
-                _targetAngularSpeed = -(float)msg.angular.z;
-            }
-            
-            if (showDebugInfo && Time.frameCount % 60 == 0)
-            {
-                Debug.Log($"[{name}] ROS command: linear={_targetLinearSpeed:F2}, angular={_targetAngularSpeed:F2}");
+                // Mode hybride : ROS prend la main
+                _targetLinear = Mathf.Clamp((float)msg.linear.x, -maxLinearSpeed, maxLinearSpeed);
+                _targetAngular = Mathf.Clamp(-(float)msg.angular.z, -maxAngularSpeed, maxAngularSpeed);
             }
         }
         
@@ -246,100 +208,85 @@ namespace RobotSNAP
         #region Public Methods
         
         /// <summary>
-        /// Change le mode de contrôle
+        /// Change le mode de contrôle.
         /// </summary>
         public void SetControlMode(ControlMode newMode)
         {
             controlMode = newMode;
-            
             // Arrêter le robot lors du changement
-            _targetLinearSpeed = 0f;
-            _targetAngularSpeed = 0f;
-            _currentLinearSpeed = 0f;
-            _currentAngularSpeed = 0f;
-            
-            // Réinitialiser le timeout ROS
-            _lastRosCommandTime = 0;
+            _targetLinear = 0f;
+            _targetAngular = 0f;
+            _robot.SetVelocity(0f, 0f);
             
             if (showDebugInfo)
-            {
                 Debug.Log($"[{name}] Control mode changed to: {controlMode}");
-            }
         }
         
         /// <summary>
-        /// Alterne entre les modes
+        /// Alterne entre les modes (Keyboard → ROS → Hybrid → Scenario → Keyboard...)
         /// </summary>
         public void ToggleControlMode()
         {
-            switch (controlMode)
-            {
-                case ControlMode.Keyboard:
-                    SetControlMode(ControlMode.ROS);
-                    break;
-                case ControlMode.ROS:
-                    SetControlMode(ControlMode.Hybrid);
-                    break;
-                case ControlMode.Hybrid:
-                    SetControlMode(ControlMode.Keyboard);
-                    break;
-            }
+            ControlMode next = (ControlMode)(((int)controlMode + 1) % System.Enum.GetValues(typeof(ControlMode)).Length);
+            SetControlMode(next);
         }
         
         /// <summary>
-        /// Force un arrêt d'urgence du robot
+        /// Force un arrêt d'urgence.
         /// </summary>
         public void EmergencyStop()
         {
-            _targetLinearSpeed = 0f;
-            _targetAngularSpeed = 0f;
-            _currentLinearSpeed = 0f;
-            _currentAngularSpeed = 0f;
-            
+            _targetLinear = 0f;
+            _targetAngular = 0f;
+            _robot.SetVelocity(0f, 0f);
             if (showDebugInfo)
-            {
-                Debug.Log($"[{name}] Emergency stop activated!");
-            }
+                Debug.Log($"[{name}] Emergency stop!");
         }
         
         /// <summary>
-        /// Envoie une commande de vitesse manuellement
+        /// Envoie une commande de vitesse manuellement (ignorée en mode Scenario).
         /// </summary>
         public void SendVelocityCommand(float linear, float angular)
         {
-            _targetLinearSpeed = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed);
-            _targetAngularSpeed = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
+            if (controlMode == ControlMode.Scenario) return;
+            _targetLinear = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed);
+            _targetAngular = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
+        }
+        
+        /// <summary>
+        /// Passe automatiquement en mode Scenario (utilisé par ScenarioApplier).
+        /// </summary>
+        public void EnableScenarioMode()
+        {
+            SetControlMode(ControlMode.Scenario);
+        }
+        
+        /// <summary>
+        /// Réactive le contrôle (dernier mode non-Scenario ou Keyboard par défaut).
+        /// </summary>
+        public void DisableScenarioMode()
+        {
+            // Retour au mode clavier par défaut, ou on pourrait stocker le mode précédent
+            SetControlMode(ControlMode.Keyboard);
         }
         
         #endregion
         
         #region UI Helpers
         
-        /// <summary>
-        /// Retourne une chaîne descriptive du mode actuel
-        /// </summary>
         public string GetModeString()
         {
             switch (controlMode)
             {
-                case ControlMode.Keyboard:
-                    return "KEYBOARD";
-                case ControlMode.ROS:
-                    return "ROS";
-                case ControlMode.Hybrid:
-                    return "HYBRID (ROS優先)";
-                default:
-                    return "UNKNOWN";
+                case ControlMode.Keyboard: return "KEYBOARD";
+                case ControlMode.ROS: return "ROS";
+                case ControlMode.Hybrid: return "HYBRID";
+                case ControlMode.Scenario: return "SCENARIO (autonome)";
+                default: return "UNKNOWN";
             }
         }
         
-        /// <summary>
-        /// Retourne les commandes actuelles pour l'affichage
-        /// </summary>
-        public Vector2 GetCurrentCommands()
-        {
-            return new Vector2(_targetLinearSpeed, _targetAngularSpeed);
-        }
+        public Vector2 GetCurrentCommands() => new Vector2(_targetLinear, _targetAngular);
         
         #endregion
         
@@ -349,27 +296,24 @@ namespace RobotSNAP
         {
             if (!showDebugInfo) return;
             
-            // Position de l'affichage
             float x = 10;
             float y = 50;
-            float width = 250;
-            float height = 100;
+            float width = 280;
+            float height = 120;
             
             GUIStyle style = new GUIStyle();
             style.normal.textColor = Color.white;
             style.fontSize = 14;
             style.fontStyle = FontStyle.Bold;
             
-            // Fond semi-transparent
             GUI.color = new Color(0, 0, 0, 0.7f);
             GUI.DrawTexture(new Rect(x - 5, y - 5, width + 10, height + 10), Texture2D.whiteTexture);
             GUI.color = Color.white;
             
-            // Texte d'information
             GUILayout.BeginArea(new Rect(x, y, width, height));
             GUILayout.Label($"Robot Control: {GetModeString()}", style);
-            GUILayout.Label($"Linear: {_targetLinearSpeed:F2} m/s", style);
-            GUILayout.Label($"Angular: {_targetAngularSpeed:F2} rad/s", style);
+            GUILayout.Label($"Linear target: {_targetLinear:F2} m/s", style);
+            GUILayout.Label($"Angular target: {_targetAngular:F2} rad/s", style);
             GUILayout.Label($"Press '{toggleModeKey}' to change mode", style);
             GUILayout.EndArea();
         }
@@ -379,28 +323,19 @@ namespace RobotSNAP
         #region Editor Utilities
         
         [ContextMenu("Switch to Keyboard Mode")]
-        private void EditorSwitchToKeyboard()
-        {
-            SetControlMode(ControlMode.Keyboard);
-        }
+        private void EditorSwitchToKeyboard() => SetControlMode(ControlMode.Keyboard);
         
         [ContextMenu("Switch to ROS Mode")]
-        private void EditorSwitchToROS()
-        {
-            SetControlMode(ControlMode.ROS);
-        }
+        private void EditorSwitchToROS() => SetControlMode(ControlMode.ROS);
         
         [ContextMenu("Switch to Hybrid Mode")]
-        private void EditorSwitchToHybrid()
-        {
-            SetControlMode(ControlMode.Hybrid);
-        }
+        private void EditorSwitchToHybrid() => SetControlMode(ControlMode.Hybrid);
+        
+        [ContextMenu("Switch to Scenario Mode")]
+        private void EditorSwitchToScenario() => SetControlMode(ControlMode.Scenario);
         
         [ContextMenu("Emergency Stop")]
-        private void EditorEmergencyStop()
-        {
-            EmergencyStop();
-        }
+        private void EditorEmergencyStop() => EmergencyStop();
         
         #endregion
     }

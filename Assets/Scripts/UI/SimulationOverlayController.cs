@@ -12,13 +12,34 @@ public class SimulationOverlayController : MonoBehaviour
 
     private void OnEnable()
     {
+        if (uiDocument == null)
+            uiDocument = GetComponent<UIDocument>();
+
+        if (uiDocument == null)
+        {
+            Debug.LogError("SimulationOverlayController: Aucun UIDocument trouvé !");
+            return;
+        }
+
         _root = uiDocument.rootVisualElement;
 
-        _viewButton = _root.Q<Button>("ViewButton");
-        _viewMenu = _root.Q<VisualElement>("ViewMenu");
-        _fullscreenButton = _root.Q<Button>("FullScreenButton");
+        _root.schedule.Execute(() =>
+        {
+            if (_viewButton == null)
+            {
+                _viewButton = _root.Q<Button>("ViewButton");
+                _viewMenu = _root.Q<VisualElement>("ViewMenu");
+                _fullscreenButton = _root.Q<Button>("FullScreenButton");
+                if (_viewButton != null && _viewMenu != null && _fullscreenButton != null)
+                {
+                    Initialize();
+                }
+            }
+        }).Every(50); // vérifie toutes les 50ms
+    }
 
-        // Ouvre/ferme le menu au clic sur le bouton
+    private void Initialize()
+    {
         _viewButton.clicked += () =>
         {
             _viewMenu.style.display = (_viewMenu.style.display == DisplayStyle.Flex) 
@@ -26,7 +47,6 @@ public class SimulationOverlayController : MonoBehaviour
                 : DisplayStyle.Flex;
         };
 
-        // Clic sur une option du menu
         foreach (var option in _viewMenu.Children())
         {
             if (option is Button btn)
@@ -40,22 +60,16 @@ public class SimulationOverlayController : MonoBehaviour
             }
         }
 
-        // Bonus : ferme le menu si on clique ailleurs (sauf sur le bouton)
         _root.RegisterCallback<ClickEvent>(evt =>
         {
-            // Si le menu est fermé, rien à faire
             if (_viewMenu.style.display != DisplayStyle.Flex) return;
-
-            // Récupère la cible du clic
             VisualElement target = evt.target as VisualElement;
-            // Si le clic n'est ni sur le bouton, ni à l'intérieur du menu, on ferme
             if (target != _viewButton && !_viewMenu.Contains(target))
             {
                 _viewMenu.style.display = DisplayStyle.None;
             }
         });
 
-        // Plein écran (à implémenter)
         if (_fullscreenButton != null)
             _fullscreenButton.clicked += ToggleFullscreen;
     }

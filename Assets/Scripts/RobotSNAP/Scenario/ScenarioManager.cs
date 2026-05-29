@@ -33,6 +33,9 @@ namespace RobotSNAP.Core.Scenario
         [Tooltip("Active les logs")]
         [SerializeField] private bool _logEvents = true;
 
+        [Tooltip("Met la simulation en pause après le chargement/application du scénario")]
+        [SerializeField] private bool _startPaused = true;
+
         [Header("Fallback")]
         [Tooltip("Scénario de secours si aucun fichier YAML n'est trouvé")]
         [SerializeField] private ScenarioData _fallbackScenario;
@@ -133,6 +136,13 @@ namespace RobotSNAP.Core.Scenario
                     _gameManagers.Add(gm);
             }
 
+            // Initialiser tous les GameManagers (NavMesh, pool, spawn initial)
+            foreach (var gm in _gameManagers)
+            {
+                if (gm != null)
+                    yield return StartCoroutine(gm.Initialize());
+            }
+
             if (_autoApplyAfterLoad)
                 yield return StartCoroutine(ApplyScenarioToAllCoroutine());
 
@@ -175,8 +185,14 @@ namespace RobotSNAP.Core.Scenario
             }
 
             OnScenarioApplied?.Invoke(_currentScenarioData);
-            if (_logEvents)
-                Debug.Log($"[ScenarioManager] Scenario applied to {_gameManagers.Count} environments: {_currentScenarioData.Name}");
+            if (_logEvents) Debug.Log($"[ScenarioManager] Scenario applied to {_gameManagers.Count} environments: {_currentScenarioData.Name}");
+
+            // NOUVEAU : mettre en pause si demandé
+            if (_startPaused && Supervisor.Instance != null)
+            {
+                Supervisor.Instance.Pause();
+                if (_logEvents) Debug.Log("[ScenarioManager] Simulation paused after scenario application");
+            }
         }
 
         #region Event Wrappers

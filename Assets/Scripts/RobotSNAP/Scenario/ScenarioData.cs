@@ -37,6 +37,12 @@ namespace RobotSNAP.Core.Scenario
         public string DatasetPath { get; set; }
         
         /// <summary>
+        /// Durée maximale du scénario (en secondes). 0 = illimitée.
+        /// </summary>
+        [YamlMember("duration")]
+        public float Duration { get; set; } = 0f;
+        
+        /// <summary>
         /// Retourne une représentation lisible du scénario (non sérialisé)
         /// </summary>
         [YamlIgnore]
@@ -130,28 +136,6 @@ namespace RobotSNAP.Core.Scenario
                 Size = size
             };
         }
-    }
-
-    /// <summary>
-    /// Configuration de la simulation
-    /// </summary>
-    [YamlObject]
-    public partial class SimulationConfigData
-    {
-        [YamlMember("duration")]
-        public float Duration { get; set; } = 60f;
-        
-        [YamlMember("random_seed")]
-        public int RandomSeed { get; set; } = -1;
-        
-        [YamlMember("time_scale")]
-        public float TimeScale { get; set; } = 1f;
-        
-        [YamlMember("min_humans")]
-        public int MinHumans { get; set; } = 5;
-        
-        [YamlMember("max_humans")]
-        public int MaxHumans { get; set; } = 15;
     }
 
     /// <summary>
@@ -336,9 +320,6 @@ namespace RobotSNAP.Core.Scenario
         [YamlMember("points")]
         public Dictionary<string, RefPoint> Points { get; set; }
         
-        [YamlMember("simulation")]
-        public SimulationConfigData Simulation { get; set; }
-        
         [YamlMember("robot")]
         public RobotScenarioConfig Robot { get; set; }
         
@@ -376,6 +357,12 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         [YamlIgnore]
         public string DatasetPath => Info?.DatasetPath ?? "";
+        
+        /// <summary>
+        /// Durée maximale du scénario (délégué à Info)
+        /// </summary>
+        [YamlIgnore]
+        public float Duration => Info?.Duration ?? 0f;
         
         // ========== MÉTHODES (pas d'attribut YamlIgnore nécessaire) ==========
         

@@ -9,6 +9,7 @@ public class MainViewController : MonoBehaviour
     [SerializeField] private VisualTreeAsset analysisTemplate;
     [SerializeField] private VisualTreeAsset scenariosTemplate;
     [SerializeField] private VisualTreeAsset agentsTemplate;
+    [SerializeField] private VisualTreeAsset recordingsTemplate;
     [SerializeField] private VisualTreeAsset settingsTemplate;
     [SerializeField] private VisualTreeAsset profileTemplate;
     [SerializeField] private VisualTreeAsset documentationTemplate;
@@ -81,6 +82,7 @@ public class MainViewController : MonoBehaviour
             case "Analysis": return analysisTemplate;
             case "Scenarios": return scenariosTemplate;
             case "Agents": return agentsTemplate;
+            case "Recordings": return recordingsTemplate;
             case "Settings": return settingsTemplate;
             case "Profile": return profileTemplate;
             case "Documentation": return documentationTemplate;

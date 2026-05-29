@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using RobotSNAP.Core;
+using RobotSNAP.Human;
 
 namespace RobotSNAP.UI
 {
@@ -58,6 +59,8 @@ namespace RobotSNAP.UI
         public GameObject axesObject;
         public GameObject floorObject;
         
+        // Agent data tracking
+        private Dictionary<int, Queue<Vector3>> _positionHistory = new Dictionary<int, Queue<Vector3>>();
         private Dictionary<int, LineRenderer> _trajectoryRenderers = new Dictionary<int, LineRenderer>();
         private Dictionary<int, LineRenderer> _pathRenderers = new Dictionary<int, LineRenderer>();
         private Dictionary<int, GameObject> _goalMarkers = new Dictionary<int, GameObject>();
@@ -66,12 +69,13 @@ namespace RobotSNAP.UI
         private Dictionary<int, TextMesh> _agentIdLabels = new Dictionary<int, TextMesh>();
         
         private Material _wireframeMaterial;
-        private Material _originalMaterial;
         private Dictionary<Renderer, Material[]> _originalMaterials = new Dictionary<Renderer, Material[]>();
         
         private Supervisor _supervisor;
         private List<Vector3> _laserScanPoints = new List<Vector3>();
         private LineRenderer _laserScanRenderer;
+        private float _lastLaserUpdateTime;
+        private RaycastLaserScanner _robotLaserScanner;
         
         #region Unity Lifecycle
         
@@ -83,6 +87,7 @@ namespace RobotSNAP.UI
         private void Update()
         {
             UpdateVisualizations();
+            UpdatePositionHistory();
         }
         
         private void OnDestroy()
@@ -101,11 +106,9 @@ namespace RobotSNAP.UI
             CreateGrid();
             CreateAxes();
             
-            // Create wireframe material
             _wireframeMaterial = new Material(Shader.Find("Standard"));
             _wireframeMaterial.color = Color.green;
             
-            // Create laser scan renderer
             CreateLaserScanRenderer();
         }
         
@@ -115,6 +118,7 @@ namespace RobotSNAP.UI
             {
                 gridObject = new GameObject("Grid");
                 gridObject.transform.SetParent(transform);
+                gridObject.transform.position = Vector3.zero;
                 
                 LineRenderer gridRenderer = gridObject.AddComponent<LineRenderer>();
                 gridRenderer.positionCount = (gridDivisions * 4) + 4;
@@ -126,37 +130,32 @@ namespace RobotSNAP.UI
                 
                 UpdateGridRenderer();
             }
-            
             gridObject.SetActive(showGrid);
         }
         
         private void UpdateGridRenderer()
         {
             if (gridObject == null) return;
-            
             LineRenderer renderer = gridObject.GetComponent<LineRenderer>();
             if (renderer == null) return;
             
             List<Vector3> points = new List<Vector3>();
             float halfSize = gridSize / 2f;
             float step = gridSize / gridDivisions;
+            float y = 0.01f; // just above ground
             
-            // Parallel lines along X axis
             for (int i = 0; i <= gridDivisions; i++)
             {
                 float z = -halfSize + i * step;
-                points.Add(new Vector3(-halfSize, 0.01f, z));
-                points.Add(new Vector3(halfSize, 0.01f, z));
+                points.Add(new Vector3(-halfSize, y, z));
+                points.Add(new Vector3(halfSize, y, z));
             }
-            
-            // Parallel lines along Z axis
             for (int i = 0; i <= gridDivisions; i++)
             {
                 float x = -halfSize + i * step;
-                points.Add(new Vector3(x, 0.01f, -halfSize));
-                points.Add(new Vector3(x, 0.01f, halfSize));
+                points.Add(new Vector3(x, y, -halfSize));
+                points.Add(new Vector3(x, y, halfSize));
             }
-            
             renderer.positionCount = points.Count;
             renderer.SetPositions(points.ToArray());
         }
@@ -174,23 +173,16 @@ namespace RobotSNAP.UI
                 axesRenderer.endWidth = 0.05f;
                 axesRenderer.material = axisMaterial ?? new Material(Shader.Find("Sprites/Default"));
                 
-                // X axis (Red)
                 axesRenderer.SetPosition(0, Vector3.zero);
                 axesRenderer.SetPosition(1, Vector3.right * 5f);
-                
-                // Y axis (Green)
                 axesRenderer.SetPosition(2, Vector3.zero);
                 axesRenderer.SetPosition(3, Vector3.up * 5f);
-                
-                // Z axis (Blue)
                 axesRenderer.SetPosition(4, Vector3.zero);
                 axesRenderer.SetPosition(5, Vector3.forward * 5f);
                 
-                // Set colors
                 axesRenderer.startColor = Color.white;
                 axesRenderer.endColor = Color.white;
             }
-            
             axesObject.SetActive(showAxes);
         }
         
@@ -198,7 +190,6 @@ namespace RobotSNAP.UI
         {
             GameObject laserObj = new GameObject("LaserScanRenderer");
             laserObj.transform.SetParent(transform);
-            
             _laserScanRenderer = laserObj.AddComponent<LineRenderer>();
             _laserScanRenderer.startWidth = 0.03f;
             _laserScanRenderer.endWidth = 0.03f;
@@ -211,310 +202,279 @@ namespace RobotSNAP.UI
         
         #endregion
         
+        #region Position History Tracking
+        
+        private void UpdatePositionHistory()
+        {
+            // Update robot history
+            Robot robot = FindObjectOfType<Robot>();
+            if (robot != null)
+            {
+                AddPositionToHistory(robot.GetInstanceID(), robot.Position);
+            }
+            // Update humans history
+            HumanAvatar[] humans = FindObjectsOfType<HumanAvatar>();
+            foreach (var human in humans)
+            {
+                AddPositionToHistory(human.GetInstanceID(), human.transform.position);
+            }
+        }
+        
+        private void AddPositionToHistory(int id, Vector3 pos)
+        {
+            if (!_positionHistory.ContainsKey(id))
+                _positionHistory[id] = new Queue<Vector3>();
+            var queue = _positionHistory[id];
+            queue.Enqueue(pos);
+            while (queue.Count > trajectoryLength)
+                queue.Dequeue();
+        }
+        
+        private List<Vector3> GetPositionHistory(int id)
+        {
+            if (_positionHistory.TryGetValue(id, out var queue))
+                return new List<Vector3>(queue);
+            return new List<Vector3>();
+        }
+        
+        #endregion
+        
         #region Visualization Updates
         
         private void UpdateVisualizations()
         {
             if (!Application.isPlaying) return;
             
-            // Update grid visibility
-            if (gridObject != null)
-                gridObject.SetActive(showGrid);
+            if (gridObject != null) gridObject.SetActive(showGrid);
+            if (axesObject != null) axesObject.SetActive(showAxes);
+            if (floorObject != null) floorObject.SetActive(showFloor);
             
-            // Update axes visibility
-            if (axesObject != null)
-                axesObject.SetActive(showAxes);
-            
-            // Update floor visibility
-            if (floorObject != null)
-                floorObject.SetActive(showFloor);
-            
-            // Update robot visualizations
             UpdateRobotVisualizations();
-            
-            // Update human visualizations
             UpdateHumanVisualizations();
-            
-            // Update debug visualizations
             UpdateDebugVisualizations();
-            
-            // Update wireframe mode
             UpdateWireframeMode();
         }
         
         private void UpdateRobotVisualizations()
         {
-            GameObject robot = GameObject.FindGameObjectWithTag("Robot");
-            if (robot == null) robot = GameObject.Find("Robot");
+            Robot robot = FindObjectOfType<Robot>();
             if (robot == null) return;
             
-            int robotId = robot.GetInstanceID();
+            int id = robot.GetInstanceID();
+            Vector3 robotPos = robot.Position; // baseLink position
             
             // Trajectory
             if (showRobotTrajectory)
             {
-                LineRenderer trajRenderer = GetOrCreateTrajectoryRenderer(robotId, robotTrajectoryColor);
-                UpdateTrajectoryRenderer(robot, trajRenderer);
+                var renderer = GetOrCreateLineRenderer(_trajectoryRenderers, id, $"Traj_Robot", robotTrajectoryColor, 0.05f);
+                UpdateTrajectoryRenderer(id, renderer);
             }
-            else if (_trajectoryRenderers.ContainsKey(robotId))
-            {
-                _trajectoryRenderers[robotId].enabled = false;
-            }
+            else HideRenderer(_trajectoryRenderers, id);
             
-            // Path
+            // Path (planned navigation)
             if (showRobotPath)
             {
-                LineRenderer pathRenderer = GetOrCreatePathRenderer(robotId, robotPathColor);
-                UpdatePathRenderer(robot, pathRenderer);
+                var renderer = GetOrCreateLineRenderer(_pathRenderers, id, $"Path_Robot", robotPathColor, 0.1f);
+                UpdatePlannedPathRenderer(robot, renderer);
             }
-            else if (_pathRenderers.ContainsKey(robotId))
-            {
-                _pathRenderers[robotId].enabled = false;
-            }
+            else HideRenderer(_pathRenderers, id);
             
-            // Goal
-            if (showRobotGoal)
+            // Goal marker
+            if (showRobotGoal && robot.HasGoal)
             {
-                GameObject goalMarker = GetOrCreateGoalMarker(robotId, robotGoalColor);
-                UpdateGoalMarker(robot, goalMarker);
+                var marker = GetOrCreateGoalMarker(id, robotGoalColor);
+                marker.transform.position = robot.CurrentGoal + Vector3.up * 0.5f;
+                marker.SetActive(true);
             }
-            else if (_goalMarkers.ContainsKey(robotId))
-            {
-                _goalMarkers[robotId].SetActive(false);
-            }
+            else if (_goalMarkers.ContainsKey(id)) _goalMarkers[id].SetActive(false);
             
-            // Velocity Vector
-            if (showRobotVelocityVector)
+            // Velocity vector
+            if (showRobotVelocityVector && robot.Velocity.magnitude > 0.1f)
             {
-                LineRenderer velRenderer = GetOrCreateVelocityVector(robotId, robotVelocityColor);
-                UpdateVelocityVector(robot, velRenderer);
+                var renderer = GetOrCreateLineRenderer(_velocityVectors, id, $"Vel_Robot", robotVelocityColor, 0.05f);
+                Vector3 start = robotPos + Vector3.up;
+                Vector3 end = start + robot.Velocity;
+                renderer.SetPosition(0, start);
+                renderer.SetPosition(1, end);
+                renderer.enabled = true;
             }
-            else if (_velocityVectors.ContainsKey(robotId))
-            {
-                _velocityVectors[robotId].enabled = false;
-            }
+            else HideRenderer(_velocityVectors, id);
             
-            // Sensor Rays
+            // Laser scans
             if (showRobotSensorRays)
-            {
                 UpdateLaserScanVisualization(robot);
-            }
-            else
-            {
+            else if (_laserScanRenderer != null)
                 _laserScanRenderer.enabled = false;
-            }
             
-            // Agent ID
+            // Agent ID label
             if (showAgentIDs)
             {
-                TextMesh label = GetOrCreateAgentIdLabel(robotId, "Robot");
-                UpdateAgentIdLabel(robot, label, "Robot", Color.cyan);
+                var label = GetOrCreateAgentIdLabel(id, "Robot", Color.cyan);
+                label.transform.position = robotPos + Vector3.up * 1.5f;
+                label.text = "Robot";
+                label.color = Color.cyan;
             }
         }
         
         private void UpdateHumanVisualizations()
         {
-            GameObject[] humans = GameObject.FindGameObjectsWithTag("Human");
-            
+            HumanAvatar[] humans = FindObjectsOfType<HumanAvatar>();
             foreach (var human in humans)
             {
-                int humanId = human.GetInstanceID();
-                var humanAgent = human.GetComponent<HumanAgent>();
+                int id = human.GetInstanceID();
+                Vector3 pos = human.transform.position;
+                Color humanColor = GetHumanColor(human);
                 
                 // Trajectory
                 if (showHumanTrajectories)
                 {
-                    LineRenderer trajRenderer = GetOrCreateTrajectoryRenderer(humanId, GetHumanColor(human));
-                    UpdateTrajectoryRenderer(human, trajRenderer);
+                    var renderer = GetOrCreateLineRenderer(_trajectoryRenderers, id, $"Traj_Human{id}", humanColor, 0.04f);
+                    UpdateTrajectoryRenderer(id, renderer);
                 }
+                else HideRenderer(_trajectoryRenderers, id);
                 
-                // Goal
-                if (showHumanGoals)
+                // Goal (wander/point/follow – for visualization we show the current goal)
+                Vector3 goal = GetHumanGoal(human);
+                if (showHumanGoals && goal != Vector3.zero)
                 {
-                    GameObject goalMarker = GetOrCreateGoalMarker(humanId, GetHumanColor(human));
-                    UpdateGoalMarker(human, goalMarker);
+                    var marker = GetOrCreateGoalMarker(id, humanColor);
+                    marker.transform.position = goal + Vector3.up * 0.4f;
+                    marker.SetActive(true);
                 }
+                else if (_goalMarkers.ContainsKey(id)) _goalMarkers[id].SetActive(false);
                 
-                // Velocity Vector
+                // Velocity vector
                 if (showHumanVelocityVectors)
                 {
-                    LineRenderer velRenderer = GetOrCreateVelocityVector(humanId, GetHumanColor(human));
-                    UpdateVelocityVector(human, velRenderer);
+                    Vector3 velocity = GetHumanVelocity(human);
+                    if (velocity.magnitude > 0.1f)
+                    {
+                        var renderer = GetOrCreateLineRenderer(_velocityVectors, id, $"Vel_Human{id}", humanColor, 0.04f);
+                        renderer.SetPosition(0, pos + Vector3.up);
+                        renderer.SetPosition(1, pos + Vector3.up + velocity);
+                        renderer.enabled = true;
+                    }
+                    else HideRenderer(_velocityVectors, id);
                 }
+                else HideRenderer(_velocityVectors, id);
                 
-                // Interaction Radius
+                // Interaction radius
                 if (showHumanInteractionRadius)
                 {
-                    GameObject radiusVisual = GetOrCreateInteractionRadius(humanId);
-                    UpdateInteractionRadius(human, radiusVisual);
+                    float radius = GetHumanInteractionRadius(human);
+                    if (radius > 0)
+                    {
+                        var radiusObj = GetOrCreateInteractionRadius(id);
+                        radiusObj.transform.position = pos;
+                        radiusObj.transform.localScale = Vector3.one * radius;
+                        radiusObj.SetActive(true);
+                    }
+                    else HideInteractionRadius(id);
                 }
-                
-                // Agent ID
-                if (showAgentIDs)
-                {
-                    string idText = humanAgent != null ? $"H{humanAgent.agentId}" : "Human";
-                    TextMesh label = GetOrCreateAgentIdLabel(humanId, idText);
-                    UpdateAgentIdLabel(human, label, idText, GetHumanColor(human));
-                }
+                else HideInteractionRadius(id);
                 
                 // Opacity
-                UpdateHumanOpacity(human);
+                if (Mathf.Abs(humanOpacity - 1f) > 0.01f)
+                    SetHumanOpacity(human, humanOpacity);
+                
+                // Agent ID label
+                if (showAgentIDs)
+                {
+                    var label = GetOrCreateAgentIdLabel(id, $"H{id}", humanColor);
+                    label.transform.position = pos + Vector3.up * 1.5f;
+                    label.text = $"H{id}";
+                    label.color = humanColor;
+                }
             }
         }
         
         private void UpdateDebugVisualizations()
         {
-            // Colliders
-            if (showColliders)
-            {
-                // Implementation depends on your collider visualization system
-            }
-            
-            // Occupancy Grid / Costmap
-            // Implementation depends on your navigation system
-            
-            // Bounding Boxes
-            if (showBoundingBoxes)
-            {
-                DrawBoundingBoxes();
-            }
-            
-            // Distance Labels
-            if (showDistanceLabels)
-            {
-                UpdateDistanceLabels();
-            }
+            if (showColliders) { /* optional: implement helper toggles */ }
+            if (showBoundingBoxes) DrawBoundingBoxes();
+            if (showDistanceLabels) UpdateDistanceLabels();
         }
         
         private void UpdateWireframeMode()
         {
             if (wireframeMode)
             {
-                // Store original materials and apply wireframe
                 foreach (var renderer in FindObjectsOfType<Renderer>())
                 {
                     if (!_originalMaterials.ContainsKey(renderer))
                     {
                         _originalMaterials[renderer] = renderer.materials;
-                        
-                        Material[] wireframeMats = new Material[renderer.materials.Length];
-                        for (int i = 0; i < wireframeMats.Length; i++)
-                        {
-                            wireframeMats[i] = _wireframeMaterial;
-                        }
-                        renderer.materials = wireframeMats;
+                        Material[] wireMats = new Material[renderer.materials.Length];
+                        for (int i = 0; i < wireMats.Length; i++)
+                            wireMats[i] = _wireframeMaterial;
+                        renderer.materials = wireMats;
                     }
                 }
             }
             else
             {
-                // Restore original materials
                 foreach (var kvp in _originalMaterials)
-                {
-                    if (kvp.Key != null)
-                    {
-                        kvp.Key.materials = kvp.Value;
-                    }
-                }
+                    if (kvp.Key != null) kvp.Key.materials = kvp.Value;
                 _originalMaterials.Clear();
             }
         }
         
         #endregion
         
-        #region Helper Methods
+        #region Helper Methods for Renderers
         
-        private LineRenderer GetOrCreateTrajectoryRenderer(int id, Color color)
+        private LineRenderer GetOrCreateLineRenderer(Dictionary<int, LineRenderer> dict, int id, string name, Color color, float width)
         {
-            if (!_trajectoryRenderers.ContainsKey(id))
+            if (!dict.ContainsKey(id))
             {
-                GameObject obj = new GameObject($"Trajectory_{id}");
-                obj.transform.SetParent(transform);
-                
-                LineRenderer renderer = obj.AddComponent<LineRenderer>();
-                renderer.startWidth = 0.05f;
-                renderer.endWidth = 0.05f;
-                renderer.material = new Material(Shader.Find("Sprites/Default"));
-                renderer.startColor = color;
-                renderer.endColor = color;
+                GameObject go = new GameObject(name);
+                go.transform.SetParent(transform);
+                LineRenderer lr = go.AddComponent<LineRenderer>();
+                lr.startWidth = width;
+                lr.endWidth = width;
+                lr.material = new Material(Shader.Find("Sprites/Default"));
+                lr.startColor = color;
+                lr.endColor = color;
+                dict[id] = lr;
+            }
+            dict[id].enabled = true;
+            return dict[id];
+        }
+        
+        private void HideRenderer(Dictionary<int, LineRenderer> dict, int id)
+        {
+            if (dict.ContainsKey(id)) dict[id].enabled = false;
+        }
+        
+        private void UpdateTrajectoryRenderer(int id, LineRenderer renderer)
+        {
+            var history = GetPositionHistory(id);
+            if (history.Count < 2)
+            {
                 renderer.positionCount = 0;
-                
-                _trajectoryRenderers[id] = renderer;
+                return;
             }
-            
-            _trajectoryRenderers[id].enabled = true;
-            return _trajectoryRenderers[id];
+            renderer.positionCount = history.Count;
+            Vector3[] points = new Vector3[history.Count];
+            for (int i = 0; i < history.Count; i++)
+                points[i] = history[i] + Vector3.up * 0.1f;
+            renderer.SetPositions(points);
         }
         
-        private void UpdateTrajectoryRenderer(GameObject obj, LineRenderer renderer)
+        private void UpdatePlannedPathRenderer(Robot robot, LineRenderer renderer)
         {
-            // Get trajectory points from agent's history
-            var history = GetPositionHistory(obj);
-            if (history != null && history.Count > 0)
+            // For now, just show a straight line to goal if exists
+            if (robot.HasGoal)
             {
-                renderer.positionCount = Mathf.Min(history.Count, trajectoryLength);
-                Vector3[] points = new Vector3[renderer.positionCount];
-                
-                int startIndex = Mathf.Max(0, history.Count - trajectoryLength);
-                for (int i = 0; i < renderer.positionCount; i++)
-                {
-                    points[i] = history[startIndex + i] + Vector3.up * 0.1f;
-                }
-                
-                renderer.SetPositions(points);
+                renderer.positionCount = 2;
+                renderer.SetPosition(0, robot.Position + Vector3.up * 0.2f);
+                renderer.SetPosition(1, robot.CurrentGoal + Vector3.up * 0.2f);
+                renderer.enabled = true;
             }
-        }
-        
-        private List<Vector3> GetPositionHistory(GameObject obj)
-        {
-            // This should be implemented based on your agent's history tracking
-            // For now, return a simple list with current position
-            var history = new List<Vector3>();
-            history.Add(obj.transform.position);
-            return history;
-        }
-        
-        private LineRenderer GetOrCreatePathRenderer(int id, Color color)
-        {
-            if (!_pathRenderers.ContainsKey(id))
+            else
             {
-                GameObject obj = new GameObject($"Path_{id}");
-                obj.transform.SetParent(transform);
-                
-                LineRenderer renderer = obj.AddComponent<LineRenderer>();
-                renderer.startWidth = 0.1f;
-                renderer.endWidth = 0.1f;
-                renderer.material = new Material(Shader.Find("Sprites/Default"));
-                renderer.startColor = color;
-                renderer.endColor = color;
-                renderer.textureMode = LineTextureMode.Tile;
-                
-                _pathRenderers[id] = renderer;
+                renderer.enabled = false;
             }
-            
-            _pathRenderers[id].enabled = true;
-            return _pathRenderers[id];
-        }
-        
-        private void UpdatePathRenderer(GameObject obj, LineRenderer renderer)
-        {
-            // Get planned path from agent's navigation system
-            Vector3[] path = GetPlannedPath(obj);
-            if (path != null && path.Length > 0)
-            {
-                renderer.positionCount = path.Length;
-                for (int i = 0; i < path.Length; i++)
-                {
-                    path[i] += Vector3.up * 0.2f;
-                }
-                renderer.SetPositions(path);
-            }
-        }
-        
-        private Vector3[] GetPlannedPath(GameObject obj)
-        {
-            // This should be implemented based on your navigation system
-            return new Vector3[] { obj.transform.position };
         }
         
         private GameObject GetOrCreateGoalMarker(int id, Color color)
@@ -525,259 +485,246 @@ namespace RobotSNAP.UI
                 marker.name = $"Goal_{id}";
                 marker.transform.SetParent(transform);
                 marker.transform.localScale = Vector3.one * 0.3f;
-                
-                Renderer rend = marker.GetComponent<Renderer>();
+                var rend = marker.GetComponent<Renderer>();
                 rend.material = new Material(Shader.Find("Standard"));
                 rend.material.color = color;
-                
-                Collider col = marker.GetComponent<Collider>();
-                if (col != null) Destroy(col);
-                
+                Destroy(marker.GetComponent<Collider>());
                 _goalMarkers[id] = marker;
             }
-            
-            _goalMarkers[id].SetActive(true);
+            else
+            {
+                _goalMarkers[id].GetComponent<Renderer>().material.color = color;
+            }
             return _goalMarkers[id];
-        }
-        
-        private void UpdateGoalMarker(GameObject obj, GameObject marker)
-        {
-            Vector3 goal = GetAgentGoal(obj);
-            if (goal != Vector3.zero)
-            {
-                marker.transform.position = goal + Vector3.up * 0.5f;
-            }
-        }
-        
-        private Vector3 GetAgentGoal(GameObject obj)
-        {
-            // This should be implemented based on your agent's goal system
-            return obj.transform.position + obj.transform.forward * 5f;
-        }
-        
-        private LineRenderer GetOrCreateVelocityVector(int id, Color color)
-        {
-            if (!_velocityVectors.ContainsKey(id))
-            {
-                GameObject obj = new GameObject($"Velocity_{id}");
-                obj.transform.SetParent(transform);
-                
-                LineRenderer renderer = obj.AddComponent<LineRenderer>();
-                renderer.startWidth = 0.05f;
-                renderer.endWidth = 0.05f;
-                renderer.material = new Material(Shader.Find("Sprites/Default"));
-                renderer.startColor = color;
-                renderer.endColor = color;
-                renderer.positionCount = 2;
-                
-                _velocityVectors[id] = renderer;
-            }
-            
-            _velocityVectors[id].enabled = true;
-            return _velocityVectors[id];
-        }
-        
-        private void UpdateVelocityVector(GameObject obj, LineRenderer renderer)
-        {
-            Vector3 velocity = GetAgentVelocity(obj);
-            if (velocity.magnitude > 0.01f)
-            {
-                Vector3 start = obj.transform.position + Vector3.up;
-                Vector3 end = start + velocity;
-                
-                renderer.SetPosition(0, start);
-                renderer.SetPosition(1, end);
-                
-                // Add arrow head
-                // Implementation depends on your arrow rendering system
-            }
-        }
-        
-        private Vector3 GetAgentVelocity(GameObject obj)
-        {
-            // This should be implemented based on your agent's movement system
-            Rigidbody rb = obj.GetComponent<Rigidbody>();
-            if (rb != null)
-                return rb.linearVelocity;
-            
-            return obj.transform.forward * 1f;
         }
         
         private GameObject GetOrCreateInteractionRadius(int id)
         {
             if (!_interactionRadiusVisuals.ContainsKey(id))
             {
-                GameObject radiusObj = new GameObject($"InteractionRadius_{id}");
-                radiusObj.transform.SetParent(transform);
-                
-                LineRenderer renderer = radiusObj.AddComponent<LineRenderer>();
-                renderer.startWidth = 0.03f;
-                renderer.endWidth = 0.03f;
-                renderer.material = new Material(Shader.Find("Sprites/Default"));
-                renderer.startColor = new Color(1, 1, 0, 0.5f);
-                renderer.endColor = new Color(1, 1, 0, 0.5f);
-                renderer.loop = true;
-                renderer.useWorldSpace = false;
-                
-                // Create circle points
+                GameObject go = new GameObject($"Radius_{id}");
+                go.transform.SetParent(transform);
+                LineRenderer lr = go.AddComponent<LineRenderer>();
+                lr.startWidth = 0.03f;
+                lr.endWidth = 0.03f;
+                lr.loop = true;
+                lr.useWorldSpace = false;
+                lr.material = new Material(Shader.Find("Sprites/Default"));
+                lr.startColor = new Color(1, 1, 0, 0.5f);
+                lr.endColor = new Color(1, 1, 0, 0.5f);
                 int segments = 32;
-                renderer.positionCount = segments + 1;
+                lr.positionCount = segments + 1;
                 Vector3[] points = new Vector3[segments + 1];
                 for (int i = 0; i <= segments; i++)
                 {
-                    float angle = i * 2f * Mathf.PI / segments;
-                    points[i] = new Vector3(Mathf.Cos(angle), 0.05f, Mathf.Sin(angle));
+                    float ang = i * 2 * Mathf.PI / segments;
+                    points[i] = new Vector3(Mathf.Cos(ang), 0.05f, Mathf.Sin(ang));
                 }
-                renderer.SetPositions(points);
-                
-                _interactionRadiusVisuals[id] = radiusObj;
+                lr.SetPositions(points);
+                _interactionRadiusVisuals[id] = go;
             }
-            
-            _interactionRadiusVisuals[id].SetActive(true);
             return _interactionRadiusVisuals[id];
         }
         
-        private void UpdateInteractionRadius(GameObject obj, GameObject radiusVisual)
+        private void HideInteractionRadius(int id)
         {
-            radiusVisual.transform.position = obj.transform.position;
-            
-            float radius = GetInteractionRadius(obj);
-            radiusVisual.transform.localScale = Vector3.one * radius;
+            if (_interactionRadiusVisuals.ContainsKey(id))
+                _interactionRadiusVisuals[id].SetActive(false);
         }
         
-        private float GetInteractionRadius(GameObject obj)
-        {
-            // This should come from your human configuration
-            return 3f;
-        }
-        
-        private TextMesh GetOrCreateAgentIdLabel(int id, string text)
+        private TextMesh GetOrCreateAgentIdLabel(int id, string defaultText, Color color)
         {
             if (!_agentIdLabels.ContainsKey(id))
             {
-                GameObject labelObj = new GameObject($"Label_{id}");
-                labelObj.transform.SetParent(transform);
+                GameObject go = new GameObject($"Label_{id}");
+                go.transform.SetParent(transform);
+                TextMesh tm = go.AddComponent<TextMesh>();
+                tm.text = defaultText;
+                tm.fontSize = 24;
+                tm.characterSize = 0.2f;
+                tm.anchor = TextAnchor.MiddleCenter;
+                tm.alignment = TextAlignment.Center;
+                tm.fontStyle = FontStyle.Bold;
+                tm.color = color;
                 
-                TextMesh textMesh = labelObj.AddComponent<TextMesh>();
-                textMesh.text = text;
-                textMesh.fontSize = 24;
-                textMesh.characterSize = 0.2f;
-                textMesh.anchor = TextAnchor.MiddleCenter;
-                textMesh.alignment = TextAlignment.Center;
-                textMesh.color = Color.white;
-                textMesh.fontStyle = FontStyle.Bold;
+                // Ajouter le script Billboard pour que le texte regarde toujours la caméra
+                Billboard billboard = go.AddComponent<Billboard>();
                 
-                _agentIdLabels[id] = textMesh;
+                _agentIdLabels[id] = tm;
             }
-            
-            _agentIdLabels[id].gameObject.SetActive(true);
             return _agentIdLabels[id];
         }
         
-        private void UpdateAgentIdLabel(GameObject obj, TextMesh label, string text, Color color)
+        #endregion
+        
+        #region Data Extraction from Agents
+        
+        private Vector3 GetHumanGoal(HumanAvatar human)
         {
-            label.transform.position = obj.transform.position + Vector3.up * 2.5f;
-            label.transform.rotation = Camera.main != null ? Camera.main.transform.rotation : Quaternion.identity;
-            label.text = text;
-            label.color = color;
+            var movement = human.GetComponent<HumanMovement>();
+            if (movement != null && movement.HasGoal)
+            {
+                Vector2 goal2D = movement.GoalPosition2D;
+                return new Vector3(goal2D.x, 0, goal2D.y);
+            }
+            return Vector3.zero;
         }
         
-        private Color GetHumanColor(GameObject human)
+        private Vector3 GetHumanVelocity(HumanAvatar human)
         {
-            if (!colorHumansByState)
-                return humanDefaultColor;
-            
-            // Determine color based on state (distance to robot, velocity, etc.)
-            GameObject robot = GameObject.FindGameObjectWithTag("Robot");
+            var rb = human.GetComponent<Rigidbody>();
+            if (rb != null) return rb.linearVelocity;
+            return Vector3.zero;
+        }
+        
+        private float GetHumanInteractionRadius(HumanAvatar human)
+        {
+            var movement = human.GetComponent<HumanMovement>();
+            return movement != null ? movement.InteractionRadius : 3f;
+        }
+        
+        private Color GetHumanColor(HumanAvatar human)
+        {
+            if (!colorHumansByState) return humanDefaultColor;
+            // simple distance to robot
+            Robot robot = FindObjectOfType<Robot>();
             if (robot != null)
             {
-                float distance = Vector3.Distance(human.transform.position, robot.transform.position);
-                
-                if (distance < 1.5f)
-                    return humanDangerColor;
-                else if (distance < 3f)
-                    return humanAlertColor;
+                float dist = Vector3.Distance(human.transform.position, robot.Position);
+                if (dist < 1.5f) return humanDangerColor;
+                if (dist < 3f) return humanAlertColor;
             }
-            
             return humanDefaultColor;
         }
         
-        private void UpdateHumanOpacity(GameObject human)
+        private void SetHumanOpacity(HumanAvatar human, float opacity)
         {
-            Renderer[] renderers = human.GetComponentsInChildren<Renderer>();
-            foreach (var renderer in renderers)
-            {
-                foreach (var mat in renderer.materials)
+            var renderers = human.GetComponentsInChildren<Renderer>();
+            foreach (var rend in renderers)
+                foreach (var mat in rend.materials)
                 {
-                    Color color = mat.color;
-                    color.a = humanOpacity;
-                    mat.color = color;
+                    Color c = mat.color;
+                    c.a = opacity;
+                    mat.color = c;
                 }
-            }
         }
         
-        private void UpdateLaserScanVisualization(GameObject robot)
+        private void UpdateLaserScanVisualization(Robot robot)
         {
-            // This should get actual laser scan data from your robot's sensors
-            Vector3 robotPos = robot.transform.position;
-            float maxRange = 10f;
-            int numRays = 36;
-            
-            _laserScanPoints.Clear();
-            _laserScanPoints.Add(robotPos + Vector3.up * 0.2f);
-            
-            for (int i = 0; i < numRays; i++)
+            if (_robotLaserScanner == null)
+                _robotLaserScanner = robot.GetComponentInChildren<RaycastLaserScanner>();
+            if (_robotLaserScanner == null || !_robotLaserScanner.isActiveAndEnabled)
             {
-                float angle = i * 360f / numRays * Mathf.Deg2Rad;
-                Vector3 direction = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle));
-                
-                RaycastHit hit;
-                if (Physics.Raycast(robotPos + Vector3.up * 0.2f, direction, out hit, maxRange))
-                {
-                    _laserScanPoints.Add(hit.point);
-                }
-                else
-                {
-                    _laserScanPoints.Add(robotPos + Vector3.up * 0.2f + direction * maxRange);
-                }
+                _laserScanRenderer.enabled = false;
+                return;
             }
-            
-            _laserScanRenderer.positionCount = _laserScanPoints.Count;
-            _laserScanRenderer.SetPositions(_laserScanPoints.ToArray());
+
+            if (Time.time - _lastLaserUpdateTime > 0.05f)
+            {
+                _lastLaserUpdateTime = Time.time;
+                _laserScanPoints.Clear();
+                Vector3 origin = robot.Position + Vector3.up * 0.2f;
+                _laserScanPoints.Add(origin);
+
+                int count = _robotLaserScanner.samples;
+                float angleStep = 360f / count;
+                for (int i = 0; i < count; i++)
+                {
+                    float angle = i * angleStep * Mathf.Deg2Rad;
+                    Vector3 dir = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle));
+                    if (Physics.Raycast(origin, dir, out RaycastHit hit, _robotLaserScanner.range_max))
+                        _laserScanPoints.Add(hit.point);
+                    else
+                        _laserScanPoints.Add(origin + dir * _robotLaserScanner.range_max);
+                }
+                _laserScanRenderer.positionCount = _laserScanPoints.Count;
+                _laserScanRenderer.SetPositions(_laserScanPoints.ToArray());
+            }
             _laserScanRenderer.enabled = true;
         }
         
         private void DrawBoundingBoxes()
         {
-            // Implementation for drawing 3D bounding boxes around agents
+            var agents = FindObjectsOfType<HumanAvatar>();
+            foreach (var a in agents)
+            {
+                Vector3 center = a.transform.position;
+                Vector3 size = new Vector3(0.5f, 1.5f, 0.5f);
+                DrawWireCube(center, size, Color.white);
+            }
+        }
+
+        private void DrawWireCube(Vector3 center, Vector3 size, Color color)
+        {
+            Vector3 half = size / 2;
+            Vector3 p1 = center + new Vector3(-half.x, -half.y, -half.z);
+            Vector3 p2 = center + new Vector3( half.x, -half.y, -half.z);
+            Vector3 p3 = center + new Vector3( half.x, -half.y,  half.z);
+            Vector3 p4 = center + new Vector3(-half.x, -half.y,  half.z);
+            Vector3 p5 = center + new Vector3(-half.x,  half.y, -half.z);
+            Vector3 p6 = center + new Vector3( half.x,  half.y, -half.z);
+            Vector3 p7 = center + new Vector3( half.x,  half.y,  half.z);
+            Vector3 p8 = center + new Vector3(-half.x,  half.y,  half.z);
+
+            Debug.DrawLine(p1, p2, color);
+            Debug.DrawLine(p2, p3, color);
+            Debug.DrawLine(p3, p4, color);
+            Debug.DrawLine(p4, p1, color);
+            Debug.DrawLine(p5, p6, color);
+            Debug.DrawLine(p6, p7, color);
+            Debug.DrawLine(p7, p8, color);
+            Debug.DrawLine(p8, p5, color);
+            Debug.DrawLine(p1, p5, color);
+            Debug.DrawLine(p2, p6, color);
+            Debug.DrawLine(p3, p7, color);
+            Debug.DrawLine(p4, p8, color);
         }
         
         private void UpdateDistanceLabels()
         {
-            // Implementation for showing distances between agents
-        }
-        
-        private void CleanupVisualizations()
-        {
-            foreach (var renderer in _trajectoryRenderers.Values)
-                if (renderer != null) Destroy(renderer.gameObject);
-            
-            foreach (var renderer in _pathRenderers.Values)
-                if (renderer != null) Destroy(renderer.gameObject);
-            
-            foreach (var marker in _goalMarkers.Values)
-                if (marker != null) Destroy(marker);
-            
-            foreach (var renderer in _velocityVectors.Values)
-                if (renderer != null) Destroy(renderer.gameObject);
-            
-            foreach (var visual in _interactionRadiusVisuals.Values)
-                if (visual != null) Destroy(visual);
-            
-            foreach (var label in _agentIdLabels.Values)
-                if (label != null) Destroy(label.gameObject);
+            // optional: distance between robot and each human
+            Robot robot = FindObjectOfType<Robot>();
+            if (robot == null) return;
+            var humans = FindObjectsOfType<HumanAvatar>();
+            foreach (var h in humans)
+            {
+                float dist = Vector3.Distance(robot.Position, h.transform.position);
+                var label = GetOrCreateAgentIdLabel(h.GetInstanceID(), "dist", Color.white);
+                label.transform.position = (robot.Position + h.transform.position) / 2f + Vector3.up * 1.2f;
+                label.text = $"{dist:F1}m";
+                label.color = Color.white;
+                label.gameObject.SetActive(showDistanceLabels);
+            }
         }
         
         #endregion
+        
+        #region Cleanup
+        
+        private void CleanupVisualizations()
+        {
+            foreach (var lr in _trajectoryRenderers.Values) if (lr) Destroy(lr.gameObject);
+            foreach (var lr in _pathRenderers.Values) if (lr) Destroy(lr.gameObject);
+            foreach (var go in _goalMarkers.Values) if (go) Destroy(go);
+            foreach (var lr in _velocityVectors.Values) if (lr) Destroy(lr.gameObject);
+            foreach (var go in _interactionRadiusVisuals.Values) if (go) Destroy(go);
+            foreach (var tm in _agentIdLabels.Values) if (tm) Destroy(tm.gameObject);
+            if (_laserScanRenderer) Destroy(_laserScanRenderer.gameObject);
+        }
+        
+        #endregion
+    }
+
+    public class Billboard : MonoBehaviour
+    {
+        void LateUpdate()
+        {
+            if (Camera.main != null)
+            {
+                // Faire regarder le texte vers la caméra (le plan du texte sera face à la caméra)
+                transform.LookAt(transform.position + Camera.main.transform.rotation * Vector3.forward,
+                                Camera.main.transform.rotation * Vector3.up);
+            }
+        }
     }
 }

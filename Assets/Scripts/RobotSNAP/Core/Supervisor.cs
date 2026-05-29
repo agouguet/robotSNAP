@@ -31,6 +31,9 @@ namespace RobotSNAP
 
         #region Serialized Fields
 
+        [Header("Startup")]
+        [SerializeField] private bool _startPaused = true;
+
         [Header("Configuration")]
         [Tooltip("Configuration par défaut (ScriptableObject)")]
         [SerializeField] private SimulationConfig _defaultConfig;
@@ -270,8 +273,6 @@ namespace RobotSNAP
             Debug.Log($"[Supervisor] Status:\n" +
                       $"  Initialized: {_isInitialized}\n" +
                       $"  Time Scale: {(cfg != null ? cfg.TimeScale : 1f)}\n" +
-                      $"  Min Humans: {(cfg != null ? cfg.MinHumans : 0)}\n" +
-                      $"  Max Humans: {(cfg != null ? cfg.MaxHumans : 0)}\n" +
                       $"  Dataset Path: {(cfg != null ? cfg.DatasetPath : "none")}\n" +
                       $"  Default Scenario: {(cfg != null ? cfg.DefaultScenario : "none")}");
         }

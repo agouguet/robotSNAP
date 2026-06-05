@@ -1,3 +1,28 @@
+.simulation-overlay {
+    padding: 8px;
+    position: relative;
+    margin: 8px;
+    background-color: var(--panel-bg);
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--accent-glow);
+    border-radius: 12px;
+    transition: border-color 0.2s;
+}
+
+.simulation-overlay:hover {
+    border-color: var(--accent-soft);
+    background-color: var(--bg-secondary);
+}
+
+.camera-overlay {
+    background-color: rgba(0, 0, 0, 0.6);  /* assombrissement */
+    /* alternative : effet de flou si supporté (Unity 2022+) */
+    /* backdrop-filter: blur(4px); */
+    justify-content: center;
+    align-items: center;
+}
+
 /* ===== PLEIN ÉCRAN ===== */
 .full-screen-button {
     width: 64px;
@@ -55,6 +80,13 @@
 }
 .menu-option:hover {
     background-color: rgba(255,255,255,0.1);
+}
+
+.menu-option.disabled-option {
+    opacity: 0.4;
+    pointer-events: none;        /* optionnel, SetEnabled suffit */
+    background-color: var(--button-bg);
+    color: var(--text-secondary);
 }
 
 /* ===== MINI-MAP ===== */

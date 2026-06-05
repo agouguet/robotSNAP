@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using RobotSNAP.Core;
+using RobotSNAP.Agents;
 
 namespace RobotSNAP.UI
 {
@@ -736,8 +737,8 @@ namespace RobotSNAP.UI
     }
     
     // Mock class for HumanAgent - implement according to your project
-    public class HumanAgent : MonoBehaviour
-    {
-        public int agentId;
-    }
+    // public class HumanAgent : MonoBehaviour
+    // {
+    //     public int agentId;
+    // }
 }

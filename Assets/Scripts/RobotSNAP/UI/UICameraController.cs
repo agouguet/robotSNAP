@@ -1,6 +1,6 @@
 using RobotSNAP.CameraControl;
 using RobotSNAP;
-using RobotSNAP.Human;
+using RobotSNAP.Agents;
 using UnityEngine;
 using UnityEngine.UIElements;
 using System.Collections.Generic;
@@ -15,7 +15,7 @@ public class UICameraController : MonoBehaviour
     private Label _agentNameLabel, _agentProgressLabel;
     private VisualElement _viewMenu;
 
-    private List<(string displayName, string modeName)> _viewModes;
+    private List<Button> _viewMenuButtons = new List<Button>();
 
     private void Start()
     {
@@ -32,41 +32,38 @@ public class UICameraController : MonoBehaviour
         _viewButton = root.Q<Button>("ViewButton");
         _viewMenu = root.Q<VisualElement>("ViewMenu");
 
-        _viewModes = new List<(string displayName, string modeName)>
-        {
-            ("Free", "Free"),
-            ("Top Down", "TopDown"),
-            ("First Person", "FirstPerson"),
-            ("Orbit", "Orbit"),
-            ("Multi Target", "MultiTarget"),
-            ("Cinematic", "Cinematic")
-        };
-
         BuildViewMenu();
         RefreshUI();
 
-        // Événements UI
         if (_prevButton != null) _prevButton.clicked += () => { cameraController.CycleFollowTarget(-1); RefreshUI(); };
         if (_nextButton != null) _nextButton.clicked += () => { cameraController.CycleFollowTarget(1); RefreshUI(); };
         if (_agentDropdown != null) _agentDropdown.RegisterValueChangedCallback(evt => OnAgentDropdownChanged(evt.newValue));
         if (_viewButton != null) _viewButton.RegisterCallback<ClickEvent>(evt => ToggleViewMenu());
+
+        cameraController.OnFollowTargetChanged += _ => RefreshUI();
     }
 
     private void BuildViewMenu()
     {
         if (_viewMenu == null) return;
         _viewMenu.Clear();
-        foreach (var (display, mode) in _viewModes)
+        _viewMenuButtons.Clear();
+
+        Debug.Log("Building view menu with modes:");
+        Debug.Log($"Current follow target: {(cameraController.GetCurrentFollowTarget() != null ? cameraController.GetCurrentFollowTarget().name : "None")}");
+        Debug.Log("[UICameraController] Mode entries:" + cameraController.ModeEntries);
+        foreach (var pair in cameraController.ModeEntries)
         {
-            var btn = new Button { text = display };
+            var mode = pair.Key;
+            var entry = pair.Value;
+            var btn = new Button { text = entry.DisplayName };
             btn.AddToClassList("menu-option");
-            // Capturer les variables pour éviter les problèmes de closure
-            string capturedMode = mode;
-            string capturedDisplay = display;
-            btn.clicked += () => OnViewModeSelected(capturedMode, capturedDisplay);
+            btn.userData = entry; // On stocke l'entrée (pas besoin du mode car on peut récupérer RequiresFocus)
+            btn.clicked += () => OnViewModeSelected(mode.ToString(), entry.DisplayName);
             _viewMenu.Add(btn);
+            _viewMenuButtons.Add(btn);
         }
-        Debug.Log($"ViewMenu built with {_viewMenu.childCount} options");
+        UpdateViewMenuInteractivity();
     }
 
     private void ToggleViewMenu()
@@ -74,11 +71,19 @@ public class UICameraController : MonoBehaviour
         // if (_viewMenu == null) return;
         // bool isVisible = _viewMenu.style.display == DisplayStyle.Flex;
         // _viewMenu.style.display = isVisible ? DisplayStyle.None : DisplayStyle.Flex;
-        // Debug.Log($"ToggleViewMenu: now visible = {!isVisible}");
     }
 
     private void OnViewModeSelected(string modeName, string displayName)
     {
+        // Vérification du focus
+        foreach (var pair in cameraController.ModeEntries)
+        {
+            if (pair.Key.ToString() == modeName && pair.Value.RequiresFocus && cameraController.GetCurrentFollowTarget() == null)
+            {
+                Debug.LogWarning($"Cannot switch to {displayName}: no agent focused.");
+                return;
+            }
+        }
         cameraController.SetCameraMode(modeName);
         if (_viewButton != null) _viewButton.text = displayName;
         if (_viewMenu != null) _viewMenu.style.display = DisplayStyle.None;
@@ -87,14 +92,12 @@ public class UICameraController : MonoBehaviour
     private void RefreshUI()
     {
         var target = cameraController.GetCurrentFollowTarget();
+        bool hasFocus = target != null;
 
-        // 1. Labels de l'agent courant
-        if (target != null)
+        if (hasFocus)
         {
-            if (_agentNameLabel != null)
-                _agentNameLabel.text = GetAgentDisplayName(target);
-            if (_agentProgressLabel != null)
-                _agentProgressLabel.text = GetAgentProgress(target);
+            if (_agentNameLabel != null) _agentNameLabel.text = GetAgentDisplayName(target);
+            if (_agentProgressLabel != null) _agentProgressLabel.text = GetAgentProgress(target);
         }
         else
         {
@@ -102,48 +105,54 @@ public class UICameraController : MonoBehaviour
             if (_agentProgressLabel != null) _agentProgressLabel.text = "0%";
         }
 
-        // 2. Dropdown des agents (liste complète)
         var targets = cameraController.GetFollowableTargets();
         if (targets != null && targets.Count > 0 && _agentDropdown != null)
         {
-            // Générer les noms affichés
             var names = new List<string>();
-            foreach (var t in targets)
-                names.Add(GetAgentDisplayName(t));
+            foreach (var t in targets) names.Add(GetAgentDisplayName(t));
 
-            // Mise à jour des choix seulement si nécessaire
             bool needRefresh = false;
-            if (_agentDropdown.choices.Count != names.Count)
-                needRefresh = true;
+            if (_agentDropdown.choices.Count != names.Count) needRefresh = true;
             else
             {
                 for (int i = 0; i < names.Count; i++)
-                    if (_agentDropdown.choices[i] != names[i])
-                    {
-                        needRefresh = true;
-                        break;
-                    }
+                    if (_agentDropdown.choices[i] != names[i]) { needRefresh = true; break; }
             }
-            if (needRefresh)
-                _agentDropdown.choices = names;
+            if (needRefresh) _agentDropdown.choices = names;
 
-            // Sélectionner l'index correspondant à l'agent courant
-            string currentName = GetAgentDisplayName(target);
-            if (_agentDropdown.value != currentName)
-                _agentDropdown.SetValueWithoutNotify(currentName);
+            string currentName = hasFocus ? GetAgentDisplayName(target) : "";
+            if (_agentDropdown.value != currentName) _agentDropdown.SetValueWithoutNotify(currentName);
+            _agentDropdown.SetEnabled(hasFocus);
         }
 
-        // 3. Mettre à jour le texte du bouton de vue selon le mode courant
         if (_viewButton != null)
         {
             string currentMode = cameraController.GetCurrentModeName();
-            foreach (var (display, mode) in _viewModes)
+            foreach (var pair in cameraController.ModeEntries)
             {
-                if (mode == currentMode)
+                if (pair.Key.ToString() == currentMode)
                 {
-                    _viewButton.text = display;
+                    _viewButton.text = pair.Value.DisplayName;
                     break;
                 }
+            }
+        }
+        UpdateViewMenuInteractivity();
+    }
+
+    private void UpdateViewMenuInteractivity()
+    {
+        bool hasFocus = cameraController.GetCurrentFollowTarget() != null;
+        foreach (var btn in _viewMenuButtons)
+        {
+            if (btn.userData is CameraModeEntry entry)
+            {
+                bool shouldEnable = !entry.RequiresFocus || hasFocus;
+                btn.SetEnabled(shouldEnable);
+                if (shouldEnable)
+                    btn.RemoveFromClassList("disabled-option");
+                else
+                    btn.AddToClassList("disabled-option");
             }
         }
     }
@@ -166,11 +175,11 @@ public class UICameraController : MonoBehaviour
     {
         if (target == null) return "None";
         var robot = target.GetComponent<Robot>();
-        if (robot != null && !string.IsNullOrEmpty(robot.robotName))
-            return robot.robotName;
-        var human = target.GetComponent<HumanAvatar>();
+        if (robot != null && !string.IsNullOrEmpty(robot.AgentName))
+            return robot.AgentName;
+        var human = target.GetComponent<HumanAgent>();
         if (human != null)
-            return $"Agent {human.agentName}";
+            return $"Agent {human.AgentName}";
         return target.name;
     }
 
@@ -183,9 +192,5 @@ public class UICameraController : MonoBehaviour
         return "50%";
     }
 
-    // Interface optionnelle pour les agents qui fournissent leur progression
-    public interface IAgentProgress
-    {
-        float Progress { get; }
-    }
+    public interface IAgentProgress { float Progress { get; } }
 }

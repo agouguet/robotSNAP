@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using RobotSNAP.Core;
-using RobotSNAP.Human;
+using RobotSNAP.Agents;
 
 namespace RobotSNAP.UI
 {
@@ -213,7 +213,7 @@ namespace RobotSNAP.UI
                 AddPositionToHistory(robot.GetInstanceID(), robot.Position);
             }
             // Update humans history
-            HumanAvatar[] humans = FindObjectsOfType<HumanAvatar>();
+            HumanAgent[] humans = FindObjectsOfType<HumanAgent>();
             foreach (var human in humans)
             {
                 AddPositionToHistory(human.GetInstanceID(), human.transform.position);
@@ -254,6 +254,7 @@ namespace RobotSNAP.UI
             UpdateDebugVisualizations();
             UpdateWireframeMode();
         }
+
         
         private void UpdateRobotVisualizations()
         {
@@ -283,7 +284,7 @@ namespace RobotSNAP.UI
             if (showRobotGoal && robot.HasGoal)
             {
                 var marker = GetOrCreateGoalMarker(id, robotGoalColor);
-                marker.transform.position = robot.CurrentGoal + Vector3.up * 0.5f;
+                marker.transform.position = robot.Goal + Vector3.up * 0.5f;
                 marker.SetActive(true);
             }
             else if (_goalMarkers.ContainsKey(id)) _goalMarkers[id].SetActive(false);
@@ -318,7 +319,7 @@ namespace RobotSNAP.UI
         
         private void UpdateHumanVisualizations()
         {
-            HumanAvatar[] humans = FindObjectsOfType<HumanAvatar>();
+            HumanAgent[] humans = FindObjectsOfType<HumanAgent>();
             foreach (var human in humans)
             {
                 int id = human.GetInstanceID();
@@ -468,7 +469,7 @@ namespace RobotSNAP.UI
             {
                 renderer.positionCount = 2;
                 renderer.SetPosition(0, robot.Position + Vector3.up * 0.2f);
-                renderer.SetPosition(1, robot.CurrentGoal + Vector3.up * 0.2f);
+                renderer.SetPosition(1, robot.Goal + Vector3.up * 0.2f);
                 renderer.enabled = true;
             }
             else
@@ -559,7 +560,7 @@ namespace RobotSNAP.UI
         
         #region Data Extraction from Agents
         
-        private Vector3 GetHumanGoal(HumanAvatar human)
+        private Vector3 GetHumanGoal(HumanAgent human)
         {
             var movement = human.GetComponent<HumanMovement>();
             if (movement != null && movement.HasGoal)
@@ -570,20 +571,19 @@ namespace RobotSNAP.UI
             return Vector3.zero;
         }
         
-        private Vector3 GetHumanVelocity(HumanAvatar human)
+        private Vector3 GetHumanVelocity(HumanAgent human)
         {
             var rb = human.GetComponent<Rigidbody>();
             if (rb != null) return rb.linearVelocity;
             return Vector3.zero;
         }
         
-        private float GetHumanInteractionRadius(HumanAvatar human)
+        private float GetHumanInteractionRadius(HumanAgent human)
         {
-            var movement = human.GetComponent<HumanMovement>();
-            return movement != null ? movement.InteractionRadius : 3f;
+            return human.InteractionRadius;
         }
         
-        private Color GetHumanColor(HumanAvatar human)
+        private Color GetHumanColor(HumanAgent human)
         {
             if (!colorHumansByState) return humanDefaultColor;
             // simple distance to robot
@@ -597,7 +597,7 @@ namespace RobotSNAP.UI
             return humanDefaultColor;
         }
         
-        private void SetHumanOpacity(HumanAvatar human, float opacity)
+        private void SetHumanOpacity(HumanAgent human, float opacity)
         {
             var renderers = human.GetComponentsInChildren<Renderer>();
             foreach (var rend in renderers)
@@ -645,7 +645,7 @@ namespace RobotSNAP.UI
         
         private void DrawBoundingBoxes()
         {
-            var agents = FindObjectsOfType<HumanAvatar>();
+            var agents = FindObjectsOfType<HumanAgent>();
             foreach (var a in agents)
             {
                 Vector3 center = a.transform.position;
@@ -685,7 +685,7 @@ namespace RobotSNAP.UI
             // optional: distance between robot and each human
             Robot robot = FindObjectOfType<Robot>();
             if (robot == null) return;
-            var humans = FindObjectsOfType<HumanAvatar>();
+            var humans = FindObjectsOfType<HumanAgent>();
             foreach (var h in humans)
             {
                 float dist = Vector3.Distance(robot.Position, h.transform.position);

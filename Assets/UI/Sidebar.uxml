@@ -21,22 +21,22 @@
                     <ui:VisualElement class="menu-icon simulator-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/simulator.png?fileID=2800000&amp;guid=e5f6e8feba5b5ea4a966c2aa5824f385&amp;type=3#simulator&quot;);"/>
                     <ui:Label text="Simulator" class="menu-label" style="-unity-text-align: middle-left;"/>
                 </ui:Button>
-                <ui:Button class="menu-item ">
+                <!-- <ui:Button class="menu-item ">
                     <ui:VisualElement class="menu-icon analysis-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/analysis.png?fileID=2800000&amp;guid=031013c512f1a2936bf2c4e36ac11a2f&amp;type=3#analysis&quot;);"/>
                     <ui:Label text="Analysis" class="menu-label" style="-unity-text-align: middle-left;"/>
                 </ui:Button>
                 <ui:Button class="menu-item ">
                     <ui:VisualElement class="menu-icon scenarios-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/scenarios.png?fileID=2800000&amp;guid=2147e330b9e5341879d660a43c111aa8&amp;type=3#scenarios&quot;);"/>
                     <ui:Label text="Scenarios" class="menu-label" style="-unity-text-align: middle-left;"/>
-                </ui:Button>
-                <ui:Button class="menu-item ">
+                </ui:Button> -->
+                <!-- <ui:Button class="menu-item ">
                     <ui:VisualElement class="menu-icon agents-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/agents.png?fileID=2800000&amp;guid=a97cd45acfb812964a672d49c457b879&amp;type=3#agents&quot;);"/>
                     <ui:Label text="Agents" class="menu-label" style="-unity-text-align: middle-left;"/>
                 </ui:Button>
                 <ui:Button name="Button" class="menu-item " style="margin-bottom: 6px;">
                     <ui:VisualElement class="menu-icon recordings-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/recordings.png?fileID=2800000&amp;guid=00a71f1eb3d06923985e0acc64225796&amp;type=3#recordings&quot;);"/>
                     <ui:Label text="Recordings" class="menu-label" style="-unity-text-align: middle-left;"/>
-                </ui:Button>
+                </ui:Button> -->
             </ui:VisualElement>
             <ui:VisualElement class="separator" style="margin-top: 5px; margin-bottom: 5px;"/>
             <ui:VisualElement class="menu-group">
@@ -44,14 +44,14 @@
                     <ui:VisualElement class="menu-icon settings-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/settings.png?fileID=2800000&amp;guid=16a7fca752443e1eb95e2f89fc0df5a1&amp;type=3#settings&quot;);"/>
                     <ui:Label text="Settings" class="menu-label" style="-unity-text-align: middle-left;"/>
                 </ui:Button>
-                <ui:Button class="menu-item ">
+                <!-- <ui:Button class="menu-item ">
                     <ui:VisualElement class="menu-icon profile-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/profile.png?fileID=2800000&amp;guid=8a5f573cadf0ac386861c7e15b6054d8&amp;type=3#profile&quot;);"/>
                     <ui:Label text="Profile" class="menu-label" style="-unity-text-align: middle-left;"/>
                 </ui:Button>
                 <ui:Button class="menu-item ">
                     <ui:VisualElement class="menu-icon documentation-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/documentation.png?fileID=2800000&amp;guid=e778a3081051758f78a1bf5454190279&amp;type=3#documentation&quot;);"/>
                     <ui:Label text="Documentation" class="menu-label" style="-unity-text-align: middle-left;"/>
-                </ui:Button>
+                </ui:Button> -->
             </ui:VisualElement>
             <ui:VisualElement style="flex-grow: 1;"/>
                 <ui:VisualElement class="bottom-actions">

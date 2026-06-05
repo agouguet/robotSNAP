@@ -4,19 +4,36 @@ scenario_info:
   version: "1.0"
   map: "basic/corner"
 
-points:
-  start: {x: -5, y: 0, z: 0}
-  end: {x: 5, y: 0, z: 0}
-
-robot:
-  start: "start"
-  goal: "end"
-  behavior: "normal"
-  speed: 1.2
-
 simulation:
   duration: 0.1
   random_seed: 42
   time_scale: 1.0
   min_humans: 1
   max_humans: 1
+
+points:
+  start_robot: {x: 0, y: 0, z: -9}
+  end_robot: {x: 9, y: 0, z: 0}
+  start_human: {x: 9, y: 0, z: 0}
+  end_human: {x: 0, y: 0, z: -9}
+
+robot:
+  start: "start_robot"
+  goal: "end_robot"
+  behavior: "normal"
+  speed: 1.2
+
+humans:
+  # Groupe 1 : simples piétons spawn aléatoire dans une zone
+  - id: "pedestrians"
+    count: 0
+    spawn:
+      type: "point"
+      ref: "start_human"
+    goal:
+      type: "point"
+      ref: "end_human"
+    behavior: "normal"
+    speed: 1.0
+    movement_controller:
+      type: "SFM"

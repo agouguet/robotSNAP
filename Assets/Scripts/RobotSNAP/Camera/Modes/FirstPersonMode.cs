@@ -6,7 +6,7 @@ namespace RobotSNAP.CameraControl
     {
         public void Enter(CameraController controller)
         {
-
+            controller.mainCamera.orthographic = false;
         }
         
         public void Update(CameraController controller, float deltaTime)

@@ -3,9 +3,25 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using RobotSNAP;
+using RobotSNAP.Agents;
 
 namespace RobotSNAP.CameraControl
 {
+    // Structure regroupant les informations d'un mode
+    public class CameraModeEntry
+    {
+        public ICameraMode ModeInstance { get; set; }
+        public string DisplayName { get; set; }
+        public bool RequiresFocus { get; set; }
+
+        public CameraModeEntry(ICameraMode modeInstance, string displayName, bool requiresFocus)
+        {
+            ModeInstance = modeInstance;
+            DisplayName = displayName;
+            RequiresFocus = requiresFocus;
+        }
+    }
+
     public class CameraController : MonoBehaviour
     {
         [Header("Camera References")]
@@ -23,8 +39,8 @@ namespace RobotSNAP.CameraControl
         public float maxHeight = 30f;
 
         [Header("Collision")]
-        public LayerMask obstacleMask = -1; // tous les layers par défaut, à assigner dans l'inspecteur
-        public float collisionRadius = 0.2f;   // rayon pour un SphereCast (plus précis)
+        public LayerMask obstacleMask = -1;
+        public float collisionRadius = 0.2f;
         
         [Header("Follow Mode Settings")]
         public List<string> followableTags = new List<string> { "Robot", "Human", "Agent" };
@@ -36,6 +52,7 @@ namespace RobotSNAP.CameraControl
         public Vector3 followOffset = new Vector3(0, 5, -10);
         public Vector3 topDownOffset = new Vector3(0, 20, 0);
         public Vector3 firstPersonOffset = new Vector3(0, 1.5f, 0.5f);
+        public Vector3 thirdPersonOffset = new Vector3(0, 2, 5);
         public Vector3 orbitOffset = new Vector3(0, 5, -10);
 
         public System.Action<List<Transform>> OnTargetsUpdated;
@@ -63,6 +80,7 @@ namespace RobotSNAP.CameraControl
             Free,
             TopDown,
             FirstPerson,
+            ThirdPerson,
             Orbit,
             MultiTarget,
             Cinematic
@@ -70,9 +88,11 @@ namespace RobotSNAP.CameraControl
         
         private CameraMode _currentModeEnum = CameraMode.Free;
         private ICameraMode _currentMode;
-        private Dictionary<CameraMode, ICameraMode> _modes;
+        // Dictionnaire unique : clé = enum, valeur = entrée (instance + métadonnées)
+        private Dictionary<CameraMode, CameraModeEntry> _modeEntries;
+        public IEnumerable<KeyValuePair<CameraMode, CameraModeEntry>> ModeEntries => _modeEntries;
         
-        // Variables d’état partagées (utilisées par certains modes)
+        // Variables d’état partagées
         public Vector3 velocity;
         private Vector3 _targetPosition;
         private Quaternion _targetRotation;
@@ -86,7 +106,7 @@ namespace RobotSNAP.CameraControl
         private Coroutine _cinematicCoroutine;
         private bool _isSplitView = false;
         
-        #region Properties for modes (accès aux états internes)
+        #region Properties for modes
         public Vector3 TargetPosition { get => _targetPosition; set => _targetPosition = value; }
         public Quaternion TargetRotation { get => _targetRotation; set => _targetRotation = value; }
         public float CurrentDistance { get => _currentDistance; set => _currentDistance = value; }
@@ -101,7 +121,7 @@ namespace RobotSNAP.CameraControl
         
         #region Unity Lifecycle
         
-        private void Start()
+        private void Awake()
         {
             Initialize();
         }
@@ -114,7 +134,6 @@ namespace RobotSNAP.CameraControl
 
         private void Update()
         {
-            // Cycle through follow targets with Tab (uniquement en mode Follow)
             if (Input.GetKeyDown(KeyCode.Tab))
             {
                 int direction = Input.GetKey(KeyCode.LeftShift) ? -1 : 1;
@@ -144,26 +163,26 @@ namespace RobotSNAP.CameraControl
             
             if (splitViewContainer != null) splitViewContainer.SetActive(false);
             
-            // Instanciation des modes
-            _modes = new Dictionary<CameraMode, ICameraMode>
+            // Création du dictionnaire unique
+            _modeEntries = new Dictionary<CameraMode, CameraModeEntry>
             {
-                { CameraMode.Free, new FreeCameraMode() },
-                { CameraMode.TopDown, new TopDownMode() },
-                { CameraMode.FirstPerson, new FirstPersonMode() },
-                { CameraMode.Orbit, new OrbitMode() },
-                { CameraMode.MultiTarget, new MultiTargetMode() },
-                { CameraMode.Cinematic, new CinematicMode() }
+                { CameraMode.Free, new CameraModeEntry(new FreeCameraMode(), "Free", false) },
+                { CameraMode.TopDown, new CameraModeEntry(new TopDownMode(), "Top", false) },
+                { CameraMode.FirstPerson, new CameraModeEntry(new FirstPersonMode(), "First", true) },
+                { CameraMode.ThirdPerson, new CameraModeEntry(new ThirdPersonMode(), "Third", true) },
+                { CameraMode.Orbit, new CameraModeEntry(new OrbitMode(), "Orbit", false) },
+                // { CameraMode.MultiTarget, new CameraModeEntry(new MultiTargetMode(), "Multi", false) },
+                // { CameraMode.Cinematic, new CameraModeEntry(new CinematicMode(), "Cinematic", false) }
             };
 
             velocity = Vector3.zero;
             
-            // Mode par défaut
             SetCameraMode(CameraMode.Free);
         }
         
         #endregion
         
-        #region Public Methods (API inchangée)
+        #region Public Methods
         
         public void SetCameraMode(int mode) => SetCameraMode((CameraMode)mode);
         
@@ -175,16 +194,33 @@ namespace RobotSNAP.CameraControl
         
         public void SetCameraMode(CameraMode mode)
         {
+            if (!_modeEntries.TryGetValue(mode, out var entry))
+            {
+                Debug.LogWarning($"Mode {mode} not found.");
+                return;
+            }
             if (_currentMode != null) _currentMode.Exit(this);
             _currentModeEnum = mode;
-            _currentMode = _modes[mode];
+            _currentMode = entry.ModeInstance;
             _currentMode.Enter(this);
             OnViewChanged?.Invoke();
             Debug.Log($"[CameraController] Mode changed to: {mode}");
         }
         
         public CameraMode GetCurrentMode() => _currentModeEnum;
-        public string GetCurrentModeName() {return _currentModeEnum.ToString();}
+        public string GetCurrentModeName() => _currentModeEnum.ToString();
+        
+        public string GetCurrentDisplayName()
+        {
+            if (_modeEntries.TryGetValue(_currentModeEnum, out var entry))
+                return entry.DisplayName;
+            return _currentModeEnum.ToString();
+        }
+        
+        public bool GetModeRequiresFocus(CameraMode mode)
+        {
+            return _modeEntries.TryGetValue(mode, out var entry) && entry.RequiresFocus;
+        }
         
         public void ResetToDefaultView()
         {
@@ -272,17 +308,14 @@ namespace RobotSNAP.CameraControl
                 foreach (GameObject obj in objects)
                 {
                     Transform targetTransform = obj.transform;
-
-                    // Si c'est un robot, on cherche l'enfant "base_link" (ou tout autre nom)
                     if (tag == "Robot")
                     {
                         Transform baseLink = obj.GetComponent<Robot>()?.RobotTransform;
                         if (baseLink != null)
                             targetTransform = baseLink;
                         else
-                            Debug.LogWarning($"Robot {obj.name} has no 'base_link' child – using parent.");
+                            Debug.LogWarning($"Robot {obj.name} has no movable child – using parent.");
                     }
-
                     if (!_followableTargets.Contains(targetTransform))
                         _followableTargets.Add(targetTransform);
                 }
@@ -328,9 +361,8 @@ namespace RobotSNAP.CameraControl
         #endregion
     }
     
-    // Mock class for HumanAgent (compatibilité)
-    public class HumanAgent : MonoBehaviour
-    {
-        public int agentId;
-    }
+    // public class HumanAgent : MonoBehaviour
+    // {
+    //     public int agentId;
+    // }
 }

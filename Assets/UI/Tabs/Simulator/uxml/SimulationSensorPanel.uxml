@@ -1,7 +1,8 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <ui:VisualElement name="BottomTabsPanel" class="bottom-tabs-panel" style="height: auto; background-size: auto auto;">
+    <Style src="project://database/Assets/UI/Tabs/Simulator/uss/Simulation.uss?fileID=7433441132597879392&amp;guid=8dabadea5cb3a8233888f77252c53c13&amp;type=3#Simulation"/>
+    <ui:VisualElement name="BottomTabsPanel" class="simulation-bottom-tabs-panel">
         <ui:VisualElement name="TabsToolbar" class="tabs-toolbar">
-            <ui:Button text="Vue Capteur" name="TabSensor" class="tab-button active"/>
+            <ui:Button text="Sensor View" name="TabSensor" class="tab-button active"/>
             <ui:Button text="Console" name="TabConsole" class="tab-button"/>
             <ui:Button text="Logs" name="TabLogs" class="tab-button"/>
         </ui:VisualElement>
@@ -9,7 +10,7 @@
             <ui:VisualElement name="SensorContent" class="tab-pane active">
                 <ui:Label text="[ Capteurs : Lidar, Caméra, IMU ]"/>
                 <ui:Slider label="Zoom" low-value="0.1" high-value="2" value="1"/>
-                <ui:VisualElement style="height: 100px; background-color: rgb(44, 49, 58);">
+                <ui:VisualElement style="height: 300px; background-color: rgb(44, 49, 58);">
                     <ui:Label text="Visualisation capteur (à implémenter)"/>
                 </ui:VisualElement>
             </ui:VisualElement>

@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using RobotSNAP.Core;
 using RobotSNAP.Environment;
-using RobotSNAP.Human;
+using RobotSNAP.Agents;
 
 namespace RobotSNAP.Core.Scenario
 {
@@ -31,7 +31,7 @@ namespace RobotSNAP.Core.Scenario
         private GameManager _gameManager;
         private ScenarioData _currentScenario;
         private readonly List<Coroutine> _activeCoroutines = new();
-        private readonly Dictionary<string, HumanAvatar> _spawnedHumans = new();
+        private readonly Dictionary<string, HumanAgent> _spawnedHumans = new();
         private int _humanCounter;
 
         public ScenarioData CurrentScenario => _currentScenario;
@@ -156,7 +156,7 @@ namespace RobotSNAP.Core.Scenario
             }
             else
             {
-                var humans = FindObjectsOfType<HumanAvatar>();
+                var humans = FindObjectsOfType<HumanAgent>();
                 foreach (var h in humans)
                     Destroy(h.gameObject);
                 if (_logEvents) Debug.Log($"[ScenarioApplier] Destroyed {humans.Length} humans directly.");
@@ -227,6 +227,9 @@ namespace RobotSNAP.Core.Scenario
                 Vector3 startPos = ResolvePosition(robotConfig.StartRef);
                 var robotComponent = robot.GetComponent<Robot>();
                 if (robotComponent != null)
+                    robotComponent.Reset();
+
+                if (robotComponent != null)
                     robotComponent.SetBaseLinkPosition(startPos);
                 else
                     robot.transform.position = startPos;   // fallback
@@ -289,14 +292,14 @@ namespace RobotSNAP.Core.Scenario
             if (totalHumans == 0) yield break;
 
             // Récupérer les instances depuis le pool
-            List<HumanAvatar> allHumans = new List<HumanAvatar>();
+            List<HumanAgent> allHumans = new List<HumanAgent>();
             for (int i = 0; i < totalHumans; i++)
             {
                 GameObject humanGO = poolManager.GetHuman();
                 if (humanGO != null)
                 {
                     humanGO.SetActive(true);
-                    var human = humanGO.GetComponent<HumanAvatar>();
+                    var human = humanGO.GetComponent<HumanAgent>();
                     if (human != null)
                         allHumans.Add(human);
                 }
@@ -323,7 +326,7 @@ namespace RobotSNAP.Core.Scenario
             if (_logEvents) Debug.Log($"[ScenarioApplier] Configured {humanIndex} humans");
         }
 
-        private void ConfigureHuman(HumanAvatar human, HumanScenarioConfig config, int index, int total)
+        private void ConfigureHuman(HumanAgent human, HumanScenarioConfig config, int index, int total)
         {
             // Positionnement
             if (config.Spawn != null)
@@ -355,7 +358,7 @@ namespace RobotSNAP.Core.Scenario
                 SetHumanMovementController(human, config.MovementController);
         }
 
-        private void SetHumanMovementController(HumanAvatar human, MovementControllerConfig movementConfig)
+        private void SetHumanMovementController(HumanAgent human, MovementControllerConfig movementConfig)
         {
             var movement = human.GetComponent<HumanMovement>();
             if (movement == null) return;
@@ -424,7 +427,7 @@ namespace RobotSNAP.Core.Scenario
             return Vector3.zero;
         }
 
-        private void ResolveAndSetGoal(HumanAvatar human, GoalConfig goal)
+        private void ResolveAndSetGoal(HumanAgent human, GoalConfig goal)
         {
             switch (goal.Type?.ToLower())
             {
@@ -444,7 +447,7 @@ namespace RobotSNAP.Core.Scenario
             }
         }
 
-        private IEnumerator WanderRoutine(HumanAvatar human, float radius)
+        private IEnumerator WanderRoutine(HumanAgent human, float radius)
         {
             while (human != null && human.gameObject.activeSelf)
             {
@@ -455,7 +458,7 @@ namespace RobotSNAP.Core.Scenario
             }
         }
 
-        private IEnumerator FollowRobotRoutine(HumanAvatar human)
+        private IEnumerator FollowRobotRoutine(HumanAgent human)
         {
             while (human != null && human.gameObject.activeSelf)
             {
@@ -472,21 +475,18 @@ namespace RobotSNAP.Core.Scenario
         private Bounds ResolveBounds(string reference) =>
             _loader?.GetBounds(_currentScenario, reference) ?? new Bounds();
 
-        private void SetHumanColor(HumanAvatar human, Color color)
+        private void SetHumanColor(HumanAgent human, Color color)
         {
             var renderer = human.GetComponentInChildren<Renderer>();
             if (renderer != null) renderer.material.color = color;
         }
 
-        private void SetHumanPersonality(HumanAvatar human, PersonalityConfig personality)
+        private void SetHumanPersonality(HumanAgent human, PersonalityConfig personality)
         {
-            var movement = human.GetComponent<HumanMovement>();
-            if (movement != null)
-            {
-                movement.SetAssertiveness(personality.Assertiveness);
-                movement.SetPersonalSpace(personality.PersonalSpace);
-                movement.SetReactionTime(personality.ReactionTime);
-            }
+            human.SetAssertiveness(personality.Assertiveness);
+            human.SetPersonalSpace(personality.PersonalSpace);
+            human.SetReactionTime(personality.ReactionTime);
+            
         }
     }
 }

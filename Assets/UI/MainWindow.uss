@@ -1,88 +1,53 @@
-/* ========================================
-   VARIABLES GLOBALES – THEME CLAIR (défaut)
-   ======================================== */
 :root {
-    /* Fonds */
-    --bg-primary: #e7eaec;      /* fond principal très clair */
-    --bg-secondary: #FFFFFF;    /* fond secondaire (cartes, panels) */
-    --sidebar-bg: #FFFFFF;      /* fond de la sidebar */
-    --panel-bg: rgba(255, 255, 255, 0.92); /* panels semi-transparents */
-    --card-bg: #FFFFFF;         /* cartes métriques */
-    
-    /* Textes */
-    --text-primary: #0F172A;    /* texte principal (très foncé) */
-    --text-secondary: #475569;  /* texte secondaire */
-    
-    /* Accents */
-    --accent: #2563EB;          /* bleu vif pour les éléments actifs */
-    --accent-soft: #3B82F6;     /* bleu plus doux */
-    --accent-glow: rgba(37, 99, 235, 0.15); /* halo léger */
-    
-    /* Bordures & séparateurs */
-    --border-color: #E2E8F0;
-    
-    /* Éléments interactifs */
-    --button-bg: #F1F5F9;
-    --button-hover: #c7ccd3;
-    
-    /* Titres flottants */
-    --title-corner-bg: #FFFFFF;
-    --title-corner-color: #2563EB;
-    
-    /* Dropdown */
-    --dropdown-bg: #FFFFFF;
-    --dropdown-text: #0F172A;
-
-    --icon-tint: #161a1f;
+    --bg-primary: rgb(231, 234, 236);
+    --bg-secondary: rgb(255, 255, 255);
+    --sidebar-bg: rgb(255, 255, 255);
+    --panel-bg: rgba(255, 255, 255, 0.92);
+    --card-bg: rgb(255, 255, 255);
+    --text-primary: rgb(15, 23, 42);
+    --text-secondary: rgb(71, 85, 105);
+    --accent: rgb(37, 99, 235);
+    --accent-soft: rgb(59, 130, 246);
+    --accent-glow: rgba(37, 99, 235, 0.15);
+    --border-color: rgb(226, 232, 240);
+    --button-bg: rgb(241, 245, 249);
+    --button-hover: rgb(199, 204, 211);
+    --title-corner-bg: rgb(255, 255, 255);
+    --title-corner-color: rgb(37, 99, 235);
+    --dropdown-bg: rgb(255, 255, 255);
+    --dropdown-text: rgb(15, 23, 42);
+    --icon-tint: rgb(22, 26, 31);
 }
 
-/* ========================================
-   THEME SOMBRE (activé par la classe .dark-mode)
-   ======================================== */
 .dark-mode {
-    /* Fonds */
-    --bg-primary: #0B1120;      /* fond très sombre, légèrement bleuté */
-    --bg-secondary: #1E293B;    /* fond secondaire */
-    --sidebar-bg: #0F172A;      /* sidebar légèrement plus claire que le fond principal */
+    --bg-primary: rgb(11, 17, 32);
+    --bg-secondary: rgb(30, 41, 59);
+    --sidebar-bg: rgb(15, 23, 42);
     --panel-bg: rgba(30, 41, 59, 0.85);
-    --card-bg: #1E293B;
-    
-    /* Textes */
-    --text-primary: #F1F5F9;    /* blanc cassé */
-    --text-secondary: #94A3B8;  /* gris clair */
-    
-    /* Accents */
-    --accent: #3B82F6;          /* bleu plus lumineux pour rester visible */
-    --accent-soft: #60A5FA;
+    --card-bg: rgb(30, 41, 59);
+    --text-primary: rgb(241, 245, 249);
+    --text-secondary: rgb(148, 163, 184);
+    --accent: rgb(59, 130, 246);
+    --accent-soft: rgb(96, 165, 250);
     --accent-glow: rgba(59, 130, 246, 0.2);
-    
-    /* Bordures */
-    --border-color: #334155;
-    
-    /* Éléments interactifs */
-    --button-bg: #334155;
-    --button-hover: #475569;
-    
-    /* Titres flottants */
-    --title-corner-bg: #1E293B;
-    --title-corner-color: #60A5FA;
-    
-    /* Dropdown */
-    --dropdown-bg: #1E293B;
-    --dropdown-text: #F1F5F9;
-
-    --icon-tint: #F1F5F9;
+    --border-color: rgb(51, 65, 85);
+    --button-bg: rgb(51, 65, 85);
+    --button-hover: rgb(71, 85, 105);
+    --title-corner-bg: rgb(30, 41, 59);
+    --title-corner-color: rgb(96, 165, 250);
+    --dropdown-bg: rgb(30, 41, 59);
+    --dropdown-text: rgb(241, 245, 249);
+    --icon-tint: rgb(241, 245, 249);
 }
 
-/* ========================================
-   STYLES GLOBAUX
-   ======================================== */
 .root {
     background-color: var(--bg-primary);
     background-size: cover;
 }
 
-.root, #MainContainer, #MainContent {
+.root,
+#MainContainer,
+#MainContent {
     height: 100%;
     width: 100%;
 }
@@ -90,7 +55,6 @@
 #MainContainer {
     background-color: var(--bg-primary);
 }
-
 
 .unity-label {
     color: var(--text-primary);
@@ -136,14 +100,9 @@
 
 .button-accent {
     background-color: var(--accent);
-    color: #FFFFFF;
+    color: rgb(255, 255, 255);
 }
 
-/* ========================================
-   COMPOSANTS PRINCIPAUX
-   ======================================== */
-
-/* Top Bar */
 .top-bar {
     padding: 12px 16px;
 }
@@ -165,7 +124,6 @@
     margin-top: 12px;
 }
 
-/* Panneau de simulation */
 .simulation-view {
     background-color: var(--bg-secondary);
     border-radius: 6px;
@@ -174,7 +132,7 @@
 }
 
 .render-zone {
-    background-color: #000000;
+    background-color: rgb(0, 0, 0);
     min-height: 300px;
     border-radius: 4px;
 }
@@ -186,7 +144,6 @@
     border-radius: 4px;
 }
 
-/* Métriques (cartes) */
 .metrics-row {
     flex-direction: row;
     justify-content: space-between;
@@ -212,7 +169,6 @@
     -unity-font-style: bold;
 }
 
-/* Panneaux génériques */
 .panel {
     background-color: var(--panel-bg);
     border-width: 1px;
@@ -231,7 +187,6 @@
     margin-bottom: 8px;
 }
 
-/* Logs */
 .logs-scroll {
     max-height: 200px;
 }
@@ -248,20 +203,17 @@
     padding: 2px 6px;
 }
 
-/* Console (onglet) */
 .console-line {
     font-family: monospace;
     font-size: 11px;
     padding: 2px 4px;
-    color: #A0FFA0;
+    color: rgb(160, 255, 160);
 }
 
-/* Vizualisations toggles */
 .viz-toggle {
     margin: 2px 0;
 }
 
-/* Robot panel */
 .robot-panel {
     flex-direction: row;
     justify-content: space-between;
@@ -281,10 +233,6 @@
     width: 150px;
 }
 
-.simulation-overlay {
-    padding: 0px 8px 16px 8px;
-}
-
 .bottom-controls {
     flex-direction: row;
     align-items: center;
@@ -302,36 +250,6 @@
 
 .speed-slider {
     width: 120px;
-}
-
-/* Panneau à onglets (bas) */
-.bottom-tabs-panel {
-    margin: 8px;
-    background-color: var(--panel-bg);
-    border-width: 1px;
-    border-style: solid;
-    border-color: var(--border-color);
-    border-radius: 6px;
-    flex-direction: column;
-}
-
-.tabs-toolbar {
-    flex-direction: row;
-    background-color: var(--bg-secondary);
-}
-
-.tab-button {
-    background-color: transparent;
-    border-width: 0;
-    padding: 8px 16px;
-    margin: 0;
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-
-.tab-button.active {
-    color: var(--accent-soft);
-    background-color: var(--accent-glow);
 }
 
 .tab-pane {
@@ -360,15 +278,14 @@
     width: 16px;
 }
 
-/* Panneau de type dashboard (avec titre flottant) */
 .dashboard-panel {
     position: relative;
+    margin: 8px;
     background-color: var(--panel-bg);
     border-width: 1px;
     border-style: solid;
     border-color: var(--accent-glow);
     border-radius: 12px;
-    margin: 16px 12px;
     padding: 16px 12px 12px 12px;
     transition: border-color 0.2s;
 }
@@ -378,7 +295,6 @@
     background-color: var(--bg-secondary);
 }
 
-/* Titre flottant */
 .panel-title-corner {
     position: absolute;
     top: -12px;
@@ -397,15 +313,15 @@
     z-index: 2;
 }
 
-/* Contenu interne */
 .panel-inner {
     flex-direction: column;
     margin-top: 6px;
 }
 
-/* Lignes de métriques */
 .metric-line {
     color: var(--text-primary);
     font-size: 12px;
     margin-bottom: 6px;
 }
+
+

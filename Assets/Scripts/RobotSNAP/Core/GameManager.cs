@@ -8,7 +8,7 @@ using RosMessageTypes.Simulation;
 using RobotSNAP.ROS;
 using RobotSNAP.Environment;
 using RobotSNAP.Core.Scenario;
-using RobotSNAP.Human;
+using RobotSNAP.Agents;
 
 namespace RobotSNAP.Core
 {
@@ -213,14 +213,14 @@ namespace RobotSNAP.Core
 
         #region Public API - Agent Management
 
-        public List<HumanAvatar> GetAllHumans()
+        public List<HumanAgent> GetAllHumans()
         {
-            var humans = new List<HumanAvatar>();
+            var humans = new List<HumanAgent>();
             if (_humanPool != null)
             {
                 foreach (var go in _humanPool.GetActiveHumans())
                 {
-                    var h = go.GetComponent<HumanAvatar>();
+                    var h = go.GetComponent<HumanAgent>();
                     if (h != null) humans.Add(h);
                 }
             }

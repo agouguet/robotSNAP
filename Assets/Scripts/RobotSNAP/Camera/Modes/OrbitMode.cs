@@ -11,6 +11,7 @@ namespace RobotSNAP.CameraControl
             // Initialise la distance à partir de orbitOffset (magnitude)
             _currentDistance = controller.orbitOffset.magnitude;
             _currentDistance = Mathf.Clamp(_currentDistance, controller.minDistance, controller.maxDistance);
+            controller.mainCamera.orthographic = false;
         }
 
         public void Update(CameraController controller, float deltaTime)

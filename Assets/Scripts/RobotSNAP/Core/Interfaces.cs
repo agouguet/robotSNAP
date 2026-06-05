@@ -86,15 +86,6 @@ namespace RobotSNAP.Core
         bool CanSpawn { get; }
     }
     
-    public interface IHumanPool
-    {
-        System.Collections.IEnumerator Prewarm(int poolSize);
-        GameObject GetHuman();
-        void ReturnHuman(GameObject human);
-        void DeactivateAllHumans();
-        int ActiveCount { get; }
-    }
-    
     public interface IHumanController
     {
         void Initialize();

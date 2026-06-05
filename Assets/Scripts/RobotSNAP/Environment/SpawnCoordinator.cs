@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using RobotSNAP.Core.Scenario;
-using RobotSNAP.Human;
+using RobotSNAP.Agents;
 
 namespace RobotSNAP.Core
 {
@@ -138,18 +138,18 @@ namespace RobotSNAP.Core
                     {
                         human.transform.SetPositionAndRotation(humanSpawn.position, humanSpawn.rotation);
                         
-                        var humanAvatar = human.GetComponent<HumanAvatar>();
-                        if (humanAvatar != null)
+                        var HumanAgent = human.GetComponent<HumanAgent>();
+                        if (HumanAgent != null)
                         {
                             // Position déjà faite, on applique la configuration métier
-                            humanAvatar.SetSpeed(config.Speed);
+                            HumanAgent.SetSpeed(config.Speed);
                             if (!string.IsNullOrEmpty(config.Behavior))
-                                humanAvatar.SetBehavior(config.Behavior);
+                                HumanAgent.SetBehavior(config.Behavior);
                             
                             // Couleur
                             if (config.Color != null && config.Color.Length >= 3)
                             {
-                                var renderer = humanAvatar.GetComponentInChildren<Renderer>();
+                                var renderer = HumanAgent.GetComponentInChildren<Renderer>();
                                 if (renderer != null)
                                     renderer.material.color = new Color(config.Color[0], config.Color[1], config.Color[2]);
                             }
@@ -157,13 +157,11 @@ namespace RobotSNAP.Core
                             // Personnalité
                             if (config.Personality != null)
                             {
-                                var movement = humanAvatar.GetComponent<HumanMovement>();
-                                if (movement != null)
-                                {
-                                    movement.SetAssertiveness(config.Personality.Assertiveness);
-                                    movement.SetPersonalSpace(config.Personality.PersonalSpace);
-                                    movement.SetReactionTime(config.Personality.ReactionTime);
-                                }
+
+                                HumanAgent.SetAssertiveness(config.Personality.Assertiveness);
+                                HumanAgent.SetPersonalSpace(config.Personality.PersonalSpace);
+                                HumanAgent.SetReactionTime(config.Personality.ReactionTime);
+                                
                             }
                             
                             // Objectif
@@ -174,7 +172,7 @@ namespace RobotSNAP.Core
                             // Type de contrôleur (SFM, ONNX, Hybrid) si spécifié
                             if (config.MovementController != null)
                             {
-                                var movement = humanAvatar.GetComponent<HumanMovement>();
+                                var movement = HumanAgent.GetComponent<HumanMovement>();
                                 if (movement != null)
                                 {
                                     int controllerType = 0;

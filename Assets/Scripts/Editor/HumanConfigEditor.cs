@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
+using RobotSNAP.Agents;
 
 namespace RobotSNAP.Human
 {
@@ -86,10 +87,10 @@ namespace RobotSNAP.Human
                 EditorGUILayout.Space();
                 
                 // Tangential Forces
-                EditorGUILayout.LabelField("Tangential Forces", EditorStyles.boldLabel);
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("tangentialForceA"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("tangentialForceB"));
-                EditorGUILayout.Space();
+                // EditorGUILayout.LabelField("Tangential Forces", EditorStyles.boldLabel);
+                // EditorGUILayout.PropertyField(serializedObject.FindProperty("tangentialForceA"));
+                // EditorGUILayout.PropertyField(serializedObject.FindProperty("tangentialForceB"));
+                // EditorGUILayout.Space();
                 
                 // Navigation
                 EditorGUILayout.LabelField("Navigation", EditorStyles.boldLabel);

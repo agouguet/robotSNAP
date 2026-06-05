@@ -98,7 +98,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _loader: {fileID: 0}
   _gridBuilder: {fileID: 2853346668875565706}
-  _robotPrefab: {fileID: 7195339433518795282, guid: 61193fdde1fb4cabcb40b1a66b38d6e1, type: 3}
+  _robotPrefab: {fileID: 7195339433518795282, guid: a7f37e81683a824d98ee39033e995bda, type: 3}
   _clearExistingHumans: 1
   _resetRobotPosition: 1
   _logEvents: 1
@@ -113,9 +113,9 @@ GameObject:
   - component: {fileID: 7524911746166132122}
   - component: {fileID: 2853346668875565706}
   - component: {fileID: 9096556643226201497}
-  - component: {fileID: 518648269625183668}
   - component: {fileID: 4037329500127252662}
   - component: {fileID: 6262913427228473794}
+  - component: {fileID: 518648269625183668}
   m_Layer: 0
   m_Name: Environment
   m_TagString: Untagged
@@ -169,27 +169,6 @@ MonoBehaviour:
   spawnSurface: {fileID: 4037329500127252662}
   navigationSurface: {fileID: 6262913427228473794}
   autoBuildOnEnvironmentReady: 1
---- !u!114 &518648269625183668
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5463317844950796959}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 02971b70e8e36d5dfaf31fc6229635eb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  targetSurface: {fileID: 6262913427228473794}
-  surfaceColor: {r: 1, g: 0, b: 0.27234697, a: 0.4}
-  yOffset: 0
-  showWireframe: 1
-  wireframeColor: {r: 0, g: 0, b: 0, a: 1}
-  toggleKey: 284
-  visibleByDefault: 1
-  autoUpdateOnBuild: 1
-  updateDelay: 0.5
 --- !u!114 &4037329500127252662
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -254,6 +233,27 @@ MonoBehaviour:
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 23800000, guid: e06e599f98fe745aaa7552e1659fab5a, type: 2}
   m_BuildHeightMesh: 0
+--- !u!114 &518648269625183668
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5463317844950796959}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 02971b70e8e36d5dfaf31fc6229635eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  targetSurface: {fileID: 6262913427228473794}
+  surfaceColor: {r: 1, g: 0, b: 0.27234697, a: 0.4}
+  yOffset: 0
+  showWireframe: 1
+  wireframeColor: {r: 0, g: 0, b: 0, a: 1}
+  toggleKey: 284
+  visibleByDefault: 1
+  autoUpdateOnBuild: 1
+  updateDelay: 0.5
 --- !u!1 &7408303485869591588
 GameObject:
   m_ObjectHideFlags: 0

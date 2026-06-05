@@ -9,6 +9,7 @@ namespace RobotSNAP.CameraControl
             controller.RefreshFollowableTargets();
             if (controller.GetFollowableTargets().Count > 0)
                 controller.SetFollowTarget(controller.GetFollowableTargets()[0]);
+            controller.mainCamera.orthographic = false;
         }
         
         public void Update(CameraController controller, float deltaTime)

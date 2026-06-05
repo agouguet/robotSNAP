@@ -4,6 +4,9 @@ using System.Collections.Generic;
 
 public class MainViewController : MonoBehaviour
 {
+    // Événement statique pour notifier qu'une vue a été chargée
+    public static System.Action<string> OnViewLoaded;
+
     [SerializeField] private UIDocument uiDocument;
     [SerializeField] private VisualTreeAsset simulatorTemplate;
     [SerializeField] private VisualTreeAsset analysisTemplate;
@@ -13,7 +16,6 @@ public class MainViewController : MonoBehaviour
     [SerializeField] private VisualTreeAsset settingsTemplate;
     [SerializeField] private VisualTreeAsset profileTemplate;
     [SerializeField] private VisualTreeAsset documentationTemplate;
-    // ajoutez les autres templates
 
     private VisualElement _contentContainer;
     private SidebarController _sidebarController;
@@ -46,7 +48,6 @@ public class MainViewController : MonoBehaviour
     {
         if (_currentView == viewName) return;
 
-        // Récupérer l'instance mise en cache ou en créer une nouvelle
         if (!_viewCache.TryGetValue(viewName, out VisualElement viewInstance))
         {
             VisualTreeAsset template = GetTemplateForView(viewName);
@@ -66,12 +67,7 @@ public class MainViewController : MonoBehaviour
         _contentContainer.Add(viewInstance);
         _currentView = viewName;
 
-        // Informer le script caméra que la vue Simulator est réaffichée
-        if (viewName == "Simulator")
-        {
-            var camView = FindObjectOfType<SimulationCameraView>();
-            if (camView != null) camView.ForceRefresh();
-        }
+        OnViewLoaded?.Invoke(viewName);
     }
 
     private VisualTreeAsset GetTemplateForView(string viewName)
@@ -86,7 +82,6 @@ public class MainViewController : MonoBehaviour
             case "Settings": return settingsTemplate;
             case "Profile": return profileTemplate;
             case "Documentation": return documentationTemplate;
-            // ... autres cas
             default: return null;
         }
     }

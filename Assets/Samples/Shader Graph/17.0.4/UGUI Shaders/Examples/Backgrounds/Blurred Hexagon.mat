@@ -72,7 +72,7 @@ Material:
     - _AlphaCutoffEnable: 0
     - _AlphaDstBlend: 0
     - _AlphaSrcBlend: 1
-    - _Background_Saturation: 1
+    - _Background_Saturation: 0.86114764
     - _BlendMode: 0
     - _Blur: 0.42260155
     - _BlurCycles: 3

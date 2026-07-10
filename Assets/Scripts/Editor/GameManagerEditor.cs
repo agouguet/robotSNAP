@@ -48,22 +48,22 @@ namespace RobotSNAP
             }
             
             // Force publish button (optional)
-            if (GUILayout.Button("Force Publish Map", GUILayout.Height(25)))
-            {
-                if (gameManager != null)
-                {
-                    var mapPublisher = gameManager.GetComponent<MapPublisher>();
-                    if (mapPublisher != null)
-                    {
-                        mapPublisher.PublishMap();
-                        Debug.Log("[GameManagerEditor] Map publish forced");
-                    }
-                    else
-                    {
-                        Debug.LogWarning("[GameManagerEditor] MapPublisher not found!");
-                    }
-                }
-            }
+            // if (GUILayout.Button("Force Publish Map", GUILayout.Height(25)))
+            // {
+            //     if (gameManager != null)
+            //     {
+            //         var mapPublisher = gameManager.GetComponent<MapPublisher>();
+            //         if (mapPublisher != null)
+            //         {
+            //             mapPublisher.PublishMap();
+            //             Debug.Log("[GameManagerEditor] Map publish forced");
+            //         }
+            //         else
+            //         {
+            //             Debug.LogWarning("[GameManagerEditor] MapPublisher not found!");
+            //         }
+            //     }
+            // }
             
             GUI.enabled = true;
             

@@ -252,9 +252,17 @@ namespace RobotSNAP.Agents
 
         private void UpdateRotation(Vector2 movement)
         {
-            if (movement.magnitude > 0.1f)
+            if (_avatar == null || !_avatar.hasDestination) return;
+
+            // Si on est déjà arrivé, on ne force pas la rotation
+            float distanceToGoal = Vector2.Distance(_currentPosition, _avatar.currentDestination);
+            if (distanceToGoal < _config.goalReachedDistance) return;
+
+            // Direction vers le but (ou le prochain waypoint)
+            Vector2 directionToGoal = _avatar.currentDestination - _currentPosition;
+            if (directionToGoal.sqrMagnitude > 0.0001f)
             {
-                float angle = Mathf.Atan2(movement.x, movement.y) * Mathf.Rad2Deg;
+                float angle = Mathf.Atan2(directionToGoal.x, directionToGoal.y) * Mathf.Rad2Deg;
                 Quaternion targetRotation = Quaternion.Euler(0, angle, 0);
                 transform.rotation = Quaternion.RotateTowards(
                     transform.rotation,

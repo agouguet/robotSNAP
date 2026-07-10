@@ -61,6 +61,21 @@ namespace RobotSNAP.Core.Scenario
     }
 
     /// <summary>
+    /// Représente un point 3D avec des floats (utilisé pour la sérialisation YAML)
+    /// </summary>
+    [YamlObject]
+    public partial class Point
+    {
+        [YamlMember("x")] public float X { get; set; }
+        [YamlMember("y")] public float Y { get; set; }
+        [YamlMember("z")] public float Z { get; set; }
+        
+        public Vector3 ToVector3() => new Vector3(X, Y, Z);
+        
+        public static Point FromVector3(Vector3 v) => new Point { X = v.x, Y = v.y, Z = v.z };
+    }
+
+    /// <summary>
     /// Point de référence - position ou zone
     /// </summary>
     [YamlObject]
@@ -76,22 +91,22 @@ namespace RobotSNAP.Core.Scenario
         public float? Z { get; set; }
         
         [YamlMember("center")]
-        public Vector3? Center { get; set; }
+        public Point Center { get; set; }
         
         [YamlMember("size")]
-        public Vector3? Size { get; set; }
+        public Point Size { get; set; }
         
         /// <summary>
-        /// Est-ce un point simple ? (non sérialisé)
+        /// Est-ce un point simple ?
         /// </summary>
         [YamlIgnore]
         public bool IsPoint => X.HasValue && Y.HasValue && Z.HasValue;
         
         /// <summary>
-        /// Est-ce une zone (bounds) ? (non sérialisé)
+        /// Est-ce une zone (bounds) ?
         /// </summary>
         [YamlIgnore]
-        public bool IsBounds => Center.HasValue && Size.HasValue;
+        public bool IsBounds => Center != null && Size != null;
         
         /// <summary>
         /// Convertit en Vector3 (pour les points)
@@ -99,7 +114,7 @@ namespace RobotSNAP.Core.Scenario
         public Vector3 ToVector3()
         {
             if (IsPoint) return new Vector3(X.Value, Y.Value, Z.Value);
-            if (IsBounds) return Center.Value;
+            if (IsBounds) return Center.ToVector3();
             return Vector3.zero;
         }
         
@@ -108,7 +123,7 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         public Bounds ToBounds()
         {
-            if (IsBounds) return new Bounds(Center.Value, Size.Value);
+            if (IsBounds) return new Bounds(Center.ToVector3(), Size.ToVector3());
             return new Bounds(ToVector3(), Vector3.zero);
         }
         
@@ -132,8 +147,8 @@ namespace RobotSNAP.Core.Scenario
         {
             return new RefPoint
             {
-                Center = center,
-                Size = size
+                Center = Point.FromVector3(center),
+                Size = Point.FromVector3(size)
             };
         }
     }

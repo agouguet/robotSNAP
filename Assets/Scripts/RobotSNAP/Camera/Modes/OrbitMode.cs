@@ -41,7 +41,7 @@ namespace RobotSNAP.CameraControl
             float scroll = Input.GetAxis("Mouse ScrollWheel");
             if (scroll != 0)
             {
-                _currentDistance -= scroll * c.zoomSpeed;
+                _currentDistance -= scroll * c.zoomSpeed * Time.deltaTime;
                 _currentDistance = Mathf.Clamp(_currentDistance, c.minDistance, c.maxDistance);
             }
         }

@@ -57,6 +57,7 @@ namespace RobotSNAP.Agents
 
         [Tooltip("Force d'interaction sociale (A)")]
         public float socialForceA = 375f;       // 1500/4
+        
 
         [Tooltip("Portée de l'interaction sociale (B)")]
         public float socialForceB = 0.16f;      // 0.08*2

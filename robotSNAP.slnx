@@ -1,7 +1,5 @@
 ﻿<Solution>
-  <Project Path="Unity.ShaderGraph.Editor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
-  <Project Path="Unity.UI.Shaders.Sample.csproj" />
-  <Project Path="Unity.UI.Shaders.Sample.Editor.csproj" />
+  <Project Path="UnityJapanOffice.Input.Runtime.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
 </Solution>

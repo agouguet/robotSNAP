@@ -18,7 +18,7 @@ namespace RobotSNAP.Core.Scenario
     {
         [Header("References")]
         [SerializeField] private ScenarioLoader _loader;
-        [SerializeField] private GridEnvironmentBuilder _gridBuilder;
+        [SerializeField] private EnvironmentBuilder _environmentBuilder;
 
         [Header("Prefabs")]
         [SerializeField] private GameObject _robotPrefab; 
@@ -96,7 +96,8 @@ namespace RobotSNAP.Core.Scenario
         private IEnumerator ApplyScenarioCoroutine()
         {
             // 1. Charger et construire la carte
-            yield return StartCoroutine(BuildMapFromScenario());
+            // yield return StartCoroutine(BuildMapFromScenario());
+            yield return StartCoroutine(_environmentBuilder.BuildEnvironment(_currentScenario.MapImage));
 
             // 2. Nettoyer les humains existants (les retourner au pool)
             if (_clearExistingHumans)
@@ -128,7 +129,7 @@ namespace RobotSNAP.Core.Scenario
                 yield break;
             }
 
-            if (_gridBuilder == null)
+            if (_environmentBuilder == null)
             {
                 OnApplicationError?.Invoke("GridEnvironmentBuilder not assigned, cannot build map.");
                 yield break;
@@ -141,7 +142,7 @@ namespace RobotSNAP.Core.Scenario
                     OnApplicationError?.Invoke($"Failed to load map texture: {_currentScenario.MapImage}");
                     yield break;
                 }
-                _gridBuilder.BuildFromTexture(texture, bounds);
+                _environmentBuilder.BuildFromTexture(texture, bounds);
             }
             yield return null;
         }
@@ -433,6 +434,15 @@ namespace RobotSNAP.Core.Scenario
             {
                 case "point":
                     human.SetGoal(ResolvePosition(goal.Reference));
+                    break;
+                case "random":
+                    Bounds bounds = ResolveBounds(goal.Reference);
+                    Vector3 randomGoal = new Vector3(
+                        UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
+                        bounds.center.y,
+                        UnityEngine.Random.Range(bounds.min.z, bounds.max.z)
+                    );
+                    human.SetGoal(randomGoal);
                     break;
                 case "wander":
                     _activeCoroutines.Add(StartCoroutine(WanderRoutine(human, goal.Radius)));

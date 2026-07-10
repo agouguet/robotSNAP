@@ -487,7 +487,8 @@ namespace RobotSNAP.UI
                 marker.transform.SetParent(transform);
                 marker.transform.localScale = Vector3.one * 0.3f;
                 var rend = marker.GetComponent<Renderer>();
-                rend.material = new Material(Shader.Find("Standard"));
+                // rend.material = new Material(Shader.Find("Standard"));
+                rend.material = new Material(Shader.Find("HDRP/Lit"));
                 rend.material.color = color;
                 Destroy(marker.GetComponent<Collider>());
                 _goalMarkers[id] = marker;

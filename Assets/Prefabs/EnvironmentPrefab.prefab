@@ -80,7 +80,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ffb318cf27123d10be277199c932cf8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _gridBuilder: {fileID: 2853346668875565706}
+  _environmentBuilder: {fileID: 0}
   _navMeshManager: {fileID: 9096556643226201497}
   _humanPool: {fileID: 3667904848397286231}
   _envROS: {fileID: 2285593503786529801}
@@ -97,7 +97,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _loader: {fileID: 0}
-  _gridBuilder: {fileID: 2853346668875565706}
+  _environmentBuilder: {fileID: 2853346668875565706}
   _robotPrefab: {fileID: 7195339433518795282, guid: a7f37e81683a824d98ee39033e995bda, type: 3}
   _clearExistingHumans: 1
   _resetRobotPosition: 1

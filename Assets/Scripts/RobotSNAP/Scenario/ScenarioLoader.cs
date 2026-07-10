@@ -9,6 +9,18 @@ using Newtonsoft.Json;
 
 namespace RobotSNAP.Core.Scenario
 {
+
+    public enum MapAssetKind { None, Image, Prefab }
+
+    public class MapAsset
+    {
+        public MapAssetKind Kind;
+        public Texture2D Texture;
+        public GameObject Prefab;
+        public Bounds Bounds; // Pour les images uniquement (ou calculé pour prefab)
+    }
+
+
     public sealed class ScenarioLoader : MonoBehaviour
     {
         [Header("Settings")]
@@ -31,6 +43,9 @@ namespace RobotSNAP.Core.Scenario
         public event Action<ScenarioData> OnScenarioLoaded;
         public event Action<string> OnScenarioError;
         public event Action<string, Texture2D> OnMapLoaded;
+
+
+        
 
         /// <summary>
         /// Met à jour les chemins à partir de la SimulationConfig active.
@@ -418,6 +433,15 @@ namespace RobotSNAP.Core.Scenario
             return true;
         }
 
+        public GameObject LoadMapPrefab(string path)
+        {
+            // Si vous utilisez Resources, le chemin est sans extension
+            GameObject prefab = Resources.Load<GameObject>(path);
+            if (prefab == null)
+                Debug.LogError($"[ScenarioLoader] Prefab not found at Resources path: {path}");
+            return prefab;
+        }
+
         // Classe interne pour la désérialisation
         [System.Serializable]
         private class MapMetadata
@@ -441,47 +465,39 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         /// <param name="mapName">Nom de la map (sans extension)</param>
         /// <returns>Texture2D de la map ou null</returns>
-        public Texture2D LoadMap(string mapName)
+        /// <summary>
+        /// Charge une carte en essayant d'abord comme Texture2D, puis comme GameObject (Prefab).
+        /// </summary>
+        public MapAsset LoadMap(string mapName)
         {
-            if (string.IsNullOrEmpty(mapName))
-                return null;
-            
-            // Vérifier le cache
-            if (_loadedMaps.TryGetValue(mapName, out var cached))
+            // 1. Essayer de charger en tant qu'image (comportement actuel)
+            if (LoadMapData(mapName, out Texture2D texture, out Bounds bounds))
             {
-                return cached;
-            }
-            
-            // Trouver le fichier
-            string filePath = FindMapFile(mapName);
-            if (filePath == null)
-            {
-                if (_logEvents) Debug.LogWarning($"[ScenarioLoader] Map not found: {mapName}");
-                return null;
-            }
-            
-            try
-            {
-                byte[] imageData = File.ReadAllBytes(filePath);
-                Texture2D texture = new Texture2D(2, 2);
-                texture.LoadImage(imageData);
-                texture.name = mapName;
-                
-                _loadedMaps[mapName] = texture;
-                OnMapLoaded?.Invoke(mapName, texture);
-                
-                if (_logEvents)
+                return new MapAsset
                 {
-                    Debug.Log($"[ScenarioLoader] Loaded map: {mapName} ({texture.width}x{texture.height})");
-                }
-                
-                return texture;
+                    Kind = MapAssetKind.Image,
+                    Texture = texture,
+                    Bounds = bounds,
+                    Prefab = null
+                };
             }
-            catch (Exception e)
+
+            // 2. Échec de l'image : essayer de charger en tant que prefab
+            GameObject prefab = Resources.Load<GameObject>(mapName);
+            if (prefab != null)
             {
-                Debug.LogError($"[ScenarioLoader] Failed to load map '{mapName}': {e.Message}");
-                return null;
+                return new MapAsset
+                {
+                    Kind = MapAssetKind.Prefab,
+                    Prefab = prefab,
+                    Texture = null,
+                    Bounds = new Bounds(Vector3.zero, Vector3.one) // Valeur par défaut, ou on peut la calculer plus tard
+                };
             }
+
+            // 3. Rien trouvé
+            Debug.LogError($"[ScenarioLoader] Map resource not found (tried as Image and Prefab): {mapName}");
+            return new MapAsset { Kind = MapAssetKind.None };
         }
         
         /// <summary>
@@ -489,13 +505,13 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         /// <param name="scenario">Scénario</param>
         /// <returns>Texture2D de la map ou null</returns>
-        public Texture2D LoadMapForScenario(ScenarioData scenario)
-        {
-            if (scenario == null || string.IsNullOrEmpty(scenario.MapImage))
-                return null;
+        // public Texture2D LoadMapForScenario(ScenarioData scenario)
+        // {
+        //     if (scenario == null || string.IsNullOrEmpty(scenario.MapImage))
+        //         return null;
             
-            return LoadMap(scenario.MapImage);
-        }
+        //     return LoadMap(scenario.MapImage);
+        // }
 
         #endregion
 

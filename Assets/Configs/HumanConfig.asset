@@ -11,27 +11,27 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e63fe2959f19b805eb79941006e53dd9, type: 3}
   m_Name: HumanConfig
-  m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.Human.HumanConfig
+  m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.Agents.HumanConfig
   showMovementParameters: 1
   showMovementController: 1
   showSFMParameters: 1
-  showONNXParameters: 0
-  showHybridParameters: 0
-  showAnimationParameters: 0
-  showNavigationParameters: 0
-  showVisualizationParameters: 0
+  showONNXParameters: 1
+  showHybridParameters: 1
+  showAnimationParameters: 1
+  showNavigationParameters: 1
+  showVisualizationParameters: 1
   desiredSpeed: 0.8
   maxSpeed: 1.2
   slowDownDistance: 1.5
-  controllerType: 0
+  controllerType: 2
   agentMass: 80
   agentRadius: 0.25
-  relaxationTime: 0.2
+  relaxationTime: 0.5
   goalForceStrength: 10
   goalForceDistance: 5
-  perceptionRadiusAgent: 4
+  perceptionRadiusAgent: 2.5
   socialForceA: 2000
-  socialForceB: 0.8
+  socialForceB: 0.08
   alignmentStrength: 0.3
   contactStiffnessK: 120000
   contactFrictionKappa: 240000
@@ -46,7 +46,7 @@ MonoBehaviour:
   robotRepulsionStrength: 10
   robotForceDistance: 0.8
   backwardDampening: 20
-  lateralDampening: 0.05
+  lateralDampening: 0.001
   robotRepulsionDampeningMin: 0.5
   robotRepulsionDampeningMax: 1
   onnxModelConfig: {fileID: 0}
@@ -59,9 +59,9 @@ MonoBehaviour:
   nextNavMinDistance: 0.3
   closeEnoughMinDistance: 0.2
   animationController: {fileID: 9100000, guid: d3b7ebf8605e64140b49960db196f694, type: 2}
-  animationSmoothing: 0.1
-  idleSpeedThreshold: 0.1
-  angularSpeed: 180
+  animationSmoothing: 0.6
+  idleSpeedThreshold: 0.5
+  angularSpeed: 360
   showPredictionGizmos: 1
   predictionColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   trajectoryColor: {r: 0, g: 0, b: 1, a: 1}

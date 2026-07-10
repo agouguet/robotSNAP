@@ -19,7 +19,7 @@ namespace RobotSNAP.Core
     public class GameManager : MonoBehaviour
     {
         [Header("Core Components")]
-        [SerializeField] private GridEnvironmentBuilder _gridBuilder;
+        [SerializeField] private EnvironmentBuilder _environmentBuilder;
         [SerializeField] private NavMeshManager _navMeshManager;
         // [SerializeField] private SpawnCoordinator _spawnCoordinator;
         [SerializeField] private HumanPoolManager _humanPool;
@@ -34,7 +34,7 @@ namespace RobotSNAP.Core
         // Properties
         public int EnvironmentId => _environmentId;
         public bool IsInitialized => _isInitialized;
-        public GridEnvironmentBuilder GridBuilder => _gridBuilder;
+        public EnvironmentBuilder EnvironmentBuilder => _environmentBuilder;
         public NavMeshManager NavMeshManager => _navMeshManager;
         // public SpawnCoordinator SpawnCoordinator => _spawnCoordinator;
         public HumanPoolManager HumanPool => _humanPool;

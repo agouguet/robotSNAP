@@ -3,21 +3,24 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using VYaml.Serialization;
 using Newtonsoft.Json;
 
 namespace RobotSNAP.Core.Scenario
 {
 
-    public enum MapAssetKind { None, Image, Prefab }
+    public enum MapAssetKind { None, Image, Prefab, Scene }
 
     public class MapAsset
     {
         public MapAssetKind Kind;
         public Texture2D Texture;
         public GameObject Prefab;
-        public Bounds Bounds; // Pour les images uniquement (ou calculé pour prefab)
+        public string SceneName;  // Nouveau : nom de la scène à charger
+        public Bounds Bounds;
     }
 
 
@@ -112,6 +115,34 @@ namespace RobotSNAP.Core.Scenario
                 }
             }
             return null;
+        }
+
+        private bool IsSceneExists(string sceneName)
+        {
+            Debug.Log($"[ScenarioLoader] Checking if scene exists: {sceneName}");
+            Debug.Log($"[ScenarioLoader] Scene count in build settings: {SceneManager.sceneCountInBuildSettings}");
+            #if UNITY_EDITOR
+                foreach (var scene in EditorBuildSettings.scenes)
+                {
+                    if (scene.enabled)
+                    {
+                        string name = Path.GetFileNameWithoutExtension(scene.path);
+                        if (name == sceneName)
+                            return true;
+                    }
+                }
+                return false;
+            #else
+                for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+                {
+                    Debug.Log($"[ScenarioLoader] Checking scene index {i} in build settings");
+                    string path = SceneUtility.GetScenePathByBuildIndex(i);
+                    string name = Path.GetFileNameWithoutExtension(path);
+                    if (name == sceneName)
+                        return true;
+                }
+                return false;
+            #endif
         }
 
         private ScenarioData ParseYaml(byte[] yamlBytes, string sourceName)
@@ -470,19 +501,20 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         public MapAsset LoadMap(string mapName)
         {
-            // 1. Essayer de charger en tant qu'image (comportement actuel)
-            if (LoadMapData(mapName, out Texture2D texture, out Bounds bounds))
+            // 1. Tenter de charger comme une Scene (additive)
+            if (IsSceneExists(mapName))
             {
                 return new MapAsset
                 {
-                    Kind = MapAssetKind.Image,
-                    Texture = texture,
-                    Bounds = bounds,
-                    Prefab = null
+                    Kind = MapAssetKind.Scene,
+                    SceneName = mapName,
+                    Texture = null,
+                    Prefab = null,
+                    Bounds = new Bounds(Vector3.zero, Vector3.one)
                 };
             }
 
-            // 2. Échec de l'image : essayer de charger en tant que prefab
+            // 2. Tenter de charger comme un Prefab (Resources)
             GameObject prefab = Resources.Load<GameObject>(mapName);
             if (prefab != null)
             {
@@ -491,12 +523,25 @@ namespace RobotSNAP.Core.Scenario
                     Kind = MapAssetKind.Prefab,
                     Prefab = prefab,
                     Texture = null,
-                    Bounds = new Bounds(Vector3.zero, Vector3.one) // Valeur par défaut, ou on peut la calculer plus tard
+                    SceneName = null,
+                    Bounds = new Bounds(Vector3.zero, Vector3.one)
                 };
             }
 
-            // 3. Rien trouvé
-            Debug.LogError($"[ScenarioLoader] Map resource not found (tried as Image and Prefab): {mapName}");
+            // 3. Tenter de charger comme une Image (comportement actuel)
+            if (LoadMapData(mapName, out Texture2D texture, out Bounds bounds))
+            {
+                return new MapAsset
+                {
+                    Kind = MapAssetKind.Image,
+                    Texture = texture,
+                    Bounds = bounds,
+                    Prefab = null,
+                    SceneName = null
+                };
+            }
+
+            Debug.LogError($"[ScenarioLoader] Map resource not found: {mapName}");
             return new MapAsset { Kind = MapAssetKind.None };
         }
         

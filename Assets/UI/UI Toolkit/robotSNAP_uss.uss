@@ -1,0 +1,6 @@
+:root {
+}
+
+.unity-base-slider--horizontal .unity-base-slider__tracker {
+    -unity-material: url("");
+}

@@ -213,6 +213,7 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.AI.Navigation;
+using UnityEngine.SceneManagement;
 using RobotSNAP.Core.Scenario;
 
 namespace RobotSNAP.Environment
@@ -230,6 +231,8 @@ namespace RobotSNAP.Environment
         private GameObject _currentEnvironmentInstance;
         private GameObject _floor;
         private GameObject _walls;
+        private string _loadedSceneName; // pour les Scenes
+
         private ScenarioLoader _loader;
 
         private void Awake()
@@ -247,19 +250,13 @@ namespace RobotSNAP.Environment
         /// </summary>
         public IEnumerator BuildEnvironment(string mapName)
         {
-            ClearEnvironment();
+            // 1. Nettoyer l'ancien
+            yield return StartCoroutine(ClearEnvironmentCoroutine());
 
-            if (string.IsNullOrEmpty(mapName))
-            {
-                Debug.Log("[EnvironmentBuilder] No map specified, skipping.");
-                yield break;
-            }
+            if (string.IsNullOrEmpty(mapName)) yield break;
 
             if (_loader == null)
-            {
-                Debug.LogError("[EnvironmentBuilder] ScenarioLoader not found.");
-                yield break;
-            }
+                _loader = FindObjectOfType<ScenarioLoader>();
 
             var asset = _loader.LoadMap(mapName);
 
@@ -267,31 +264,78 @@ namespace RobotSNAP.Environment
             {
                 case MapAssetKind.Image:
                     BuildFromTexture(asset.Texture, asset.Bounds);
-                    break;
+                    yield break;
 
                 case MapAssetKind.Prefab:
                     BuildFromPrefab(asset.Prefab);
+                    yield break;
+
+                case MapAssetKind.Scene:
+                    yield return StartCoroutine(LoadSceneAdditive(asset.SceneName));
                     break;
 
                 default:
                     Debug.LogError($"[EnvironmentBuilder] Failed to load map: {mapName}");
                     break;
             }
-
-            yield return null;
         }
 
-        public void ClearEnvironment()
+        private IEnumerator ClearEnvironmentCoroutine()
         {
+            // Nettoyer l'ancien prefab ou l'ancienne image
             if (_currentEnvironmentInstance != null) Destroy(_currentEnvironmentInstance);
             if (_floor != null) Destroy(_floor);
             if (_walls != null) Destroy(_walls);
             _currentEnvironmentInstance = null;
             _floor = null;
             _walls = null;
+
+            // Nettoyer l'ancienne scene additive
+            if (!string.IsNullOrEmpty(_loadedSceneName))
+            {
+                Scene scene = SceneManager.GetSceneByName(_loadedSceneName);
+                if (scene.isLoaded)
+                {
+                    yield return SceneManager.UnloadSceneAsync(scene);
+                }
+                _loadedSceneName = null;
+            }
+
+            yield return null;
         }
 
-         /// <summary>
+        private IEnumerator LoadSceneAdditive(string sceneName)
+        {
+            // Vérifier si la scene est déjà chargée (éviter les doublons)
+            Scene existingScene = SceneManager.GetSceneByName(sceneName);
+            if (existingScene.isLoaded)
+            {
+                Debug.LogWarning($"[EnvironmentBuilder] Scene {sceneName} is already loaded.");
+                _loadedSceneName = sceneName;
+                yield break;
+            }
+
+            // Charger la scene en additif
+            AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
+            while (!asyncLoad.isDone)
+                yield return null;
+
+            // Récupérer la scene chargée
+            Scene loadedScene = SceneManager.GetSceneByName(sceneName);
+            if (loadedScene.isLoaded)
+            {
+                _loadedSceneName = sceneName;
+                // Optionnel : déplacer la scene sous le parent de ce builder pour organiser la hiérarchie ?
+                // SceneManager.MoveGameObjectToScene(loadedScene.GetRootGameObjects()[0], this.gameObject.scene);
+                Debug.Log($"[EnvironmentBuilder] Scene {sceneName} loaded additively.");
+            }
+            else
+            {
+                Debug.LogError($"[EnvironmentBuilder] Failed to load scene: {sceneName}");
+            }
+        }
+
+        /// <summary>
         /// Construit l'environnement à partir de la texture d'occupation.
         /// </summary>
         /// <param name="occupancyTexture">Texture en niveaux de gris (blanc = libre, noir = mur)</param>

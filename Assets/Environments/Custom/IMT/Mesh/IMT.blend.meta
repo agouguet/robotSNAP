@@ -3,7 +3,32 @@ guid: 622741146ea8ce1a9818c70954c91ca5
 ModelImporter:
   serializedVersion: 24200
   internalIDToNameTable: []
-  externalObjects: {}
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_floor_wood
+    second: {fileID: 2100000, guid: fd26e245d0d835e64935f3f7c94a8409, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_floor_wood.001
+    second: {fileID: 2100000, guid: 96f33456ccacc48f5b92e007a35759c7, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_sol_lino
+    second: {fileID: 2100000, guid: 5286a3dc24f66baef975f240b9f48954, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_sol_lino.002
+    second: {fileID: 2100000, guid: f30e92d07ea7537ab8420d6c031e4599, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: M_sol_tile
+    second: {fileID: 2100000, guid: eef4202264ffa23c4b8b1a09673f70c9, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

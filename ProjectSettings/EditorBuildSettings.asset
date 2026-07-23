@@ -6,9 +6,6 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/UnityJapanOffice/Scenes/Base.unity
-    guid: 00000000000000000000000000000000
-  - enabled: 1
     path: Assets/Environments/ExternalAssets/UnityJapanOffice/Scenes/Base.unity
     guid: 7f62db489cfbb3c48b9401495a7a653f
   - enabled: 1
@@ -33,23 +30,8 @@ EditorBuildSettings:
     path: Assets/Environments/ExternalAssets/UnityJapanOffice/Scenes/NightB.unity
     guid: 6085043725c60594094703ba44e15e0b
   - enabled: 1
-    path: Assets/UnityJapanOffice/Scenes/EveningA.unity
-    guid: 00000000000000000000000000000000
-  - enabled: 1
-    path: Assets/UnityJapanOffice/Scenes/EveningB.unity
-    guid: 00000000000000000000000000000000
-  - enabled: 1
-    path: Assets/UnityJapanOffice/Scenes/NoonA.unity
-    guid: 00000000000000000000000000000000
-  - enabled: 1
-    path: Assets/UnityJapanOffice/Scenes/NoonB.unity
-    guid: 00000000000000000000000000000000
-  - enabled: 1
-    path: Assets/UnityJapanOffice/Scenes/NightA.unity
-    guid: 00000000000000000000000000000000
-  - enabled: 1
-    path: Assets/UnityJapanOffice/Scenes/NightB.unity
-    guid: 00000000000000000000000000000000
+    path: Assets/Scenes/Test.unity
+    guid: 15de09d01c44e755c88af831e7d84239
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

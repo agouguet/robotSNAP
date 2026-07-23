@@ -1,5 +1,4 @@
 ﻿<Solution>
   <Project Path="Assembly-CSharp.csproj" />
-  <Project Path="UnityJapanOffice.Input.Runtime.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
 </Solution>

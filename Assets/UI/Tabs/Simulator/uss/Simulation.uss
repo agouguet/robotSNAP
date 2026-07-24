@@ -7,67 +7,50 @@
     height: 20%;
 }
 
+/* Définition unique pour tous les boutons d'action */
 .action-button {
     flex-direction: row;
     align-items: center;
-    background-color: var(--button-bg);
-    border-radius: 8px;
-    padding: 10px 18px;
-    margin-left: 12px;
+    justify-content: center;          /* centre l'icône + texte horizontalement */
+    
+    background-color: var(--accent);
     border-width: 0;
-    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 10px 8px;                /* padding intérieur (ajustez selon besoin) */
+    margin: 0;                        /* on gérera les marges externes séparément */
+    margin-left: 18px;
+    
+    color: white;
     font-size: 14px;
+    
+    width: 150px;                     /* largeur fixe pour tous */
+    flex-shrink: 0;                  /* empêche le rétrécissement */
+    flex-grow: 0;                    /* empêche l'étirement */
+    min-width: 150px;                /* optionnel, pour forcer la largeur */
 }
 
-.action-button:hover {
-    background-color: var(--button-hover);
-}
-
-.split-button-container {
-    flex-direction: row;
-    margin-left: 12px;
-    border-radius: 8px;
-    overflow: hidden;
-    background-color: var(--accent);
-}
-
-.split-button-primary {
-    flex-direction: row;
-    align-items: center;
-    background-color: var(--accent);
-    border-width: 0;
-    padding: 10px 16px;
-    color: white;
-    margin: 0;
-}
-
-.split-button-primary Label {
+/* Couleur du texte et de l'icône en blanc */
+.action-button Label {
     color: white;
 }
 
-.split-button-primary .button-icon {
+.action-button .button-icon {
     -unity-background-image-tint-color: white;
+    margin-right: 6px;               /* espace entre l'icône et le texte */
 }
 
-.split-button-primary:hover {
+/* Hover */
+.action-button:hover {
     background-color: var(--accent-soft);
 }
 
-.split-button-arrow {
-    background-color: var(--accent);
-    border-width: 0;
-    border-left-width: 1px;
-    border-left-style: solid;
-    border-left-color: rgba(255, 255, 255, 0.3);
-    padding: 10px 12px;
-    color: white;
-    font-size: 12px;
-    margin: 0;
+.start-stop-button.running {
+    background-color: var(--danger-color, #c0392b);
+}
+.start-stop-button.running:hover {
+    background-color: var(--danger-hover, #e74c3c);
 }
 
-.split-button-arrow:hover {
-    background-color: var(--accent-soft);
-}
 
 .simulation-bottom-tabs-panel {
     flex-direction: column;
@@ -118,4 +101,9 @@
     background-color: var(--accent-glow);
 }
 
-
+.start-stop-button.running {
+    background-color: var(--danger-color, #c0392b);
+}
+.start-stop-button.running:hover {
+    background-color: var(--danger-hover, #e74c3c);
+}

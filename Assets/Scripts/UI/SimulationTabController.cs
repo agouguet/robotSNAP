@@ -1,13 +1,14 @@
 using UnityEngine.UIElements;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using System.Collections;
 using RobotSNAP;
+using RobotSNAP.Core;
 using RobotSNAP.Core.Scenario;
 
 public class SimulationTabController : MonoBehaviour
 {
     [SerializeField] private UIDocument uiDocument;
+    [SerializeField] private ScenarioManager scenarioManager; // à assigner dans l'inspecteur
 
     private Supervisor _supervisor;
     private bool _isInitialized = false;
@@ -17,15 +18,16 @@ public class SimulationTabController : MonoBehaviour
     private VisualElement _viewMenu;
     private Button _fullscreenButton;
     private Button _loadScenarioButton;
-    private Button _startButton;
-    private Button _dropdownArrow;
+    private Button _startStopButton;
+    private Button _pauseResumeButton;
     private VisualElement _cameraOverlay;
+
+    private enum SimState { Idle, Running, Paused }
+    private SimState _currentState = SimState.Idle;
 
     private void OnEnable()
     {
-        // S'abonner à l'événement statique
         MainViewController.OnViewLoaded += OnViewLoaded;
-        // Cas où la vue Simulator serait déjà chargée (si le script est activé après)
         if (uiDocument != null && uiDocument.rootVisualElement.Q<Button>("ViewButton") != null)
             TryInitialize();
     }
@@ -55,26 +57,43 @@ public class SimulationTabController : MonoBehaviour
         _viewMenu = _root.Q<VisualElement>("ViewMenu");
         _fullscreenButton = _root.Q<Button>("FullScreenButton");
         _loadScenarioButton = _root.Q<Button>("LoadScenarioButton");
-        _startButton = _root.Q<Button>("StartSimulationButton");
-        _dropdownArrow = _root.Q<Button>("DropdownArrowButton");
+        _startStopButton = _root.Q<Button>("StartStopButton");
+        _pauseResumeButton = _root.Q<Button>("PauseResumeButton");
         _cameraOverlay = _root.Q<VisualElement>("CameraOverlay");
 
-        if (_viewButton != null && _viewMenu != null && _fullscreenButton != null)
+        if (_viewButton == null || _viewMenu == null || _fullscreenButton == null ||
+            _startStopButton == null || _pauseResumeButton == null)
         {
-            _isInitialized = true;
-            Initialize();
-            // Une fois initialisé, on peut se désabonner pour ne plus être appelé
-            MainViewController.OnViewLoaded -= OnViewLoaded;
+            Debug.LogWarning("SimulationTabController: certains éléments UI sont manquants.");
+            return;
         }
+
+        _supervisor = Supervisor.Instance;
+        if (_supervisor == null)
+        {
+            Debug.LogError("Supervisor introuvable.");
+            return;
+        }
+
+        if (scenarioManager == null)
+            scenarioManager = FindObjectOfType<ScenarioManager>();
+        if (scenarioManager == null)
+        {
+            Debug.LogError("ScenarioManager introuvable.");
+            return;
+        }
+
+        _isInitialized = true;
+        Initialize();
+        MainViewController.OnViewLoaded -= OnViewLoaded;
     }
 
     private void Initialize()
     {
+        // === Menu de sélection de vue ===
         _viewButton.clicked += () =>
         {
-            _viewMenu.style.display = (_viewMenu.style.display == DisplayStyle.Flex) 
-                ? DisplayStyle.None 
-                : DisplayStyle.Flex;
+            _viewMenu.style.display = (_viewMenu.style.display == DisplayStyle.Flex) ? DisplayStyle.None : DisplayStyle.Flex;
         };
 
         foreach (var option in _viewMenu.Children())
@@ -95,133 +114,159 @@ public class SimulationTabController : MonoBehaviour
             if (_viewMenu.style.display != DisplayStyle.Flex) return;
             VisualElement target = evt.target as VisualElement;
             if (target != _viewButton && !_viewMenu.Contains(target))
-            {
                 _viewMenu.style.display = DisplayStyle.None;
-            }
         });
 
-        if (_fullscreenButton != null)
-            _fullscreenButton.clicked += ToggleFullscreen;
-        if (_loadScenarioButton != null)
-            _loadScenarioButton.clicked += OnLoadScenarioClicked;
-        if (_startButton != null)
-            _startButton.clicked += OnStartSimulationClicked;
-        if (_dropdownArrow != null)
-            _dropdownArrow.clicked += ShowSimulationMenu;
-        if (_cameraOverlay != null && Supervisor.Instance != null)
-        {
-            UpdateOverlayVisibility(Supervisor.Instance.IsPaused);
-            // Idéalement, écoutez un événement. Sinon, une coroutine simple :
-            StartCoroutine(CheckPauseState());
-        }
+        // === Plein écran ===
+        _fullscreenButton.clicked += ToggleFullscreen;
+
+        // === Load Scenario ===
+        _loadScenarioButton.clicked += OnLoadScenarioClicked;
+
+        // === Start / Stop ===
+        _startStopButton.clicked += OnStartStopClicked;
+
+        // === Pause / Resume ===
+        _pauseResumeButton.clicked += OnPauseResumeClicked;
+
+        // === État initial ===
+        UpdateUI();
+
+        // === Surveillance des changements d'état ===
+        StartCoroutine(CheckStatePeriodically());
+
+        // Souscrire aux événements de ScenarioManager et Supervisor si nécessaire
+        // (par exemple, OnScenarioLoaded, OnScenarioApplied, etc.)
     }
 
     private void OnViewChanged(string viewName)
     {
-        Camera cam = GetComponent<Camera>(); // ou trouvez la caméra de simulation autrement
+        // Implémentez le changement de vue (caméra orthographique, etc.)
+        Camera cam = GetComponent<Camera>();
         if (cam != null)
         {
             switch (viewName)
             {
-                case "3D":
-                    cam.orthographic = false;
-                    break;
-                case "2D":
-                    cam.orthographic = true;
-                    break;
-                // autres vues...
+                case "3D": cam.orthographic = false; break;
+                case "2D": cam.orthographic = true; break;
             }
         }
     }
 
     private void OnLoadScenarioClicked()
     {
-        
+        // Ouvrir un dialogue pour choisir un scénario, puis charger
+        // Exemple : scenarioManager.LoadScenario("mon_scenario");
     }
 
-    private void OnStartSimulationClicked()
+    private void OnStartStopClicked()
     {
-        var supervisor = Supervisor.Instance;
-        if (supervisor == null) return;
-
-        // Si la simulation est en pause, on la reprend ; sinon, on la met en pause.
-        if (supervisor.IsPaused) // à définir dans Supervisor
-            supervisor.Resume();
-        else
-            supervisor.Pause();
-
-        UpdateStartButtonState(supervisor.IsPaused);
-    }
-
-    private void UpdateStartButtonState(bool isPaused)
-    {
-        if (_startButton == null) return;
-        // Changer l'icône et le texte selon l'état
-        var icon = _startButton.Q<VisualElement>("button-icon");
-        var label = _startButton.Q<Label>("button-label");
-        if (isPaused) // simulation en pause → bouton "Play"
+        switch (_currentState)
         {
-            if (icon != null) icon.style.backgroundImage = new StyleBackground(Resources.Load<Texture2D>("Icons/play"));
-            if (label != null) label.text = "Start simulation";
+            case SimState.Idle:
+                // Démarrer la simulation
+                scenarioManager.StartSimulation();
+                break;
+            case SimState.Running:
+            case SimState.Paused:
+                // Arrêter (stop)
+                scenarioManager.StopSimulation();
+                break;
         }
-        else // simulation en cours → bouton "Pause"
-        {
-            if (icon != null) icon.style.backgroundImage = new StyleBackground(Resources.Load<Texture2D>("Icons/pause"));
-            if (label != null) label.text = "Pause";
-        }
+        // L'UI sera mise à jour par la coroutine
     }
 
-    private void ShowSimulationMenu()
+    private void OnPauseResumeClicked()
     {
-        // Créer un menu temporaire (ou réutiliser un élément caché)
-        var menu = new VisualElement();
-        menu.AddToClassList("simulation-menu");
-        menu.style.position = Position.Absolute;
-        menu.style.backgroundColor = new StyleColor(new Color(0.2f, 0.2f, 0.2f));
-        // menu.style.borderRadius = 8;
-        // menu.style.padding = 8;
-
-        // Obtenir la position du bouton flèche
-        var arrowPos = _dropdownArrow.worldBound;
-        menu.style.top = arrowPos.yMax;
-        menu.style.left = arrowPos.xMin;
-
-        // Ajouter les options
-        var pauseItem = new Button(() => { Supervisor.Instance.Pause(); }) { text = "Pause" };
-        var resetItem = new Button(() => { FindObjectOfType<ScenarioManager>()?.ResetAndReapply(); }) { text = "Reset" };
-        var stepItem = new Button(() => { Supervisor.Instance.Pause(); }) { text = "Step" };
-
-        menu.Add(pauseItem);
-        menu.Add(resetItem);
-        menu.Add(stepItem);
-
-        _root.Add(menu);
-
-        // Fermer le menu en cliquant ailleurs
-        _root.RegisterCallback<ClickEvent>(evt =>
+        if (_currentState == SimState.Running)
         {
-            if (menu.parent != null && evt.target != _dropdownArrow && !menu.Contains(evt.target as VisualElement))
-                menu.RemoveFromHierarchy();
-        });
+            _supervisor.Pause();
+        }
+        else if (_currentState == SimState.Paused)
+        {
+            _supervisor.Resume();
+        }
     }
 
     private void ToggleFullscreen()
     {
-
+        // Implémentez le plein écran (Screen.fullScreen = !Screen.fullScreen)
     }
 
-    private IEnumerator CheckPauseState()
+    private IEnumerator CheckStatePeriodically()
     {
         while (true)
         {
-            yield return new WaitForSeconds(0.2f);
-            if (Supervisor.Instance != null)
-                UpdateOverlayVisibility(Supervisor.Instance.IsPaused);
+            yield return new WaitForSeconds(0.1f);
+            UpdateUI();
         }
     }
 
-    private void UpdateOverlayVisibility(bool isPaused)
+    private void UpdateUI()
     {
-        _cameraOverlay.style.display = isPaused ? DisplayStyle.Flex : DisplayStyle.None;
+        // Déterminer l'état
+        SimState newState;
+        bool hasScenario = scenarioManager.HasScenarioLoaded;
+        bool isPaused = _supervisor.IsPaused;
+
+        if (!hasScenario)
+            newState = SimState.Idle;
+        else if (!isPaused)
+            newState = SimState.Running;
+        else
+            newState = SimState.Paused;
+
+        if (newState != _currentState)
+        {
+            _currentState = newState;
+            // Optionnel : déclencher un événement de changement d'état
+        }
+
+        // Mettre à jour les boutons
+        var startIcon = _startStopButton?.Q<VisualElement>("StartStopIcon");
+        var startLabel = _startStopButton?.Q<Label>("StartStopLabel");
+
+        switch (newState)
+        {
+            case SimState.Idle:
+                if (startLabel != null) startLabel.text = "Start";
+                if (startIcon != null) SetIcon(startIcon, "play");
+                _pauseResumeButton.SetEnabled(false);
+                break;
+
+            case SimState.Running:
+                if (startLabel != null) startLabel.text = "Stop";
+                if (startIcon != null) SetIcon(startIcon, "stop");
+                _pauseResumeButton.SetEnabled(true);
+                SetPauseResumeText("Pause", "pause");
+                break;
+
+            case SimState.Paused:
+                if (startLabel != null) startLabel.text = "Stop";
+                if (startIcon != null) SetIcon(startIcon, "stop");
+                _pauseResumeButton.SetEnabled(true);
+                SetPauseResumeText("Resume", "play");
+                break;
+        }
+
+        // Overlay de pause
+        if (_cameraOverlay != null)
+            _cameraOverlay.style.display = (newState == SimState.Paused) ? DisplayStyle.Flex : DisplayStyle.None;
+    }
+
+    private void SetPauseResumeText(string text, string iconName)
+    {
+        var label = _pauseResumeButton?.Q<Label>("PauseResumeLabel");
+        var icon = _pauseResumeButton?.Q<VisualElement>("PauseResumeIcon");
+        if (label != null) label.text = text;
+        if (icon != null) SetIcon(icon, iconName);
+    }
+
+    private void SetIcon(VisualElement iconElement, string iconName)
+    {
+        // Chargez votre icône depuis Resources ou autre
+        Texture2D tex = Resources.Load<Texture2D>($"Icons/{iconName}");
+        if (tex != null)
+            iconElement.style.backgroundImage = new StyleBackground(tex);
     }
 }

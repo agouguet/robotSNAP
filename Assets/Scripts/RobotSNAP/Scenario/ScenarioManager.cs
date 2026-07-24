@@ -67,13 +67,78 @@ namespace RobotSNAP.Core.Scenario
         private void Start()
         {
             // Le Supervisor peut appeler LoadDefaultScenario() après son initialisation
-            LoadDefaultScenario();
+            // LoadDefaultScenario();
+            EventBus.Instance.Subscribe<ResetRequestEvent>(OnResetRequest);
+            EventBus.Instance.Subscribe<PlayStateChangedEvent>(OnPlayStateChanged);
         }
 
         private void OnDestroy()
         {
             CancelLoad();
             ClearEnvironments();
+            EventBus.Instance.Unsubscribe<ResetRequestEvent>(OnResetRequest);
+            EventBus.Instance.Unsubscribe<PlayStateChangedEvent>(OnPlayStateChanged);
+        }
+
+        private void OnResetRequest(ResetRequestEvent evt)
+        {
+            Debug.Log($"[ScenarioManager] ResetRequestEvent received");
+            LoadDefaultScenario();
+        }
+        
+        private void OnPlayStateChanged(PlayStateChangedEvent evt)
+        {
+            // pass
+            Debug.Log($"[ScenarioManager] PlayStateChangedEvent received: isPlaying={evt.isPlaying}");
+            if (evt.isPlaying)
+            {
+                // Simulation resumed
+                // pass
+            }
+            else
+            {
+                // Simulation paused
+                // pass
+            }
+            
+        }
+
+        /// <summary>
+        /// Démarre la simulation : charge le scénario par défaut (si pas déjà chargé) et reprend le Clock.
+        /// </summary>
+        public void StartSimulation()
+        {
+            if (!HasScenarioLoaded)
+            {
+                LoadDefaultScenario();
+                // On attend que le chargement soit fini ? On peut utiliser une coroutine, mais pour simplifier on suppose que LoadDefaultScenario est synchrone (ou on utilise un booléen).
+                // Ici, on va simplement appeler Resume après un petit délai.
+                StartCoroutine(StartAfterLoad());
+            }
+            else
+            {
+                // Si déjà chargé, juste reprendre
+                Supervisor.Instance?.Resume();
+            }
+        }
+
+        private IEnumerator StartAfterLoad()
+        {
+            // Attendre que le chargement soit effectif (si asynchrone, on peut attendre un frame ou utiliser un callback)
+            yield return null; // ou attendre que _isLoading soit false
+            Supervisor.Instance?.Resume();
+        }
+
+        /// <summary>
+        /// Arrête complètement la simulation : détruit les environnements, vide le scénario chargé, et met le Clock en pause.
+        /// </summary>
+        public void StopSimulation()
+        {
+            Supervisor.Instance?.Pause(); // on met en pause pour figer tout
+            ClearEnvironments();
+            _currentScenarioData = null;
+            _currentScenarioId = null;
+            // On pourrait aussi réinitialiser les GameManagers si on veut les garder, mais on les supprime.
         }
 
         private void EnsureDependencies()

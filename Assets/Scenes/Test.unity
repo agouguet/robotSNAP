@@ -604,57 +604,6 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 4787754478723403522, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
   m_PrefabInstance: {fileID: 1599894184}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &306017456
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 306017457}
-  - component: {fileID: 306017458}
-  m_Layer: 0
-  m_Name: Corridor 1
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &306017457
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 306017456}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 10.403048, y: -1.3914227, z: -7.989094}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1251608264}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &306017458
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 306017456}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5c61b7a04f29ad49a0985f4fb6c436d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.RenderPipelines.HighDefinition.Runtime::UnityEngine.Rendering.HighDefinition.ReflectionProxyVolumeComponent
-  m_ProxyVolume:
-    m_CSVersion: 2
-    m_ObsoleteSphereInfiniteProjection: 0
-    m_ObsoleteBoxInfiniteProjection: 0
-    m_Shape: 0
-    m_BoxSize: {x: 2.6555634, y: 2.6451912, z: 11.352654}
-    m_SphereRadius: 1
 --- !u!1 &343829361
 GameObject:
   m_ObjectHideFlags: 0
@@ -670,7 +619,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &343829362
 Transform:
   m_ObjectHideFlags: 0
@@ -707,7 +656,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &383068278
 Transform:
   m_ObjectHideFlags: 0
@@ -724,6 +673,74 @@ Transform:
   - {fileID: 1886606526}
   m_Father: {fileID: 348459851}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &394659719
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 394659720}
+  - component: {fileID: 394659721}
+  m_Layer: 0
+  m_Name: Probe Adjustment Volume (2)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &394659720
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 394659719}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.009708405, y: 2.7302642, z: -7.408577}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1599894188}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &394659721
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 394659719}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55f90731af2ebc94fb7fdaebe2a9a409, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.ProbeAdjustmentVolume
+  shape: 0
+  size: {x: 79.499886, y: 0.32685494, z: 32.718483}
+  radius: 1
+  mode: 0
+  intensityScale: 1
+  overriddenDilationThreshold: 0.75
+  virtualOffsetRotation: {x: 0, y: 0, z: 0}
+  virtualOffsetDistance: 1
+  geometryBias: 0.01
+  virtualOffsetThreshold: 0.75
+  rayOriginBias: -0.001
+  skyDirection: {x: 0, y: 0, z: 0}
+  directSampleCount: 32
+  indirectSampleCount: 512
+  sampleCountMultiplier: 4
+  maxBounces: 2
+  skyOcclusionSampleCount: 2048
+  skyOcclusionMaxBounces: 2
+  renderingLayerMaskOperation: 0
+  renderingLayerMask: 0
+  cachedHashCode: -1994365703
+  version: 1
+  invalidateProbes: 0
+  overrideDilationThreshold: 0
 --- !u!1 &466993710
 GameObject:
   m_ObjectHideFlags: 0
@@ -836,6 +853,74 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 466993710}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &488542918
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 488542919}
+  - component: {fileID: 488542920}
+  m_Layer: 0
+  m_Name: Probe Adjustment Volume (1)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &488542919
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 488542918}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.009708405, y: 6.103, z: -7.408577}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1599894188}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &488542920
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 488542918}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55f90731af2ebc94fb7fdaebe2a9a409, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.ProbeAdjustmentVolume
+  shape: 0
+  size: {x: 79.499886, y: 1.5663265, z: 32.718483}
+  radius: 1
+  mode: 0
+  intensityScale: 1
+  overriddenDilationThreshold: 0.75
+  virtualOffsetRotation: {x: 0, y: 0, z: 0}
+  virtualOffsetDistance: 1
+  geometryBias: 0.01
+  virtualOffsetThreshold: 0.75
+  rayOriginBias: -0.001
+  skyDirection: {x: 0, y: 0, z: 0}
+  directSampleCount: 32
+  indirectSampleCount: 512
+  sampleCountMultiplier: 4
+  maxBounces: 2
+  skyOcclusionSampleCount: 2048
+  skyOcclusionMaxBounces: 2
+  renderingLayerMaskOperation: 0
+  renderingLayerMask: 0
+  cachedHashCode: -1136781333
+  version: 1
+  invalidateProbes: 0
+  overrideDilationThreshold: 0
 --- !u!1 &533055269
 GameObject:
   m_ObjectHideFlags: 0
@@ -3908,11 +3993,6 @@ ReflectionProbe:
   m_UseOcclusionCulling: 1
   m_Importance: 1
   m_CustomBakedTexture: {fileID: 0}
---- !u!4 &1251608264 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 4614474755798720249, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
-  m_PrefabInstance: {fileID: 1599894184}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1358535770
 GameObject:
   m_ObjectHideFlags: 0
@@ -4937,12 +5017,16 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 116314712869433254, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_RenderingLayerMask
-      value: 2
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 116314712869433254, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_StaticShadowCaster
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 116314712869433254, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 5286a3dc24f66baef975f240b9f48954, type: 2}
     - target: {fileID: 134714330231298435, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_Color.b
       value: 1
@@ -4965,15 +5049,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 134714330231298435, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_BoundingSphereOverride.w
-      value: -5.987026
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 134714330231298435, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_BoundingSphereOverride.x
-      value: 4.1093e-41
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 134714330231298435, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_BoundingSphereOverride.y
-      value: 0
+      value: 4.26e-43
       objectReference: {fileID: 0}
     - target: {fileID: 134714330231298435, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_BoundingSphereOverride.z
@@ -4989,111 +5073,111 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 0]'
-      value: 64.59946
+      value: 88.64444
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 1]'
-      value: -4.283529
+      value: -6.6158595
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 2]'
-      value: 3.3902683
+      value: -2.514884
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 3]'
-      value: 23.742638
+      value: 16.702835
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 4]'
-      value: -5.9028597
+      value: -6.528396
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 5]'
-      value: -7.778152
+      value: -4.110477
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 6]'
-      value: -3.9948301
+      value: -1.8815639
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 7]'
-      value: 3.9412053
+      value: 5.243414
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 8]'
-      value: 11.465528
+      value: 10.358816
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 9]'
-      value: 32.22267
+      value: 42.406746
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[10]'
-      value: -5.919806
+      value: -6.6520925
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[11]'
-      value: 3.4469683
+      value: -1.7244567
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[12]'
-      value: 5.4126334
+      value: -2.5838666
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[13]'
-      value: -3.7669814
+      value: -3.5558848
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[14]'
-      value: -4.0946975
+      value: -1.7286571
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[15]'
-      value: -2.3264382
+      value: -1.0762218
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[16]'
-      value: 1.4006586
+      value: 2.14136
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[17]'
-      value: 6.7796855
+      value: 5.7350926
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[18]'
-      value: 19.635254
+      value: 22.864592
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[19]'
-      value: -4.991884
+      value: -4.670469
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[20]'
-      value: 2.5596256
+      value: -0.846838
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[21]'
-      value: -2.5170639
+      value: -8.873906
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[22]'
-      value: -1.8540395
+      value: -1.5749263
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[23]'
-      value: -2.1721215
+      value: -0.14328952
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[24]'
-      value: -1.4453694
+      value: -0.5895806
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[25]'
-      value: -0.09133737
+      value: -0.06817755
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[26]'
-      value: 4.8076506
+      value: 3.54456
       objectReference: {fileID: 0}
     - target: {fileID: 203175591181728952, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_HasValidSHForNormalization
@@ -5211,6 +5295,10 @@ PrefabInstance:
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: 92b9f39004e53ae71a606f8e71ac3fb3, type: 2}
+    - target: {fileID: 858001732301307683, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 873911930436329427, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_IsActive
       value: 1
@@ -5222,114 +5310,114 @@ PrefabInstance:
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_ProxyVolume
       value: 
-      objectReference: {fileID: 1706580099}
+      objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 0]'
-      value: 3.4028235e+38
+      value: 0.018106585
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 1]'
-      value: 0
+      value: 0.0006928489
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 2]'
-      value: 0
+      value: 0.0058733276
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 3]'
-      value: 0
+      value: 0.019918736
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 4]'
-      value: 0
+      value: 0.0003699284
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 5]'
-      value: 0
+      value: 0.000107912565
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 6]'
-      value: 0
+      value: -0.00073280936
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 7]'
-      value: 0
+      value: 0.0031336609
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 8]'
-      value: 0
+      value: 0.0026532332
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 9]'
-      value: 3.4028235e+38
+      value: 0.021060232
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[10]'
-      value: 0
+      value: 0.0007988811
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[11]'
-      value: 0
+      value: 0.0068349973
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[12]'
-      value: 0
+      value: 0.02316718
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[13]'
-      value: 0
+      value: 0.00042652953
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[14]'
-      value: 0
+      value: 0.00012447964
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[15]'
-      value: 0
+      value: -0.0008520675
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[16]'
-      value: 0
+      value: 0.0036466215
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[17]'
-      value: 0
+      value: 0.0030858887
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[18]'
-      value: 3.4028235e+38
+      value: 0.02007549
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[19]'
-      value: 0
+      value: 0.0007481753
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[20]'
-      value: 0
+      value: 0.0065222415
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[21]'
-      value: 0
+      value: 0.022082351
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[22]'
-      value: 0
+      value: 0.00039943424
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[23]'
-      value: 0
+      value: 0.00011667969
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[24]'
-      value: 0
+      value: -0.00081168755
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[25]'
-      value: 0
+      value: 0.0034795133
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[26]'
-      value: 0
+      value: 0.002941301
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_HasValidSHForNormalization
@@ -5341,15 +5429,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_SHValidForCapturePosition.x
-      value: 12.030791
+      value: 12.027
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_SHValidForCapturePosition.y
-      value: 1.3330772
+      value: 1.35
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_SHValidForCapturePosition.z
-      value: -19.914984
+      value: -19.764
       objectReference: {fileID: 0}
     - target: {fileID: 987617842641610783, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_ProbeSettings.distanceBasedRoughness
@@ -5366,114 +5454,114 @@ PrefabInstance:
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_ProxyVolume
       value: 
-      objectReference: {fileID: 306017458}
+      objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 0]'
-      value: 0.20749111
+      value: 0.43593886
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 1]'
-      value: -0.014195891
+      value: 0.04851538
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 2]'
-      value: 0.2344505
+      value: 0.46115744
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 3]'
-      value: -0.028352479
+      value: -0.037846286
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 4]'
-      value: 0.0015968345
+      value: 0.004234686
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 5]'
-      value: -0.007616162
+      value: 0.012618078
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 6]'
-      value: 0.021088768
+      value: 0.03940429
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 7]'
-      value: -0.015314806
+      value: -0.026892671
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 8]'
-      value: 0.00042429892
+      value: -0.0038532445
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 9]'
-      value: 0.0883913
+      value: 0.14339426
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[10]'
-      value: -0.004075189
+      value: 0.013267764
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[11]'
-      value: 0.10030294
+      value: 0.15140195
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[12]'
-      value: -0.010189805
+      value: -0.011919226
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[13]'
-      value: 0.00045939468
+      value: 0.0011471685
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[14]'
-      value: -0.0021860476
+      value: 0.0031699862
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[15]'
-      value: 0.009099729
+      value: 0.013222156
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[16]'
-      value: -0.005535063
+      value: -0.009163228
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[17]'
-      value: 0.00013666209
+      value: -0.00082660146
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[18]'
-      value: 0.05177122
+      value: 0.041313473
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[19]'
-      value: -0.0012128047
+      value: 0.0033464478
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[20]'
-      value: 0.059024185
+      value: 0.04281258
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[21]'
-      value: -0.004629492
+      value: -0.0029423507
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[22]'
-      value: 0.00013214223
+      value: 0.00029750218
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[23]'
-      value: -0.0006514988
+      value: 0.00057487306
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[24]'
-      value: 0.0054047853
+      value: 0.003828657
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[25]'
-      value: -0.0025365972
+      value: -0.002758051
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[26]'
-      value: 0.000047869486
+      value: -0.000121251804
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_HasValidSHForNormalization
@@ -5489,15 +5577,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_SHValidForCapturePosition.x
-      value: 10.380838
+      value: 10.602
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_SHValidForCapturePosition.y
-      value: 1.3330772
+      value: 1.35
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_SHValidForCapturePosition.z
-      value: -16.505077
+      value: -14.854
       objectReference: {fileID: 0}
     - target: {fileID: 1022883489647358610, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_ProbeSettings.influence.m_BoxSize.x
@@ -5539,117 +5627,121 @@ PrefabInstance:
       propertyPath: m_StaticEditorFlags
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1547644564001201902, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1911772143927898800, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 0]'
-      value: 0.22357593
+      value: 1.2290226
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 1]'
-      value: 0.009725603
+      value: 0.061291516
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 2]'
-      value: -0.0013019665
+      value: -0.15841725
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 3]'
-      value: 0.13086413
+      value: 0.66785175
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 4]'
-      value: -0.0063032047
+      value: -0.016424345
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 5]'
-      value: -0.008855078
+      value: 0.011152969
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 6]'
-      value: -0.002215921
+      value: -0.015099188
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 7]'
-      value: 0.0011246956
+      value: -0.050876003
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 8]'
-      value: 0.011898192
+      value: 0.07994664
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[ 9]'
-      value: 0.1145213
+      value: 0.6579089
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[10]'
-      value: 0.0036311522
+      value: -0.00037611002
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[11]'
-      value: -0.008791829
+      value: -0.10821308
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[12]'
-      value: 0.07151907
+      value: 0.447882
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[13]'
-      value: -0.0025648496
+      value: -0.012741805
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[14]'
-      value: -0.005288866
+      value: 0.008646735
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[15]'
-      value: -0.000947726
+      value: -0.009533811
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[16]'
-      value: 0.000026613212
+      value: -0.042878326
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[17]'
-      value: 0.0064742933
+      value: 0.046511095
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[18]'
-      value: 0.077014625
+      value: 0.32948887
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[19]'
-      value: 0.00042833225
+      value: -0.0197662
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[20]'
-      value: -0.010767382
+      value: -0.06726345
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[21]'
-      value: 0.048461445
+      value: 0.25513798
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[22]'
-      value: -0.0020343384
+      value: -0.010723719
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[23]'
-      value: -0.0040728515
+      value: 0.0067902105
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[24]'
-      value: -0.00039545042
+      value: -0.0059501017
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[25]'
-      value: -0.00087459636
+      value: -0.0275326
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[26]'
-      value: 0.0043282364
+      value: 0.025757408
       objectReference: {fileID: 0}
     - target: {fileID: 1923017094827585042, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_HasValidSHForNormalization
@@ -5827,6 +5919,10 @@ PrefabInstance:
       propertyPath: m_StaticEditorFlags
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 2679608021782211748, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2771056747423642649, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
@@ -5970,6 +6066,10 @@ PrefabInstance:
     - target: {fileID: 3399404358016680392, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_LocalPosition.z
       value: -14.854
+      objectReference: {fileID: 0}
+    - target: {fileID: 3567069323775590444, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3592975896708126601, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_LocalPosition.x
@@ -6235,6 +6335,14 @@ PrefabInstance:
       propertyPath: m_LocalPosition.z
       value: -4.958
       objectReference: {fileID: 0}
+    - target: {fileID: 4557886782115131246, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      propertyPath: m_RenderingLayerMask
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4557886782115131246, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 5286a3dc24f66baef975f240b9f48954, type: 2}
     - target: {fileID: 4590664270046904431, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_LocalPosition.x
       value: -10.54
@@ -6354,6 +6462,10 @@ PrefabInstance:
     - target: {fileID: 4771460986392890169, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_SHForNormalization.sh[26]'
       value: -0.000053935513
+      objectReference: {fileID: 0}
+    - target: {fileID: 4787754478723403522, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4856099922667027982, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_StaticEditorFlags
@@ -6875,6 +6987,10 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 7747954138015094355, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7782618575967862931, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: m_StaticEditorFlags
       value: 0
@@ -6913,10 +7029,14 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8460272303387809832, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: mightNeedRebaking
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8460272303387809832, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: overrideRendererFilters
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8460272303387809832, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      propertyPath: lowestSubdivLevelOverride
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8567370279816795105, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
@@ -7129,7 +7249,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8875616965136051158, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: parameters.meanFreePath
-      value: 1
+      value: 50
       objectReference: {fileID: 0}
     - target: {fileID: 8881988596628230665, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
@@ -7305,12 +7425,15 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 5005821773463311115, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       insertIndex: -1
       addedObject: {fileID: 533055270}
-    - targetCorrespondingSourceObject: {fileID: 4614474755798720249, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+    - targetCorrespondingSourceObject: {fileID: 2801553692510500981, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 306017457}
-    - targetCorrespondingSourceObject: {fileID: 4614474755798720249, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      addedObject: {fileID: 2063710296}
+    - targetCorrespondingSourceObject: {fileID: 2801553692510500981, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1706580098}
+      addedObject: {fileID: 488542919}
+    - targetCorrespondingSourceObject: {fileID: 2801553692510500981, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 394659720}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
 --- !u!4 &1599894185 stripped
@@ -7326,6 +7449,11 @@ GameObject:
 --- !u!1 &1599894187 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 858001732301307683, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
+  m_PrefabInstance: {fileID: 1599894184}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &1599894188 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2801553692510500981, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
   m_PrefabInstance: {fileID: 1599894184}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &1599894190 stripped
@@ -7358,57 +7486,6 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 2090976634137258292, guid: 20df415e2f29c947b8a79481498febc9, type: 3}
   m_PrefabInstance: {fileID: 1599894184}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &1706580097
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1706580098}
-  - component: {fileID: 1706580099}
-  m_Layer: 0
-  m_Name: Corridor 1 (1)
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1706580098
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1706580097}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 12.053, y: -1.3914227, z: -11.399}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1251608264}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1706580099
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1706580097}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5c61b7a04f29ad49a0985f4fb6c436d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.RenderPipelines.HighDefinition.Runtime::UnityEngine.Rendering.HighDefinition.ReflectionProxyVolumeComponent
-  m_ProxyVolume:
-    m_CSVersion: 2
-    m_ObsoleteSphereInfiniteProjection: 0
-    m_ObsoleteBoxInfiniteProjection: 0
-    m_Shape: 0
-    m_BoxSize: {x: 5.9639435, y: 2.6451912, z: 4.521286}
-    m_SphereRadius: 1
 --- !u!1 &1884394773
 GameObject:
   m_ObjectHideFlags: 0
@@ -8864,7 +8941,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Unity.RenderPipelines.HighDefinition.Runtime::UnityEngine.Rendering.HighDefinition.StaticLightingSky
   m_Profile: {fileID: 11400000, guid: ee81becbe8d9c765b9882d8640948885, type: 2}
-  m_StaticLightingSkyUniqueID: 0
+  m_StaticLightingSkyUniqueID: 4
   m_StaticLightingCloudsUniqueID: 0
   m_StaticLightingVolumetricClouds: 0
   bounces: 1
@@ -9287,33 +9364,33 @@ MonoBehaviour:
     m_Aspect: 0
   m_HasValidSHForNormalization: 1
   m_SHForNormalization:
-    'sh[ 0]': 54.27174
-    'sh[ 1]': -2.7940655
-    'sh[ 2]': 7.2232833
-    'sh[ 3]': -9.293063
-    'sh[ 4]': -4.5979705
-    'sh[ 5]': -6.261942
-    'sh[ 6]': -3.2898424
-    'sh[ 7]': 2.2905803
-    'sh[ 8]': 11.419166
-    'sh[ 9]': 23.091
-    'sh[10]': -3.327256
-    'sh[11]': 4.2480392
-    'sh[12]': -3.6875885
-    'sh[13]': -1.5125252
-    'sh[14]': -3.178326
-    'sh[15]': -1.6544989
-    'sh[16]': 1.4457357
-    'sh[17]': 5.543581
-    'sh[18]': 11.366624
-    'sh[19]': -2.454106
-    'sh[20]': 2.1865737
-    'sh[21]': -2.522905
-    'sh[22]': -0.235442
-    'sh[23]': -1.5230211
-    'sh[24]': -0.8238481
-    'sh[25]': 0.6381663
-    'sh[26]': 3.0115402
+    'sh[ 0]': 62.714077
+    'sh[ 1]': -0.109076865
+    'sh[ 2]': 7.672582
+    'sh[ 3]': -13.649549
+    'sh[ 4]': -1.3663611
+    'sh[ 5]': -4.916875
+    'sh[ 6]': -2.5737083
+    'sh[ 7]': 0.05053926
+    'sh[ 8]': 11.211501
+    'sh[ 9]': 22.302727
+    'sh[10]': -2.5967336
+    'sh[11]': 3.5077856
+    'sh[12]': -4.7089753
+    'sh[13]': -0.19087517
+    'sh[14]': -2.42094
+    'sh[15]': -1.3333344
+    'sh[16]': 0.415209
+    'sh[17]': 4.709759
+    'sh[18]': 7.847254
+    'sh[19]': -2.0158613
+    'sh[20]': 1.476042
+    'sh[21]': -1.8217443
+    'sh[22]': 0.24945864
+    'sh[23]': -1.0155532
+    'sh[24]': -0.61831427
+    'sh[25]': 0.1605526
+    'sh[26]': 1.9206932
   m_SHValidForCapturePosition: {x: 7.812, y: 1.35, z: -4.958}
   m_SHValidForSourcePosition: {x: 7.812, y: 1.35, z: -4.958}
   m_ReflectionProbeVersion: 10
@@ -9358,6 +9435,74 @@ ReflectionProbe:
   m_UseOcclusionCulling: 1
   m_Importance: 1
   m_CustomBakedTexture: {fileID: 0}
+--- !u!1 &2063710295
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2063710296}
+  - component: {fileID: 2063710297}
+  m_Layer: 0
+  m_Name: Probe Adjustment Volume
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2063710296
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2063710295}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.009708405, y: -0.8003312, z: -7.408577}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1599894188}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2063710297
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2063710295}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55f90731af2ebc94fb7fdaebe2a9a409, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.ProbeAdjustmentVolume
+  shape: 0
+  size: {x: 79.499886, y: 1.5663265, z: 32.718483}
+  radius: 1
+  mode: 0
+  intensityScale: 1
+  overriddenDilationThreshold: 0.75
+  virtualOffsetRotation: {x: 0, y: 0, z: 0}
+  virtualOffsetDistance: 1
+  geometryBias: 0.01
+  virtualOffsetThreshold: 0.75
+  rayOriginBias: -0.001
+  skyDirection: {x: 0, y: 0, z: 0}
+  directSampleCount: 32
+  indirectSampleCount: 512
+  sampleCountMultiplier: 4
+  maxBounces: 2
+  skyOcclusionSampleCount: 2048
+  skyOcclusionMaxBounces: 2
+  renderingLayerMaskOperation: 0
+  renderingLayerMask: 0
+  cachedHashCode: 1252823711
+  version: 1
+  invalidateProbes: 0
+  overrideDilationThreshold: 0
 --- !u!1 &2108216066
 GameObject:
   m_ObjectHideFlags: 0
@@ -9405,7 +9550,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2119373429
 Transform:
   m_ObjectHideFlags: 0

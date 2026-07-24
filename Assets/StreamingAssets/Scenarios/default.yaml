@@ -2,9 +2,9 @@ scenario_info:
   name: "Default"
   description: "Default minimal scenario"
   version: "1.0"
-  # map: "basic/crowd"
+  map: "basic/crowd"
   # map: "Environnements/Test"
-  map: "Test"
+  # map: "Test"
 
 simulation:
   duration: 0.1

@@ -1,27 +1,22 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <ui:VisualElement name="TopBar" class="top-bar" style="flex-direction: row; align-items: center; justify-content: space-between; height: auto; min-height: 100px; padding: 12px 20px;">
-        <!-- Zone gauche : titre + description -->
         <ui:VisualElement style="flex-direction: column; flex-grow: 1;">
             <ui:Label text="Simulator" name="SimulatorTitle" class="simulator-title"/>
             <ui:Label text="Test and evaluate social robotic navigation solutions in realistic environments." name="SimulatorDesc" class="simulator-desc"/>
         </ui:VisualElement>
-        
-        <!-- Zone droite : boutons -->
         <ui:VisualElement style="flex-direction: row; align-items: center;">
-            <!-- Bouton Load Scenario (normal) -->
             <ui:Button name="LoadScenarioButton" class="action-button">
-                <ui:VisualElement class="button-icon" style="background-image: url('project://database/Assets/UI/Icons/folder.png?...');"/>
+                <ui:VisualElement class="button-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/folder.png?fileID=2800000&amp;guid=e5af9e7dfb7d9e0e68161298d5377cb7&amp;type=3#folder&quot;);"/>
                 <ui:Label text="Load scenario" class="button-label"/>
             </ui:Button>
-            
-            <!-- Split Button (Start / Dropdown) -->
-            <ui:VisualElement name="SplitButtonContainer" class="split-button-container">
-                <ui:Button name="StartSimulationButton" class="split-button-primary">
-                    <ui:VisualElement class="button-icon" style="background-image: url('project://database/Assets/UI/Icons/play.png?...');"/>
-                    <ui:Label text="Start simulation" class="button-label"/>
-                </ui:Button>
-                <ui:Button name="DropdownArrowButton" class="split-button-arrow" text="▼" />
-            </ui:VisualElement>
+            <ui:Button name="StartStopButton" class="action-button">
+                <ui:VisualElement name="StartStopIcon" class="button-icon" style="background-image: none;"/>
+                <ui:Label name="StartStopLabel" text="Start" class="button-label"/>
+            </ui:Button>
+            <ui:Button name="PauseResumeButton" class="action-button">
+                <ui:VisualElement name="PauseResumeIcon" class="button-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/pause.png?fileID=2800000&amp;guid=6c722e01cbb6bb3b585de31b4bd00cda&amp;type=3#pause&quot;);"/>
+                <ui:Label name="PauseResumeLabel" text="Pause" class="button-label"/>
+            </ui:Button>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

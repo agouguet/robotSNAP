@@ -1,4 +1,4 @@
-:root {
+* {
     --bg-primary: rgb(231, 234, 236);
     --bg-secondary: rgb(255, 255, 255);
     --sidebar-bg: rgb(255, 255, 255);
@@ -6,6 +6,7 @@
     --card-bg: rgb(255, 255, 255);
     --text-primary: rgb(15, 23, 42);
     --text-secondary: rgb(71, 85, 105);
+    --text-secondary-muted: rgb(100, 116, 139);
     --accent: rgb(37, 99, 235);
     --accent-soft: rgb(59, 130, 246);
     --accent-glow: rgba(37, 99, 235, 0.15);
@@ -19,7 +20,7 @@
     --icon-tint: rgb(22, 26, 31);
 }
 
-.dark-mode {
+.dark-mode * {
     --bg-primary: rgb(11, 17, 32);
     --bg-secondary: rgb(30, 41, 59);
     --sidebar-bg: rgb(15, 23, 42);
@@ -27,6 +28,7 @@
     --card-bg: rgb(30, 41, 59);
     --text-primary: rgb(241, 245, 249);
     --text-secondary: rgb(148, 163, 184);
+    --text-secondary-muted: rgb(100, 116, 139);
     --accent: rgb(59, 130, 246);
     --accent-soft: rgb(96, 165, 250);
     --accent-glow: rgba(59, 130, 246, 0.2);
@@ -64,7 +66,6 @@
 .unity-panel {
     background-color: var(--panel-bg);
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
     border-radius: 4px;
     padding: 8px;
@@ -82,6 +83,7 @@
 .unity-button:hover {
     background-color: var(--button-hover);
 }
+
 
 .button-icon {
     width: 28px;
@@ -156,11 +158,9 @@
     padding: 8px;
     background-color: var(--card-bg);
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
     border-radius: 4px;
     align-items: center;
-    text-align: center;
 }
 
 .metric-value {
@@ -172,7 +172,6 @@
 .panel {
     background-color: var(--panel-bg);
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
     border-radius: 6px;
     margin: 8px;
@@ -182,7 +181,6 @@
 
 .panel-title {
     font-size: 12px;
-    text-transform: uppercase;
     color: var(--accent-soft);
     margin-bottom: 8px;
 }
@@ -192,19 +190,16 @@
 }
 
 .log-entry {
-    font-family: monospace;
     font-size: 10px;
     padding: 2px 4px;
 }
 
 #LogsPanel .unity-list-view__item {
-    font-family: "Courier New", monospace;
     font-size: 10px;
     padding: 2px 6px;
 }
 
 .console-line {
-    font-family: monospace;
     font-size: 11px;
     padding: 2px 4px;
     color: rgb(160, 255, 160);
@@ -224,10 +219,6 @@
     flex-grow: 1;
 }
 
-.robot-name {
-    font-weight: bold;
-}
-
 .robot-progress {
     margin-top: 6px;
     width: 150px;
@@ -239,7 +230,6 @@
     justify-content: space-between;
     padding: 8px 16px;
     border-top-width: 1px;
-    border-top-style: solid;
     border-top-color: var(--border-color);
 }
 
@@ -254,7 +244,6 @@
 
 .tab-pane {
     padding: 8px;
-    overflow: auto;
 }
 
 .view-dropdown {
@@ -270,7 +259,6 @@
 
 .view-dropdown .unity-base-text-field__input {
     color: var(--dropdown-text);
-    text-align: center;
 }
 
 .view-dropdown .unity-popup-field__arrow {
@@ -283,7 +271,6 @@
     margin: 8px;
     background-color: var(--panel-bg);
     border-width: 1px;
-    border-style: solid;
     border-color: var(--accent-glow);
     border-radius: 12px;
     padding: 16px 12px 12px 12px;
@@ -302,16 +289,13 @@
     background-color: var(--title-corner-bg);
     padding: 0 10px;
     font-size: 14px;
-    font-weight: bold;
-    text-transform: uppercase;
     letter-spacing: 1.2px;
     color: var(--title-corner-color);
     border-radius: 20px;
     border-width: 1px;
-    border-style: solid;
     border-color: var(--accent-glow);
-    z-index: 2;
 }
+
 
 .panel-inner {
     flex-direction: column;
@@ -325,3 +309,121 @@
 }
 
 
+/* === DROPDOWN FIELD (le champ visible) === */
+/* .unity-base-field__input {
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    padding: 0 12px;
+    font-size: 14px;
+    height: 100%;
+    border-color: var(--border-color);
+    border-radius: 8px;
+    overflow: hidden; 
+    white-space: nowrap; 
+    text-overflow: ellipsis; 
+}
+
+.unity-base-field__input:hover {
+    border-color: var(--accent-soft);
+}
+
+.unity-base-field__input:focus {
+    border-color: var(--accent);
+}
+
+.unity-base-popup-field__text {
+    color: var(--text-secondary);
+    font-size: 14px;
+    padding: 0;
+    flex-grow: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+} */
+
+/* === FLÈCHE DU DROPDOWN === */
+/* .unity-base-popup-field__arrow {
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-left: 6px;
+    -unity-background-image-tint-color: var(--text-secondary);
+}
+
+
+.unity-base-dropdown__container-inner {
+    background-color: var(--bg-secondary) !important;
+    border-radius: 4px !important;
+    padding: 4px 0 !important;
+    margin-top: 4px !important;
+    min-width: 100% !important;
+    max-height: 400px !important;
+}
+
+.unity-base-dropdown__item {
+    color: #FF0000 !important;
+    padding: 8px 14px !important;
+    font-size: 4px !important;
+    transition: background-color 0.15s, color 0.15s !important;
+    border-radius: 4px !important;
+    margin: 0 4px !important;
+    background-color: var(--bg-secondary);
+}
+
+.unity-base-dropdown__container-inner .unity-base-dropdown__item:hover {
+    background-color: var(--button-hover) !important;
+}
+
+.unity-base-dropdown__container-inner .unity-base-dropdown__item.selected {
+    background-color: var(--accent-glow) !important;
+    color: var(--accent) !important;
+}
+
+.unity-base-dropdown__container-inner .unity-base-dropdown__item:active {
+    background-color: var(--accent-soft) !important;
+    color: white !important;
+} */
+
+
+
+
+.unity-base-field__input {
+    color: var(--text-secondary);
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    border-radius: 4px;
+}
+
+.unity-base-popup-field__arrow {
+    -unity-background-image-tint-color: var(--text-secondary);
+}
+
+.unity-base-field__label {
+    color: var(--text-secondary);
+    font-size: 28px;
+}
+
+.unity-base-dropdown .unity-scroll-view {
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+    border-radius: 4px;
+}
+
+
+.unity-base-dropdown__item {
+    flex-grow: 1;
+}
+
+.unity-base-dropdown #unity-content-container {
+    flex-direction: column;
+}
+
+.unity-base-dropdown__checkmark {
+    -unity-background-image-tint-color: var(--text-secondary);
+}
+
+.unity-base-dropdown__container-outer {
+    border-color: var(--border-color);
+    border-radius: 4px;
+}

@@ -76,12 +76,15 @@ namespace RobotSNAP.UI
         private LineRenderer _laserScanRenderer;
         private float _lastLaserUpdateTime;
         private RaycastLaserScanner _robotLaserScanner;
+
+        private SimulationState _currentState = SimulationState.Idle;
         
         #region Unity Lifecycle
         
         private void Start()
         {
             Initialize();
+            EventBus.Instance.Subscribe<SimulationStateChangedEvent>(OnSimulationStateChanged);
         }
         
         private void Update()
@@ -92,7 +95,8 @@ namespace RobotSNAP.UI
         
         private void OnDestroy()
         {
-            CleanupVisualizations();
+            EventBus.Instance.Unsubscribe<SimulationStateChangedEvent>(OnSimulationStateChanged);
+            CleanupAllVisualizations();
         }
         
         #endregion
@@ -202,6 +206,26 @@ namespace RobotSNAP.UI
         
         #endregion
         
+        #region Event Handling
+        
+        private void OnSimulationStateChanged(SimulationStateChangedEvent evt)
+        {
+            // Si on passe à Ready (après un Stop) ou Idle, on nettoie les visualisations des agents
+            if ((evt.NewState == SimulationState.Ready || evt.NewState == SimulationState.Idle) 
+                && _currentState != evt.NewState)
+            {
+                ClearEntityVisualizations();
+                _currentState = evt.NewState;
+                Debug.Log("[VisualizationManager] Entity visualizations cleared due to state change to " + evt.NewState);
+            }
+            else
+            {
+                _currentState = evt.NewState;
+            }
+        }
+        
+        #endregion
+
         #region Position History Tracking
         
         private void UpdatePositionHistory()
@@ -258,6 +282,9 @@ namespace RobotSNAP.UI
         
         private void UpdateRobotVisualizations()
         {
+            if (_currentState == SimulationState.Idle || _currentState == SimulationState.Ready)
+                return;
+
             Robot robot = FindObjectOfType<Robot>();
             if (robot == null) return;
             
@@ -701,18 +728,66 @@ namespace RobotSNAP.UI
         #endregion
         
         #region Cleanup
-        
-        private void CleanupVisualizations()
+
+        /// <summary>
+        /// Supprime TOUTES les visualisations liées aux entités (robot + humains)
+        /// mais conserve la grille, les axes et le rendu laser.
+        /// </summary>
+        private void ClearEntityVisualizations()
         {
-            foreach (var lr in _trajectoryRenderers.Values) if (lr) Destroy(lr.gameObject);
-            foreach (var lr in _pathRenderers.Values) if (lr) Destroy(lr.gameObject);
-            foreach (var go in _goalMarkers.Values) if (go) Destroy(go);
-            foreach (var lr in _velocityVectors.Values) if (lr) Destroy(lr.gameObject);
-            foreach (var go in _interactionRadiusVisuals.Values) if (go) Destroy(go);
-            foreach (var tm in _agentIdLabels.Values) if (tm) Destroy(tm.gameObject);
-            if (_laserScanRenderer) Destroy(_laserScanRenderer.gameObject);
+            // Trajectoires (robot + humains)
+            foreach (var lr in _trajectoryRenderers.Values)
+                if (lr != null) Destroy(lr.gameObject);
+            _trajectoryRenderers.Clear();
+            
+            // Chemins (robot)
+            foreach (var lr in _pathRenderers.Values)
+                if (lr != null) Destroy(lr.gameObject);
+            _pathRenderers.Clear();
+            
+            // Marqueurs de but (robot + humains)
+            foreach (var go in _goalMarkers.Values)
+                if (go != null) Destroy(go);
+            _goalMarkers.Clear();
+            
+            // Vecteurs de vitesse (robot + humains)
+            foreach (var lr in _velocityVectors.Values)
+                if (lr != null) Destroy(lr.gameObject);
+            _velocityVectors.Clear();
+            
+            // Rayons d'interaction (humains)
+            foreach (var go in _interactionRadiusVisuals.Values)
+                if (go != null) Destroy(go);
+            _interactionRadiusVisuals.Clear();
+            
+            // Labels d'ID (robot + humains)
+            foreach (var tm in _agentIdLabels.Values)
+                if (tm != null) Destroy(tm.gameObject);
+            _agentIdLabels.Clear();
+            
+            // Historique des positions (robot + humains)
+            _positionHistory.Clear();
+            
+            // Laser scan : on le réinitialise (ne pas détruire, on le réutilisera)
+            if (_laserScanRenderer != null)
+                _laserScanRenderer.positionCount = 0;
         }
         
+        private void CleanupAllVisualizations()
+        {
+            ClearEntityVisualizations();
+            
+            if (gridObject != null) Destroy(gridObject);
+            if (axesObject != null) Destroy(axesObject);
+            if (floorObject != null) Destroy(floorObject);
+            if (_laserScanRenderer != null) Destroy(_laserScanRenderer.gameObject);
+            if (_wireframeMaterial != null) Destroy(_wireframeMaterial);
+            
+            foreach (var kvp in _originalMaterials)
+                if (kvp.Key != null) kvp.Key.materials = kvp.Value;
+            _originalMaterials.Clear();
+        }
+
         #endregion
     }
 

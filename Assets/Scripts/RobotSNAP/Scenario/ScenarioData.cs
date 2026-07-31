@@ -14,6 +14,9 @@ namespace RobotSNAP.Core.Scenario
     {
         [YamlMember("name")]
         public string Name { get; set; }
+
+        [YamlMember("type")]
+        public string Type { get; set; } = "";
         
         [YamlMember("description")]
         public string Description { get; set; }
@@ -32,10 +35,18 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("map")]
         public string MapImage { get; set; }
+
+        [YamlMember("location")]
+        public string Location { get; set; } = "";
         
         [YamlMember("dataset")]
         public string DatasetPath { get; set; }
         
+        [YamlMember("preview")]
+        public string PreviewImage { get; set; }
+
+
+
         /// <summary>
         /// Durée maximale du scénario (en secondes). 0 = illimitée.
         /// </summary>

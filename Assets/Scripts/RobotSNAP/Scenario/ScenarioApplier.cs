@@ -97,7 +97,7 @@ namespace RobotSNAP.Core.Scenario
         {
             // 1. Charger et construire la carte
             // yield return StartCoroutine(BuildMapFromScenario());
-            yield return StartCoroutine(_environmentBuilder.BuildEnvironment(_currentScenario.MapImage));
+            // yield return StartCoroutine(_environmentBuilder.BuildEnvironment(_currentScenario.MapImage));
 
             // 2. Nettoyer les humains existants (les retourner au pool)
             if (_clearExistingHumans)

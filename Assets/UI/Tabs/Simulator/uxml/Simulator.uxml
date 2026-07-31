@@ -1,5 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <ui:Template name="BottomPanel" src="project://database/Assets/UI/Tabs/Simulator/uxml/SimulationSensorPanel.uxml?fileID=9197481963319205126&amp;guid=50e9224592b3143ecaccb1326e9d54d4&amp;type=3#SimulationSensorPanel"/>
+    <ui:Template name="ScenarioSelectionPopup" src="project://database/Assets/UI/Tabs/Simulator/uxml/ScenarioSelectionPopup.uxml?fileID=9197481963319205126&amp;guid=80e178bdc07d0054690bdb5e4c5c7702&amp;type=3#ScenarioSelectionPopup"/>
     <ui:Template name="SimulationOverlay" src="project://database/Assets/UI/Tabs/Simulator/uxml/SimulationOverlay.uxml?fileID=9197481963319205126&amp;guid=9122e17034a60205eac9e6ee17f6bb80&amp;type=3#SimulationOverlay"/>
     <ui:Template name="SimulationView" src="project://database/Assets/UI/Tabs/Simulator/uxml/SimulationStatus.uxml?fileID=9197481963319205126&amp;guid=4eb8246bb1a0234e587cbed5f9918faa&amp;type=3#SimulationStatus"/>
     <ui:Template name="TopBar" src="project://database/Assets/UI/Tabs/Simulator/uxml/SimulationTopBar.uxml?fileID=9197481963319205126&amp;guid=f8ab7480e4b015c7ea8318f70a2efd51&amp;type=3#SimulationTopBar"/>
@@ -16,4 +17,5 @@
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
+    <ui:Instance template="ScenarioSelectionPopup" name="PopupOverlay" style="flex-grow: 1; position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none;"/>
 </ui:UXML>

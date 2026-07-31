@@ -32,7 +32,7 @@ namespace RobotSNAP.CameraControl
             if (Input.GetKey(c.downKey)) move -= Vector3.up;
             
             if (move != Vector3.zero)
-                c.TargetPosition += move.normalized * speed * Time.deltaTime;
+                c.TargetPosition += move.normalized * speed * Time.unscaledDeltaTime;
             
             // Mouse rotation
             if (Input.GetKeyDown(c.rotateKey))
@@ -47,8 +47,8 @@ namespace RobotSNAP.CameraControl
             {
                 Vector3 delta = Input.mousePosition - c.LastMousePosition;
                 c.LastMousePosition = Input.mousePosition;
-                c.CurrentRotationY += delta.x * c.rotateSpeed * Time.deltaTime;
-                c.CurrentRotationX -= delta.y * c.rotateSpeed * Time.deltaTime;
+                c.CurrentRotationY += delta.x * c.rotateSpeed * Time.unscaledDeltaTime;
+                c.CurrentRotationX -= delta.y * c.rotateSpeed * Time.unscaledDeltaTime;
                 c.CurrentRotationX = Mathf.Clamp(c.CurrentRotationX, -90f, 90f);
                 c.TargetRotation = Quaternion.Euler(c.CurrentRotationX, c.CurrentRotationY, 0);
             }
@@ -57,20 +57,21 @@ namespace RobotSNAP.CameraControl
             if (scroll != 0)
             {
                 if (c.mainCamera.orthographic)
-                    c.mainCamera.orthographicSize -= scroll * c.zoomSpeed * Time.deltaTime;
+                    c.mainCamera.orthographicSize -= scroll * c.zoomSpeed * Time.unscaledDeltaTime;
                 else
                     c.TargetPosition += c.mainCamera.transform.forward * scroll * c.zoomSpeed;
             }
         }
-        
+
         private void UpdateFreeCamera(CameraController c)
         {
-            c.mainCamera.transform.position = Vector3.SmoothDamp(
-                c.mainCamera.transform.position,
-                c.TargetPosition,
-                ref c.velocity,
-                c.smoothTime
-            );
+            c.mainCamera.transform.position = c.TargetPosition;
+            // c.mainCamera.transform.position = Vector3.SmoothDamp(
+            //     c.mainCamera.transform.position,
+            //     c.TargetPosition,
+            //     ref c.velocity,
+            //     c.smoothTime
+            // );
             
             if (!c.IsRotating)
             {

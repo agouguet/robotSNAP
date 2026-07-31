@@ -26,6 +26,7 @@ namespace RobotSNAP.Agents
         private HumanMovement _movement;
         private Animator _animator;
         private bool _wasPlaying = true;
+        private bool _wasPaused;
         private Rigidbody _rb;
 
         // Propriétés héritées de BaseAgent (implémentation)
@@ -55,12 +56,51 @@ namespace RobotSNAP.Agents
 
         private void Update()
         {
+            bool isPaused = Supervisor.Instance != null && Supervisor.Instance.IsPaused;
+            
+            if (isPaused && !_wasPaused)
+            {
+                // Passer en mode cinématique pour figer le Rigidbody sans perdre la vélocité
+                if (_rb != null)
+                {
+                    _rb.isKinematic = true;
+                    // Optionnel : stocker la vélocité si besoin (mais elle est conservée)
+                    // _storedVelocity = _rb.linearVelocity;
+                }
+                _wasPaused = true;
+            }
+            else if (!isPaused && _wasPaused)
+            {
+                if (_rb != null)
+                {
+                    _rb.isKinematic = false;
+                    // Remettre la vélocité stockée (si on l'a stockée)
+                    // _rb.linearVelocity = _storedVelocity;
+                }
+                _wasPaused = false;
+            }
+
+            if (isPaused)
+            {
+                if (_animator != null && _animator.speed != 0f)
+                    _animator.speed = 0f;
+                return;
+            }
+            else
+            {
+                if (_animator != null && _animator.speed == 0f)
+                    _animator.speed = 1f;
+            }
+
             HandlePlayPause();
             UpdateAnimation();
         }
 
         private void FixedUpdate()
         {
+            // On laisse le Rigidbody gérer si cinématique
+            if (Supervisor.Instance != null && Supervisor.Instance.IsPaused)
+                return;
             UpdateMovement();
         }
 
@@ -112,6 +152,7 @@ namespace RobotSNAP.Agents
         private void UpdateMovement()
         {
             if (_movement == null || !_movement.IsPlaying) return;
+            _movement.move();
 
             if (_rb != null)
                 _rb.linearVelocity = currentVelocity3D;

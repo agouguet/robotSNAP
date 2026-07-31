@@ -470,5 +470,20 @@ namespace RobotSNAP.Environment
             if (_floor != null) Destroy(_floor);
             if (_walls != null) Destroy(_walls);
         }
+
+        private void OnDestroy()
+        {
+            // Décharger la scène additive si elle est chargée
+            if (!string.IsNullOrEmpty(_loadedSceneName))
+            {
+                Scene scene = SceneManager.GetSceneByName(_loadedSceneName);
+                if (scene.isLoaded)
+                {
+                    SceneManager.UnloadSceneAsync(scene);
+                    Debug.Log($"[EnvironmentBuilder] Unloaded additive scene: {_loadedSceneName}");
+                }
+                _loadedSceneName = null;
+            }
+        }
     }
 }

@@ -1,0 +1,28 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/Tabs/Simulator/uss/ScenarioSelectionPopup.uss?fileID=7433441132597879392&amp;guid=c337fd529c08f231fb15fcab1153c332&amp;type=3#ScenarioSelectionPopup"/>
+    <Style src="project://database/Assets/UI/Tabs/Simulator/uss/Card.uss?fileID=7433441132597879392&amp;guid=a9a5bee9a32b7d59993bfb9607bf0c7e&amp;type=3#Card"/>
+    <ui:VisualElement name="PopupOverlay" class="popup-overlay">
+        <ui:VisualElement class="popup-panel">
+            <ui:Label text="Choisir un scénario" class="popup-title"/>
+            <ui:Label text="Sélectionnez un scénario existant ou créez-en un nouveau." class="popup-subtitle"/>
+            <ui:VisualElement class="popup-toolbar">
+                <ui:VisualElement name="ScenarioSearch" style="flex-grow: 1;">
+                    <ui:VisualElement name="ScenarioSearchIcon" class="scenario-search-icon" style="background-image: resource(&quot;Icons/search&quot;);"/>
+                    <ui:TextField name="ScenarioSearchField" class="popup-search"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="popup-dropdowns">
+                    <ui:DropdownField name="FilterDropdown" class="popup-filter-dropdown"/>
+                    <ui:DropdownField name="SortDropdown" class="popup-sort-dropdown"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:ScrollView name="ScenarioListView" class="popup-list"/>
+            <ui:VisualElement class="popup-footer">
+                <ui:Button name="NewScenarioButton" text="+ Nouveau scénario" class="action-button secondary"/>
+                <ui:VisualElement style="flex-direction: row;">
+                    <ui:Button name="CancelPopupButton" text="Annuler" class="action-button secondary"/>
+                    <ui:Button name="LoadScenarioConfirmButton" text="Charger le scénario" class="action-button primary"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

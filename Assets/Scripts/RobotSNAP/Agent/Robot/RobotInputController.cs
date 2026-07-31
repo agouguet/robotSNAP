@@ -37,6 +37,9 @@ namespace RobotSNAP
         private float _targetLinear;
         private float _targetAngular;
 
+        // Détection du changement d'état de pause
+        private bool _wasPaused = false;
+
         public enum ControlMode { Keyboard, ROS, Hybrid, Scenario }
         public ControlMode CurrentMode => controlMode;
 
@@ -52,7 +55,26 @@ namespace RobotSNAP
         private void Update()
         {
             if (Input.GetKeyDown(toggleModeKey)) ToggleControlMode();
-            if (Supervisor.Instance != null && Supervisor.Instance.IsPaused) return;
+
+            // --- Gestion de la pause ---
+            bool isPaused = Supervisor.Instance != null && Supervisor.Instance.IsPaused;
+
+            if (isPaused && !_wasPaused)
+            {
+                // Entrée en pause : on arrête immédiatement les roues,
+                // mais on conserve les valeurs cibles pour la reprise.
+                _robot.Stop();
+                _wasPaused = true;
+            }
+            else if (!isPaused && _wasPaused)
+            {
+                // Sortie de pause : on laisse le prochain FixedUpdate réappliquer la vitesse.
+                _wasPaused = false;
+            }
+
+            // Ne pas traiter les entrées clavier si en pause
+            if (isPaused) return;
+
             if (controlMode == ControlMode.Scenario) return;
             if (controlMode == ControlMode.Keyboard || controlMode == ControlMode.Hybrid)
                 HandleKeyboardInput();
@@ -60,13 +82,20 @@ namespace RobotSNAP
 
         private void FixedUpdate()
         {
+            // Si en pause, on n'envoie aucune commande (les roues sont déjà à l'arrêt)
+            if (Supervisor.Instance != null && Supervisor.Instance.IsPaused)
+                return;
+
             if (controlMode == ControlMode.Scenario) return;
+
             if (controlMode == ControlMode.Hybrid && Time.time - _lastRosCommandTime > rosCommandTimeout)
             {
                 if (showDebugInfo && Time.frameCount % 60 == 0)
                     Debug.Log("[RobotInputController] ROS timeout, fallback to keyboard");
                 HandleKeyboardInput();
             }
+
+            // Appliquer la vitesse au robot (les valeurs sont conservées)
             _robot.SetVelocity(_targetLinear, _targetAngular);
         }
 
@@ -102,10 +131,32 @@ namespace RobotSNAP
             _targetAngular = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
         }
 
-        public void SetControlMode(ControlMode newMode) { controlMode = newMode; _targetLinear = 0f; _targetAngular = 0f; _robot.Stop(); }
+        public void SetControlMode(ControlMode newMode)
+        {
+            controlMode = newMode;
+            _targetLinear = 0f;
+            _targetAngular = 0f;
+            _robot.Stop();
+        }
+
         public void ToggleControlMode() => SetControlMode((ControlMode)(((int)controlMode + 1) % System.Enum.GetValues(typeof(ControlMode)).Length));
-        public void EmergencyStop() { _targetLinear = 0f; _targetAngular = 0f; _robot.Stop(); }
-        public void SendVelocityCommand(float linear, float angular) { if (controlMode != ControlMode.Scenario) { _targetLinear = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed); _targetAngular = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed); } }
+
+        public void EmergencyStop()
+        {
+            _targetLinear = 0f;
+            _targetAngular = 0f;
+            _robot.Stop();
+        }
+
+        public void SendVelocityCommand(float linear, float angular)
+        {
+            if (controlMode != ControlMode.Scenario)
+            {
+                _targetLinear = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed);
+                _targetAngular = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
+            }
+        }
+
         public void EnableScenarioMode() => SetControlMode(ControlMode.Scenario);
         public void DisableScenarioMode() => SetControlMode(ControlMode.Keyboard);
         public string GetModeString() => controlMode.ToString();

@@ -1,0 +1,21 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/Tabs/Simulator/uss/Card.uss?fileID=7433441132597879392&amp;guid=a9a5bee9a32b7d59993bfb9607bf0c7e&amp;type=3#Card"/>
+    <ui:VisualElement name="CardRoot" class="popup-card">
+        <ui:VisualElement style="position: relative; width: 100%; height: 120px; margin-bottom: 8px; border-radius: 6px; overflow: hidden;">
+            <ui:Image name="CardPreviewImage" class="popup-card-preview-image" style="width: 100%; height: 100%; background-color: rgb(250, 128, 114); background-image: none;"/>
+            <ui:VisualElement name="CardBadge" class="popup-card-badge" style="position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 14px; background-color: rgba(0, 0, 0, 0.7); align-items: center; justify-content: center; display: none;">
+                <ui:VisualElement name="CardBadgeIcon" class="popup-card-badge-icon" style="width: 16px; height: 16px; background-size: contain; background-repeat: no-repeat; background-position: center; background-image: none;"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px;">
+            <ui:VisualElement name="SelectedIcon" class="card-icon selected-icon" style="background-image: resource(&quot;Icons/check_circle_blue&quot;);"/>
+            <ui:VisualElement name="LoadedIcon" class="card-icon loaded-icon" style="background-image: resource(&quot;Icons/play_circle_green&quot;);"/>
+        </ui:VisualElement>
+        <ui:Label name="CardTitle" class="popup-card-title"/>
+        <ui:VisualElement name="CardTagsContainer" class="card-tags-container"/>
+        <ui:VisualElement style="flex-direction: row; align-items: center; margin-top: 6px;">
+            <ui:VisualElement name="CardDateIcon" class="popup-card-date-icon" style="background-image: resource(&quot;Icons/calendar&quot;);"/>
+            <ui:Label name="CardDate" class="popup-card-date"/>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

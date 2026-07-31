@@ -1,4 +1,3 @@
-// Scripts/RobotSNAP/Scenario/ScenarioManager.cs
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -19,6 +18,7 @@ namespace RobotSNAP.Core.Scenario
 
         [Tooltip("Chargeur de scénarios YAML")]
         [SerializeField] private ScenarioLoader _scenarioLoader;
+        public ScenarioLoader Loader => _scenarioLoader;
 
         [Header("Settings")]
         [Tooltip("Nom du scénario par défaut (sans extension)")]
@@ -33,9 +33,6 @@ namespace RobotSNAP.Core.Scenario
         [Tooltip("Active les logs")]
         [SerializeField] private bool _logEvents = true;
 
-        [Tooltip("Met la simulation en pause après le chargement/application du scénario")]
-        [SerializeField] private bool _startPaused = true;
-
         [Header("Fallback")]
         [Tooltip("Scénario de secours si aucun fichier YAML n'est trouvé")]
         [SerializeField] private ScenarioData _fallbackScenario;
@@ -46,6 +43,10 @@ namespace RobotSNAP.Core.Scenario
         private List<GameManager> _gameManagers = new();
         [SerializeField] private bool _isLoading;
         private Coroutine _loadCoroutine;
+
+        // Nouveaux flags d'état
+        private bool _isClockStarted = false;
+        private bool _scenarioApplied = false;  // Indique si les agents ont été spawnés
 
         // Propriétés
         public string CurrentScenarioId => _currentScenarioId;
@@ -66,80 +67,142 @@ namespace RobotSNAP.Core.Scenario
 
         private void Start()
         {
-            // Le Supervisor peut appeler LoadDefaultScenario() après son initialisation
-            // LoadDefaultScenario();
-            EventBus.Instance.Subscribe<ResetRequestEvent>(OnResetRequest);
-            EventBus.Instance.Subscribe<PlayStateChangedEvent>(OnPlayStateChanged);
+            // Abonnement aux commandes
+            EventBus.Instance.Subscribe<StartSimulationCommand>(OnStartCommand);
+            EventBus.Instance.Subscribe<StopSimulationCommand>(OnStopCommand);
+            EventBus.Instance.Subscribe<PauseSimulationCommand>(OnPauseCommand);
+            EventBus.Instance.Subscribe<ResumeSimulationCommand>(OnResumeCommand);
+
+            // Chargement automatique du scénario par défaut en mode "Ready" (sans spawn d'agents)
+            LoadDefaultScenario(false, false);
         }
 
         private void OnDestroy()
         {
             CancelLoad();
             ClearEnvironments();
-            EventBus.Instance.Unsubscribe<ResetRequestEvent>(OnResetRequest);
-            EventBus.Instance.Unsubscribe<PlayStateChangedEvent>(OnPlayStateChanged);
+            EventBus.Instance.Unsubscribe<StartSimulationCommand>(OnStartCommand);
+            EventBus.Instance.Unsubscribe<StopSimulationCommand>(OnStopCommand);
+            EventBus.Instance.Unsubscribe<PauseSimulationCommand>(OnPauseCommand);
+            EventBus.Instance.Unsubscribe<ResumeSimulationCommand>(OnResumeCommand);
         }
 
-        private void OnResetRequest(ResetRequestEvent evt)
-        {
-            Debug.Log($"[ScenarioManager] ResetRequestEvent received");
-            LoadDefaultScenario();
-        }
-        
-        private void OnPlayStateChanged(PlayStateChangedEvent evt)
-        {
-            // pass
-            Debug.Log($"[ScenarioManager] PlayStateChangedEvent received: isPlaying={evt.isPlaying}");
-            if (evt.isPlaying)
-            {
-                // Simulation resumed
-                // pass
-            }
-            else
-            {
-                // Simulation paused
-                // pass
-            }
-            
-        }
+        // === Gestion des commandes ===
 
-        /// <summary>
-        /// Démarre la simulation : charge le scénario par défaut (si pas déjà chargé) et reprend le Clock.
-        /// </summary>
-        public void StartSimulation()
+        private void OnStartCommand(StartSimulationCommand cmd)
         {
             if (!HasScenarioLoaded)
             {
-                LoadDefaultScenario();
-                // On attend que le chargement soit fini ? On peut utiliser une coroutine, mais pour simplifier on suppose que LoadDefaultScenario est synchrone (ou on utilise un booléen).
-                // Ici, on va simplement appeler Resume après un petit délai.
-                StartCoroutine(StartAfterLoad());
+                // Idle : charger, appliquer et démarrer
+                LoadDefaultScenario(startClock: true, autoApply: true);
+            }
+            else if (!_scenarioApplied)
+            {
+                // Ready : appliquer le scénario et démarrer
+                StartCoroutine(ApplyScenarioAndResume());
             }
             else
             {
-                // Si déjà chargé, juste reprendre
-                Supervisor.Instance?.Resume();
+                // Running ou Paused : on ne fait rien (le bouton Start n'est pas visible)
+                if (_logEvents) Debug.Log("[ScenarioManager] Start command ignored: scenario already applied.");
             }
         }
 
-        private IEnumerator StartAfterLoad()
+        private void OnStopCommand(StopSimulationCommand cmd)
         {
-            // Attendre que le chargement soit effectif (si asynchrone, on peut attendre un frame ou utiliser un callback)
-            yield return null; // ou attendre que _isLoading soit false
-            Supervisor.Instance?.Resume();
+            // 1. Arrêter le Clock
+            Supervisor.Instance?.Pause();
+            _isClockStarted = false;
+
+            // 2. Supprimer les agents, mais garder la carte
+            foreach (var gm in _gameManagers)
+            {
+                if (gm != null)
+                    gm.ClearAgents();
+            }
+
+            // 3. Marquer le scénario comme non appliqué
+            _scenarioApplied = false;
+
+            // 4. Ne pas vider _currentScenarioData ni _currentScenarioId pour rester en Ready
+            // Ne pas appeler ClearEnvironments() qui détruit tout
+
+            // 5. Notifier l'UI (passage à Ready)
+            PublishState();
+
+            if (_logEvents) Debug.Log("[ScenarioManager] Simulation stopped, environment kept, agents cleared.");
         }
 
-        /// <summary>
-        /// Arrête complètement la simulation : détruit les environnements, vide le scénario chargé, et met le Clock en pause.
-        /// </summary>
-        public void StopSimulation()
+        private void OnPauseCommand(PauseSimulationCommand cmd)
         {
-            Supervisor.Instance?.Pause(); // on met en pause pour figer tout
-            ClearEnvironments();
-            _currentScenarioData = null;
-            _currentScenarioId = null;
-            // On pourrait aussi réinitialiser les GameManagers si on veut les garder, mais on les supprime.
+            if (HasScenarioLoaded && _scenarioApplied && _isClockStarted)
+            {
+                Supervisor.Instance?.Pause();
+                PublishState();
+                if (_logEvents) Debug.Log("[ScenarioManager] Simulation paused");
+            }
+            else
+            {
+                if (_logEvents) Debug.Log("[ScenarioManager] Pause ignored: not in a running state");
+            }
         }
+
+        private void OnResumeCommand(ResumeSimulationCommand cmd)
+        {
+            if (HasScenarioLoaded && _scenarioApplied)
+            {
+                _isClockStarted = true;
+                Supervisor.Instance?.Resume();
+                PublishState();
+                if (_logEvents) Debug.Log("[ScenarioManager] Simulation resumed");
+            }
+            else
+            {
+                if (_logEvents) Debug.Log("[ScenarioManager] Resume ignored: scenario not applied");
+            }
+        }
+
+        // === Coroutine d'application du scénario (spawn des agents) ===
+
+        private IEnumerator ApplyScenarioAndResume()
+        {
+            if (_logEvents) Debug.Log("[ScenarioManager] Applying scenario and resuming...");
+
+            yield return StartCoroutine(ApplyScenarioToAllCoroutine());
+            _scenarioApplied = true;
+
+            _isClockStarted = true;
+            Supervisor.Instance?.Resume();
+
+            PublishState();
+
+            if (_logEvents) Debug.Log("[ScenarioManager] Scenario applied, simulation running");
+        }
+
+        // === Notification d'état (calcul du bon état) ===
+
+        private void PublishState()
+        {
+            SimulationState state;
+
+            if (!HasScenarioLoaded)
+                state = SimulationState.Idle;
+            else if (Supervisor.Instance == null)
+                state = SimulationState.Idle;
+            else if (!_scenarioApplied)
+                state = SimulationState.Ready;
+            else if (_isClockStarted && Supervisor.Instance.IsPaused)
+                state = SimulationState.Paused;
+            else if (_isClockStarted && !Supervisor.Instance.IsPaused)
+                state = SimulationState.Running;
+            else
+                state = SimulationState.Ready; // fallback
+
+            EventBus.Instance.Publish(new SimulationStateChangedEvent { NewState = state });
+            if (_logEvents) Debug.Log($"[ScenarioManager] State published: {state}");
+        }
+
+        // === Méthodes privées existantes (non modifiées) ===
 
         private void EnsureDependencies()
         {
@@ -171,7 +234,9 @@ namespace RobotSNAP.Core.Scenario
             _gameManagers.Clear();
         }
 
-        private IEnumerator LoadScenarioCoroutine(string scenarioName)
+        // === Chargement du scénario (Coroutine principale) ===
+
+        private IEnumerator LoadScenarioCoroutine(string scenarioName, bool startClock = false, bool autoApply = false)
         {
             _isLoading = true;
             if (_applyDelay > 0)
@@ -189,27 +254,69 @@ namespace RobotSNAP.Core.Scenario
             _currentScenarioData = scenario;
             OnScenarioLoadedInternal(scenario);
 
-            // Reconstruire les environnements
+            // 1. Reconstruire les environnements
             ClearEnvironments();
 
             int envCount = Supervisor.Instance?.ActiveConfig?.EnvironmentCount ?? 1;
             for (int i = 0; i < envCount; i++)
             {
-                Debug.Log($"Creating environment {i + 1}/{envCount} for scenario '{scenarioName}'");
+                if (_logEvents) Debug.Log($"Creating environment {i + 1}/{envCount} for scenario '{scenarioName}'");
                 var gm = CreateEnvironment(i);
                 if (gm != null)
                     _gameManagers.Add(gm);
             }
 
-            // Initialiser tous les GameManagers (NavMesh, pool, spawn initial)
+            // 2. Initialiser tous les GameManagers (NavMesh, pool)
             foreach (var gm in _gameManagers)
             {
                 if (gm != null)
+                {
                     yield return StartCoroutine(gm.Initialize());
+                    gm.gameObject.SetActive(true);
+                }
             }
 
-            if (_autoApplyAfterLoad)
+            // 3. Construire la carte (quels que soient autoApply et startClock)
+            string mapImage = scenario.MapImage;
+            if (!string.IsNullOrEmpty(mapImage))
+            {
+                foreach (var gm in _gameManagers)
+                {
+                    if (gm != null)
+                        yield return StartCoroutine(gm.BuildMap(mapImage));
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[ScenarioManager] No map image specified for scenario '{scenarioName}'");
+            }
+
+
+            // 4. Appliquer le scénario uniquement si autoApply est true
+            if (autoApply)
+            {
                 yield return StartCoroutine(ApplyScenarioToAllCoroutine());
+                _scenarioApplied = true;
+            }
+            else
+            {
+                _scenarioApplied = false;
+            }
+
+            // 5. Gestion du temps
+            if (startClock)
+            {
+                _isClockStarted = true;
+                Supervisor.Instance?.Resume();
+            }
+            else
+            {
+                _isClockStarted = false;
+                Supervisor.Instance?.Pause();
+            }
+
+            // 6. Notification finale
+            PublishState();
 
             _isLoading = false;
             _loadCoroutine = null;
@@ -229,7 +336,6 @@ namespace RobotSNAP.Core.Scenario
                 return null;
             }
             gm.SetEnvironmentId(index);
-            // Appliquer la config globale (Supervisor)
             var config = Supervisor.Instance?.ActiveConfig;
             if (config != null) gm.ApplyConfig(config);
             return gm;
@@ -251,13 +357,6 @@ namespace RobotSNAP.Core.Scenario
 
             OnScenarioApplied?.Invoke(_currentScenarioData);
             if (_logEvents) Debug.Log($"[ScenarioManager] Scenario applied to {_gameManagers.Count} environments: {_currentScenarioData.Name}");
-
-            // NOUVEAU : mettre en pause si demandé
-            if (_startPaused && Supervisor.Instance != null)
-            {
-                Supervisor.Instance.Pause();
-                if (_logEvents) Debug.Log("[ScenarioManager] Simulation paused after scenario application");
-            }
         }
 
         #region Event Wrappers
@@ -279,9 +378,12 @@ namespace RobotSNAP.Core.Scenario
         #region Public API
 
         /// <summary>
-        /// Charge un scénario par son nom (sans extension). Reconstruit les environnements et applique le scénario.
+        /// Charge un scénario par son nom (sans extension).
         /// </summary>
-        public void LoadScenario(string scenarioName)
+        /// <param name="scenarioName">Nom du scénario</param>
+        /// <param name="startClock">Si true, démarre l'horloge immédiatement après chargement (doit être utilisé avec autoApply).</param>
+        /// <param name="autoApply">Si true, applique le scénario (spawn des agents) immédiatement après chargement.</param>
+        public void LoadScenario(string scenarioName, bool startClock = false, bool autoApply = false)
         {
             if (_isLoading)
             {
@@ -289,33 +391,56 @@ namespace RobotSNAP.Core.Scenario
                 return;
             }
             CancelLoad();
-            Debug.Log($"[ScenarioManager] Loading scenario: {scenarioName}");
-            _loadCoroutine = StartCoroutine(LoadScenarioCoroutine(scenarioName));
+            if (_logEvents) Debug.Log($"[ScenarioManager] Loading scenario: {scenarioName} (startClock={startClock}, autoApply={autoApply})");
+            _loadCoroutine = StartCoroutine(LoadScenarioCoroutine(scenarioName, startClock, autoApply));
         }
 
         /// <summary>
         /// Charge le scénario par défaut (depuis la SimulationConfig ou le fallback).
         /// </summary>
-        public void LoadDefaultScenario()
+        /// <param name="startClock">Si true, démarre l'horloge après chargement.</param>
+        /// <param name="autoApply">Si true, applique le scénario (spawn des agents) après chargement.</param>
+        public void LoadDefaultScenario(bool startClock = false, bool autoApply = false)
         {
             var config = Supervisor.Instance?.ActiveConfig;
             if (config != null && !string.IsNullOrEmpty(config.DefaultScenario))
             {
-                LoadScenario(config.DefaultScenario);
+                LoadScenario(config.DefaultScenario, startClock, autoApply);
                 return;
             }
 
+            // Fallback : scénario de secours en ScriptableObject
             if (_fallbackScenario != null)
             {
                 _currentScenarioData = _fallbackScenario;
                 _currentScenarioId = _fallbackScenario.Name;
                 OnScenarioLoadedInternal(_fallbackScenario);
+
                 ClearEnvironments();
-                // Créer un seul environnement par défaut
                 var gm = CreateEnvironment(0);
                 if (gm != null) _gameManagers.Add(gm);
-                if (_autoApplyAfterLoad)
+
+                if (autoApply)
+                {
                     StartCoroutine(ApplyScenarioToAllCoroutine());
+                    _scenarioApplied = true;
+                }
+                else
+                {
+                    _scenarioApplied = false;
+                }
+
+                if (startClock)
+                {
+                    _isClockStarted = true;
+                    Supervisor.Instance?.Resume();
+                }
+                else
+                {
+                    _isClockStarted = false;
+                    Supervisor.Instance?.Pause();
+                }
+                PublishState();
                 return;
             }
 
@@ -324,6 +449,7 @@ namespace RobotSNAP.Core.Scenario
 
         /// <summary>
         /// Applique le scénario courant à tous les environnements existants (sans recréer les envs).
+        /// Utile pour un rechargement à chaud.
         /// </summary>
         public void ApplyCurrentScenarioToAll()
         {

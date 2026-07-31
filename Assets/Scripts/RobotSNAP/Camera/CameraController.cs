@@ -129,7 +129,7 @@ namespace RobotSNAP.CameraControl
         private void LateUpdate()
         {
             if (mainCamera == null) return;
-            _currentMode?.Update(this, Time.deltaTime);
+            _currentMode?.Update(this, Time.unscaledDeltaTime);
         }
 
         private void Update()

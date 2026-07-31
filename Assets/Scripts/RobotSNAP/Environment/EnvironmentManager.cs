@@ -1,4 +1,3 @@
-// Scripts/RobotSNAP/Core/EnvironmentManager.cs
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -8,7 +7,6 @@ namespace RobotSNAP.Core
 {
     /// <summary>
     /// Gère la création, destruction et gestion des environnements.
-    /// Ne gère PAS les scénarios (c'est le rôle de ScenarioSupervisor).
     /// </summary>
     public class EnvironmentManager : MonoBehaviour
     {
@@ -19,7 +17,7 @@ namespace RobotSNAP.Core
         [Header("Settings")]
         [SerializeField] private bool _logEvents = true;
         
-        // Events
+        // Events (C# classiques conservés pour compatibilité, mais peuvent être remplacés par EventBus)
         public event Action<int> OnEnvironmentCreated;
         public event Action OnEnvironmentsCleared;
         public event Action<int> OnEnvironmentDestroyed;
@@ -38,7 +36,6 @@ namespace RobotSNAP.Core
         private void Awake()
         {
             if (_environmentsParent == null)
-                // _environmentsParent = transform;
                 _environmentsParent = new GameObject("Environments").transform;
         }
 
@@ -85,11 +82,7 @@ namespace RobotSNAP.Core
                 gameManager.SetEnvironmentId(index);
                 gameManager.ApplyConfig(config);
                 
-                if (config.EnvironmentCount > 1)
-                {
-                    gameManager.SetROSPrefix($"env_{index}");
-                }
-                
+                // Plus besoin de gérer le préfixe ROS ici, EnvROS le fera lui-même.
                 _gameManagers.Add(gameManager);
             }
             
@@ -110,13 +103,9 @@ namespace RobotSNAP.Core
                 if (env != null)
                 {
                     if (immediate || !Application.isPlaying)
-                    {
                         DestroyImmediate(env);
-                    }
                     else
-                    {
                         Destroy(env);
-                    }
                 }
             }
 
@@ -266,7 +255,6 @@ namespace RobotSNAP.Core
         {
             if (index < 0 || index >= _environmentInstances.Count) return;
             
-            // Conserver l'ancien GameManager (pour le scénario ? non, le scénario sera réappliqué par ScenarioSupervisor)
             DestroyEnvironment(index);
             
             // Re-créer à la même position
@@ -279,9 +267,7 @@ namespace RobotSNAP.Core
             {
                 gm.SetEnvironmentId(index);
                 gm.ApplyConfig(config);
-                if (config.EnvironmentCount > 1)
-                    gm.SetROSPrefix($"env_{index}");
-                
+                // Plus de SetROSPrefix
                 _gameManagers.Insert(index, gm);
             }
             _environmentInstances.Insert(index, instance);
@@ -303,12 +289,7 @@ namespace RobotSNAP.Core
                       $"  Environments: {_environmentInstances.Count}\n" +
                       $"  GameManagers: {_gameManagers.Count}\n" +
                       $"  Current Spacing: {_currentSpacing}");
-            for (int i = 0; i < _gameManagers.Count; i++)
-            {
-                var gm = _gameManagers[i];
-                // if (gm != null)
-                //     Debug.Log($"  Env {i}: Init={gm.IsInitialized}, ScenarioApplied={gm.IsScenarioApplied}");
-            }
+            // Le commentaire sur IsScenarioApplied a été supprimé car il n'existe plus
         }
 #endif
         

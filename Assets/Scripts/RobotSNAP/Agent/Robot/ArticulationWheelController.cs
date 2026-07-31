@@ -13,6 +13,10 @@ public class ArticulationWheelController : MonoBehaviour
     public float wheelTrackLength; // distance between wheels (meters)
     public float wheelRadius;       // wheel radius (meters)
 
+    [Header("Wheel Drive")]
+    [SerializeField] private float forceLimitNormal = 50f;
+    [SerializeField] private float forceLimitBrake = 500f; // Couple de freinage
+
     // Current speeds (for UI / debug)
     private float _currentLinearSpeed;
     private float _currentAngularSpeed;

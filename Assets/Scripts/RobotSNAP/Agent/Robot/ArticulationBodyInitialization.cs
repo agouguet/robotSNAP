@@ -37,6 +37,7 @@ public class ArticulationBodyInitialization : MonoBehaviour
         for (int i = 0; i < assignLength; i++)
         {
             ArticulationBody joint = articulationChain[i];
+            Debug.Log($"[ArticulationBodyInitialization] Setting joint {joint.name} with stiffness={stiffness}, damping={damping}, forceLimit={forceLimit}");
             ArticulationDrive drive = joint.xDrive;
 
             joint.jointFriction = defDyanmicVal;

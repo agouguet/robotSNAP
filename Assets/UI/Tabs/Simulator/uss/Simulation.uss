@@ -100,10 +100,3 @@
     color: var(--accent-soft);
     background-color: var(--accent-glow);
 }
-
-.start-stop-button.running {
-    background-color: var(--danger-color, #c0392b);
-}
-.start-stop-button.running:hover {
-    background-color: var(--danger-hover, #e74c3c);
-}

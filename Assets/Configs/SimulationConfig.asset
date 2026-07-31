@@ -14,34 +14,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _environmentCount: 1
   _environmentSpacing: 100
-  _datasetPath: Dataset
   _defaultScenario: default
   _scenariosFolder: Scenarios
+  _startPaused: 1
   _timeScale: 1
   _fixedTimestep: 0.02
-  _minHumans: 0
-  _maxHumans: 0
-  _minAgentDistance: 1.5
-  _minPathLength: 3
-  _maxPathLength: 15
-  _robotBehavior: normal
-  _robotSpeed: 1.2
-  _robotMaxLinearSpeed: 2
-  _robotMaxAngularSpeed: 2
-  _robotSensorRange: 5
-  _robotControlMode: 0
-  _robotLaserSamples: 180
-  _humanDefaultSpeed: 1.2
-  _humanMaxSpeed: 2
-  _humanControllerType: 0
-  _humanInteractionRadius: 1.5
-  _humanPersonalSpace: 0.8
-  _humanAssertiveness: 0.5
-  _humanReactionTime: 0.3
+  _randomSeed: -1
   _enableROS: 0
   _rosMasterURI: http://localhost:11311
   _rosPrefix: 
   _rosPublishFrequency: 10
-  _inferenceMode: 0
   _recordData: 0
   _outputDirectory: SimulationData
+  _datasetPath: Dataset
+  _inferenceMode: 0

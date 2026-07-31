@@ -1,0 +1,44 @@
+scenario_info:
+  name: "IMT"
+  description: "IMT School"
+  version: "1.0"
+  map: "Test"
+  tags: ["Indoor", "Crowd", "Corridor", "Openspace"]
+  preview: "IMT.png"
+
+simulation:
+  duration: 0.1
+  random_seed: 42
+  time_scale: 1.0
+  min_humans: 0
+  max_humans: 50
+
+points:
+  start_robot: {x: 0, y: 0, z: -7}
+  end_robot: {x: 7, y: 0, z: 0}
+  start_human: {x: 7, y: 0, z: 0}
+  end_human: {x: 0, y: 0, z: -7}
+  spawn_zone:
+    center: {x: 0, y: 0, z: 0}
+    size: {x: 7, y: 1, z: 7}
+
+robot:
+  start: "start_robot"
+  goal: "end_robot"
+  behavior: "normal"
+  speed: 1.2
+
+humans:
+  # Groupe 1 : simples piétons spawn aléatoire dans une zone
+  - id: "pedestrians"
+    count: 4
+    spawn:
+      type: "random"
+      ref: "spawn_zone"
+    goal:
+      type: "random"
+      ref: "spawn_zone"
+    behavior: "normal"
+    speed: 1.0
+    movement_controller:
+      type: "SFM"

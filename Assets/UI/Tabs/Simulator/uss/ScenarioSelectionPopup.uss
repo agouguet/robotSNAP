@@ -1,0 +1,174 @@
+/* ===== POPUP OVERLAY ===== */
+.popup-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.65);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* ===== POPUP PANEL ===== */
+.popup-panel {
+    width: 1200px;
+    max-width: 90%;
+    max-height: 85%;
+    background-color: var(--bg-primary);
+    border-radius: 16px;
+    padding: 28px 32px;
+    flex-direction: column;
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--accent-glow);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.popup-title {
+    font-size: 22px;
+    font-weight: bold;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.popup-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+/* ===== TOOLBAR ===== */
+.popup-toolbar {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 16px;
+    justify-content: space-between;
+}
+
+#ScenarioSearch {
+    flex-grow: 1;
+    flex-direction: row;
+    max-width: 400px;
+    align-items: center;
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--border-color);
+    padding: 0 12px;
+    margin-right: 12px;
+    transition: border-color 0.2s;
+}
+
+#ScenarioSearch:focus {
+    border-color: var(--accent);
+}
+
+.scenario-search-icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    -unity-background-image-tint-color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+/* === CHAMP DE TEXTE === */
+.popup-search {
+    flex-grow: 1;
+    background-color: transparent;
+    border-width: 0;
+    padding: 8px 0;
+    color: var(--text-primary);
+    font-size: 14px;
+    min-height: 36px;
+    --unity-cursor-color: var(--text-primary);
+}
+
+.popup-search .unity-text-field__input {
+    background-color: transparent;
+    border-width: 0;
+    padding: 0;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.popup-search .unity-text-field__input{
+    color: var(--text-secondary);
+    font-weight: normal;
+}
+
+.popup-search:focus {
+    border-color: transparent;
+}
+
+.popup-search .unity-text-field__input:focus {
+    border-color: transparent;
+}
+
+
+.popup-dropdowns {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: 12px;
+}
+
+.popup-filter-dropdown,
+.popup-sort-dropdown {
+    width: 150px;
+    height: 42px;
+    flex-shrink: 0;
+}
+
+
+
+/* ===== LIST / GRID CONTAINER ===== */
+.popup-list {
+    flex-grow: 1;
+    min-height: 500px;
+    max-height: 700px;
+    margin-bottom: 20px;
+    background-color: var(--bg-primary);
+    border-radius: 8px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--border-color);
+    padding: 8px;
+}
+
+/* ===== FOOTER BUTTONS ===== */
+.popup-footer {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+    padding-top: 16px;
+}
+
+.popup-footer .action-button {
+    width: auto;
+    margin-left: 8px;
+    padding: 16px 26px;
+    font-size: 16px;
+    border-radius: 6px;
+    color: var(--text-primary);
+}
+
+.popup-footer .action-button.primary {
+    background-color: var(--accent);
+}
+.popup-footer .action-button.primary:hover {
+    background-color: var(--accent-soft);
+}
+
+.popup-footer .action-button.secondary {
+    background-color: transparent;
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--border-color);
+}
+.popup-footer .action-button.secondary:hover {
+    background-color: var(--button-hover);
+}

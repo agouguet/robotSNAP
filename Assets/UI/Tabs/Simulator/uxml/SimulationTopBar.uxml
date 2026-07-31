@@ -9,7 +9,7 @@
                 <ui:VisualElement class="button-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/folder.png?fileID=2800000&amp;guid=e5af9e7dfb7d9e0e68161298d5377cb7&amp;type=3#folder&quot;);"/>
                 <ui:Label text="Load scenario" class="button-label"/>
             </ui:Button>
-            <ui:Button name="StartStopButton" class="action-button">
+            <ui:Button name="StartStopButton" class="action-button start-stop-button">
                 <ui:VisualElement name="StartStopIcon" class="button-icon" style="background-image: none;"/>
                 <ui:Label name="StartStopLabel" text="Start" class="button-label"/>
             </ui:Button>

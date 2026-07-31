@@ -1,6 +1,5 @@
-using UnityEngine.UIElements;
 using UnityEngine;
-using System.Collections;
+using UnityEngine.UIElements;
 using RobotSNAP;
 using RobotSNAP.Core;
 using RobotSNAP.Core.Scenario;
@@ -8,7 +7,8 @@ using RobotSNAP.Core.Scenario;
 public class SimulationTabController : MonoBehaviour
 {
     [SerializeField] private UIDocument uiDocument;
-    [SerializeField] private ScenarioManager scenarioManager; // à assigner dans l'inspecteur
+    [SerializeField] private ScenarioManager scenarioManager;
+    [SerializeField] private ScenarioSelectionController scenarioSelectionController;
 
     private Supervisor _supervisor;
     private bool _isInitialized = false;
@@ -22,8 +22,7 @@ public class SimulationTabController : MonoBehaviour
     private Button _pauseResumeButton;
     private VisualElement _cameraOverlay;
 
-    private enum SimState { Idle, Running, Paused }
-    private SimState _currentState = SimState.Idle;
+    private SimulationState _currentState = SimulationState.Idle;
 
     private void OnEnable()
     {
@@ -35,6 +34,10 @@ public class SimulationTabController : MonoBehaviour
     private void OnDisable()
     {
         MainViewController.OnViewLoaded -= OnViewLoaded;
+        EventBus.Instance.Unsubscribe<SimulationStateChangedEvent>(OnStateChanged);
+
+        if (_loadScenarioButton != null)
+            _loadScenarioButton.clicked -= OnLoadScenarioClicked;
     }
 
     private void OnViewLoaded(string viewName)
@@ -83,6 +86,12 @@ public class SimulationTabController : MonoBehaviour
             return;
         }
 
+        // Récupération du ScenarioSelectionController
+        if (scenarioSelectionController == null)
+            scenarioSelectionController = GetComponent<ScenarioSelectionController>();
+        if (scenarioSelectionController == null)
+            scenarioSelectionController = FindObjectOfType<ScenarioSelectionController>();
+
         _isInitialized = true;
         Initialize();
         MainViewController.OnViewLoaded -= OnViewLoaded;
@@ -129,19 +138,29 @@ public class SimulationTabController : MonoBehaviour
         // === Pause / Resume ===
         _pauseResumeButton.clicked += OnPauseResumeClicked;
 
+        // === Abonnement aux événements d'état ===
+        EventBus.Instance.Subscribe<SimulationStateChangedEvent>(OnStateChanged);
+
         // === État initial ===
         UpdateUI();
+    }
 
-        // === Surveillance des changements d'état ===
-        StartCoroutine(CheckStatePeriodically());
+    private void OnLoadScenarioClicked()
+    {
+        if (scenarioSelectionController != null)
+            scenarioSelectionController.OpenPopup();
+        else
+            Debug.LogWarning("[SimulationTabController] ScenarioSelectionController non trouvé.");
+    }
 
-        // Souscrire aux événements de ScenarioManager et Supervisor si nécessaire
-        // (par exemple, OnScenarioLoaded, OnScenarioApplied, etc.)
+    private void OnStateChanged(SimulationStateChangedEvent evt)
+    {
+        _currentState = evt.NewState;
+        UpdateUI();
     }
 
     private void OnViewChanged(string viewName)
     {
-        // Implémentez le changement de vue (caméra orthographique, etc.)
         Camera cam = GetComponent<Camera>();
         if (cam != null)
         {
@@ -153,95 +172,57 @@ public class SimulationTabController : MonoBehaviour
         }
     }
 
-    private void OnLoadScenarioClicked()
-    {
-        // Ouvrir un dialogue pour choisir un scénario, puis charger
-        // Exemple : scenarioManager.LoadScenario("mon_scenario");
-    }
-
     private void OnStartStopClicked()
     {
         switch (_currentState)
         {
-            case SimState.Idle:
-                // Démarrer la simulation
-                scenarioManager.StartSimulation();
+            case SimulationState.Idle:
+            case SimulationState.Ready:
+                EventBus.Instance.Publish(new StartSimulationCommand());
                 break;
-            case SimState.Running:
-            case SimState.Paused:
-                // Arrêter (stop)
-                scenarioManager.StopSimulation();
+            case SimulationState.Running:
+            case SimulationState.Paused:
+                EventBus.Instance.Publish(new StopSimulationCommand());
                 break;
         }
-        // L'UI sera mise à jour par la coroutine
     }
 
     private void OnPauseResumeClicked()
     {
-        if (_currentState == SimState.Running)
-        {
-            _supervisor.Pause();
-        }
-        else if (_currentState == SimState.Paused)
-        {
-            _supervisor.Resume();
-        }
+        if (_currentState == SimulationState.Running)
+            EventBus.Instance.Publish(new PauseSimulationCommand());
+        else if (_currentState == SimulationState.Paused)
+            EventBus.Instance.Publish(new ResumeSimulationCommand());
     }
 
     private void ToggleFullscreen()
     {
-        // Implémentez le plein écran (Screen.fullScreen = !Screen.fullScreen)
-    }
-
-    private IEnumerator CheckStatePeriodically()
-    {
-        while (true)
-        {
-            yield return new WaitForSeconds(0.1f);
-            UpdateUI();
-        }
+        Screen.fullScreen = !Screen.fullScreen;
+        Debug.Log($"[SimulationTabController] Fullscreen: {Screen.fullScreen}");
     }
 
     private void UpdateUI()
     {
-        // Déterminer l'état
-        SimState newState;
-        bool hasScenario = scenarioManager.HasScenarioLoaded;
-        bool isPaused = _supervisor.IsPaused;
-
-        if (!hasScenario)
-            newState = SimState.Idle;
-        else if (!isPaused)
-            newState = SimState.Running;
-        else
-            newState = SimState.Paused;
-
-        if (newState != _currentState)
-        {
-            _currentState = newState;
-            // Optionnel : déclencher un événement de changement d'état
-        }
-
-        // Mettre à jour les boutons
         var startIcon = _startStopButton?.Q<VisualElement>("StartStopIcon");
         var startLabel = _startStopButton?.Q<Label>("StartStopLabel");
 
-        switch (newState)
+        switch (_currentState)
         {
-            case SimState.Idle:
+            case SimulationState.Idle:
+            case SimulationState.Ready:
                 if (startLabel != null) startLabel.text = "Start";
                 if (startIcon != null) SetIcon(startIcon, "play");
                 _pauseResumeButton.SetEnabled(false);
                 break;
 
-            case SimState.Running:
+            case SimulationState.Running:
                 if (startLabel != null) startLabel.text = "Stop";
                 if (startIcon != null) SetIcon(startIcon, "stop");
                 _pauseResumeButton.SetEnabled(true);
                 SetPauseResumeText("Pause", "pause");
                 break;
 
-            case SimState.Paused:
+            case SimulationState.Paused:
                 if (startLabel != null) startLabel.text = "Stop";
                 if (startIcon != null) SetIcon(startIcon, "stop");
                 _pauseResumeButton.SetEnabled(true);
@@ -249,9 +230,11 @@ public class SimulationTabController : MonoBehaviour
                 break;
         }
 
-        // Overlay de pause
+        bool isRunningOrPaused = (_currentState == SimulationState.Running || _currentState == SimulationState.Paused);
+        _startStopButton?.EnableInClassList("running", isRunningOrPaused);
+
         if (_cameraOverlay != null)
-            _cameraOverlay.style.display = (newState == SimState.Paused) ? DisplayStyle.Flex : DisplayStyle.None;
+            _cameraOverlay.style.display = (_currentState == SimulationState.Paused) ? DisplayStyle.Flex : DisplayStyle.None;
     }
 
     private void SetPauseResumeText(string text, string iconName)
@@ -264,9 +247,10 @@ public class SimulationTabController : MonoBehaviour
 
     private void SetIcon(VisualElement iconElement, string iconName)
     {
-        // Chargez votre icône depuis Resources ou autre
         Texture2D tex = Resources.Load<Texture2D>($"Icons/{iconName}");
         if (tex != null)
             iconElement.style.backgroundImage = new StyleBackground(tex);
+        else
+            Debug.LogWarning($"[SimulationTabController] Icône non trouvée: Icons/{iconName}");
     }
 }

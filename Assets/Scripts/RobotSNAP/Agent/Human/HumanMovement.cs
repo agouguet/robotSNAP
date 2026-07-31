@@ -51,34 +51,6 @@ namespace RobotSNAP.Agents
             InitializeNavMeshFilter();
         }
 
-        private void FixedUpdate()
-        {
-            if (!_isPlaying || _avatar == null || !_avatar.hasDestination) return;
-
-            _currentPosition = _avatar.GetCurrentPosition2D();
-            _currentVelocity = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
-
-            UpdateTrajectoryBuffer();
-            UpdateNavMeshPath();
-            DetectNeighbors();
-
-            Vector2 desiredVelocity = _controller.ComputeVelocity(
-                _currentPosition,
-                _currentVelocity,
-                _currentGoalPoint,
-                _neighborPositions.ToArray(),
-                _neighborVelocities.ToArray(),
-                Time.fixedDeltaTime
-            );
-
-            float desiredSpeed = _avatar.DesiredSpeed;
-            Vector2 finalVelocity = desiredVelocity.normalized * desiredSpeed;
-            _rb.linearVelocity = new Vector3(finalVelocity.x, _rb.linearVelocity.y, finalVelocity.y);
-            _avatar.SetVelocity(_rb.linearVelocity);
-
-            UpdateRotation(finalVelocity);
-        }
-
         #endregion
 
         #region Initialization
@@ -153,7 +125,6 @@ namespace RobotSNAP.Agents
                     break;
             }
         }
-
 
         #endregion
 
@@ -276,6 +247,34 @@ namespace RobotSNAP.Agents
 
         #region Public API - Movement Control
 
+        public void move()
+        {
+            if (!_isPlaying || _avatar == null || !_avatar.hasDestination) return;
+
+            _currentPosition = _avatar.GetCurrentPosition2D();
+            _currentVelocity = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
+
+            UpdateTrajectoryBuffer();
+            UpdateNavMeshPath();
+            DetectNeighbors();
+
+            Vector2 desiredVelocity = _controller.ComputeVelocity(
+                _currentPosition,
+                _currentVelocity,
+                _currentGoalPoint,
+                _neighborPositions.ToArray(),
+                _neighborVelocities.ToArray(),
+                Time.fixedDeltaTime
+            );
+
+            float desiredSpeed = _avatar.DesiredSpeed;
+            Vector2 finalVelocity = desiredVelocity.normalized * desiredSpeed;
+            _rb.linearVelocity = new Vector3(finalVelocity.x, _rb.linearVelocity.y, finalVelocity.y);
+            _avatar.SetVelocity(_rb.linearVelocity);
+
+            UpdateRotation(finalVelocity);
+        }
+
         public void SetPlaying(bool playing)
         {
             _isPlaying = playing;
@@ -394,4 +393,3 @@ namespace RobotSNAP.Agents
         #endregion
     }
 }
-

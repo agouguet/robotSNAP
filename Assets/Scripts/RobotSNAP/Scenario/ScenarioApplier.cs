@@ -225,18 +225,29 @@ namespace RobotSNAP.Core.Scenario
 
             if (_resetRobotPosition)
             {
-                Vector3 startPos = ResolvePosition(robotConfig.StartRef);
+                // Récupérer position ET rotation (yaw) du point de départ
+                var (startPos, startRot) = _loader.GetPositionAndRotation(_currentScenario, robotConfig.StartRef);
                 var robotComponent = robot.GetComponent<Robot>();
                 if (robotComponent != null)
                     robotComponent.Reset();
 
                 if (robotComponent != null)
-                    robotComponent.SetBaseLinkPosition(startPos);
+                {
+                    // Utiliser la méthode SetBaseLinkPose qui accepte position + rotation
+                    robotComponent.SetBaseLinkPose(startPos, startRot);
+                }
                 else
-                    robot.transform.position = startPos;   // fallback
-                if (_logEvents) Debug.Log($"[ScenarioApplier] Robot position set to {startPos}");
+                {
+                    // Fallback si pas de composant Robot
+                    robot.transform.position = startPos;
+                    robot.transform.rotation = startRot;
+                }
+                if (_logEvents) 
+                    Debug.Log($"[ScenarioApplier] Robot position set to {startPos}, rotation yaw: {startRot.eulerAngles.y}");
             }
 
+            // Pour le but, on peut aussi récupérer la rotation si besoin (ex: pour orienter le robot vers le but)
+            // Mais actuellement, le goal est utilisé uniquement pour la position.
             Vector3 goalPos = ResolvePosition(robotConfig.GoalRef);
             SetRobotGoal(robot, goalPos);
             SetRobotBehavior(robot, robotConfig.Behavior);

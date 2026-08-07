@@ -3,26 +3,34 @@ using System.Collections.Generic;
 using RobotSNAP.Agents.Movement.Controllers;
 using RobotSNAP.Agents.Movement.Interfaces;
 using RobotSNAP.Core;
+using UnityEngine.AI;
 
 namespace RobotSNAP.Agents
 {
+    /// <summary>
+    /// Contrôleur de mouvement pour un agent humain utilisant un IMovementController (SFM, ONNX, Hybride).
+    /// Gère le chemin NavMesh, la détection des voisins (sans doublon) et l'application du mouvement.
+    /// </summary>
     [RequireComponent(typeof(Rigidbody))]
     public class HumanMovement : MonoBehaviour
     {
-        [Header("Movement Settings")]
+        [Header("Fallback Settings (si config manquante)")]
         [SerializeField] private float _maxSpeed = 2.0f;
+        [SerializeField] private float _angularSpeed = 180f;
 
+        // Références principales
+        private HumanManager _humanManager;
+        private int _agentId;
         private HumanAgent _avatar;
         private IMovementController _controller;
         private HumanConfig _config;
         private Rigidbody _rb;
 
         // Navigation NavMesh
-        private UnityEngine.AI.NavMeshPath _navMeshPath;
+        private NavMeshPath _navMeshPath;
         private Vector3[] _pathCorners;
         private float _lastPathUpdate;
-        private Vector2 _currentGoalPoint;
-        private UnityEngine.AI.NavMeshQueryFilter _navMeshFilter;
+        private Vector2 _currentGoalPoint; // prochain waypoint
 
         // État local
         private Vector2 _currentVelocity;
@@ -30,15 +38,15 @@ namespace RobotSNAP.Agents
         private bool _isPlaying = true;
         private MovementControllerType _currentControllerType;
 
-        // Buffer de trajectoire
-        private Vector2[] _trajectoryBuffer;
-        private int _bufferIndex;
-        private const int TRAJECTORY_BUFFER_SIZE = 8;
+        // Détection des voisins (positions/vitesses)
+        private readonly List<Vector2> _neighborPositions = new List<Vector2>();
+        private readonly List<Vector2> _neighborVelocities = new List<Vector2>();
 
-        // Détection des voisins
-        private List<Vector2> _neighborPositions;
-        private List<Vector2> _neighborVelocities;
+        // Cache pour éviter les allocations
+        private Collider[] _overlapCache = new Collider[50];
+        private HashSet<int> _processedAgents = new HashSet<int>(); // réutilisé
 
+        // Propriétés publiques
         public bool IsPlaying => _isPlaying;
         public Vector2 CurrentVelocity => _currentVelocity;
         public Vector2 CurrentPosition => _currentPosition;
@@ -48,7 +56,14 @@ namespace RobotSNAP.Agents
         private void Awake()
         {
             InitializeComponents();
-            InitializeNavMeshFilter();
+        }
+
+        private void FixedUpdate()
+        {
+            if (_isPlaying && _avatar != null && _avatar.hasDestination)
+            {
+                Move();
+            }
         }
 
         #endregion
@@ -57,35 +72,24 @@ namespace RobotSNAP.Agents
 
         private void InitializeComponents()
         {
+            // Rigidbody : on contrôle entièrement la vitesse
             _rb = GetComponent<Rigidbody>();
             if (_rb == null) _rb = gameObject.AddComponent<Rigidbody>();
-
-            _rb.useGravity = true;
+            _rb.useGravity = false;
             _rb.constraints = RigidbodyConstraints.FreezeRotationX |
-                             RigidbodyConstraints.FreezeRotationZ |
-                             RigidbodyConstraints.FreezePositionY;
-            _rb.linearDamping = 2f;
-            _rb.angularDamping = 5f;
+                              RigidbodyConstraints.FreezeRotationZ |
+                              RigidbodyConstraints.FreezePositionY;
+            _rb.linearDamping = 0f;
+            _rb.angularDamping = 0f;
 
-            _navMeshPath = new UnityEngine.AI.NavMeshPath();
+            _navMeshPath = new NavMeshPath();
             _pathCorners = new Vector3[0];
-            _trajectoryBuffer = new Vector2[TRAJECTORY_BUFFER_SIZE];
-            _neighborPositions = new List<Vector2>();
-            _neighborVelocities = new List<Vector2>();
-
             SetupCollider();
-        }
-
-        private void InitializeNavMeshFilter()
-        {
-            _navMeshFilter = new UnityEngine.AI.NavMeshQueryFilter();
-            _navMeshFilter.agentTypeID = 0;
-            _navMeshFilter.areaMask = UnityEngine.AI.NavMesh.AllAreas;
         }
 
         private void SetupCollider()
         {
-            var collider = GetComponent<CapsuleCollider>();
+            CapsuleCollider collider = GetComponent<CapsuleCollider>();
             if (collider == null) collider = gameObject.AddComponent<CapsuleCollider>();
 
             var renderer = GetComponentInChildren<SkinnedMeshRenderer>();
@@ -97,15 +101,53 @@ namespace RobotSNAP.Agents
                 collider.height = height;
                 collider.center = Vector3.up * height / 1.95f;
             }
+            else
+            {
+                // valeurs par défaut pour un humain standard
+                collider.radius = 0.25f;
+                collider.height = 1.7f;
+                collider.center = Vector3.up * 0.85f;
+            }
         }
 
         public void Initialize(HumanAgent avatar, HumanConfig config)
         {
             _avatar = avatar;
             _config = config;
+            _agentId = avatar.agentId;
             _currentControllerType = config.controllerType;
             InitializeController(_currentControllerType);
         }
+
+        private void OnEnable()
+        {
+            if (_agentId != 0 && _humanManager != null)
+            {
+                Vector2 currentPos = new Vector2(transform.position.x, transform.position.z);
+                Vector2 currentVel = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
+                _humanManager.RegisterAgent(_agentId, currentPos);
+                _humanManager.UpdateAgent(_agentId, currentPos, currentVel);
+            }
+        }
+   
+
+        private void OnDisable()
+        {
+            if (_humanManager != null && _agentId != 0)
+            {
+                _humanManager.UnregisterAgent(_agentId);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            // Sécurité supplémentaire (même si OnDisable est appelé avant, ça ne fait pas de mal)
+            if (_humanManager != null && _agentId != 0)
+            {
+                _humanManager.UnregisterAgent(_agentId);
+            }
+        }
+
 
         private void InitializeController(MovementControllerType type)
         {
@@ -128,28 +170,84 @@ namespace RobotSNAP.Agents
 
         #endregion
 
-        #region Navigation
+        #region Movement Logic
 
-        private void UpdateTrajectoryBuffer()
+        private void Move()
         {
-            _trajectoryBuffer[_bufferIndex] = _currentPosition;
-            _bufferIndex = (_bufferIndex + 1) % TRAJECTORY_BUFFER_SIZE;
+            _currentPosition = new Vector2(transform.position.x, transform.position.z);
+            _currentVelocity = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
+
+            // 1. Mettre à jour les données dans le manager
+            _humanManager?.UpdateAgent(_agentId, _currentPosition, _currentVelocity);
+
+            // 2. Mise à jour du chemin NavMesh
+            UpdateNavMeshPath();
+
+            // 3. Récupérer les voisins via le manager (plus de OverlapSphere)
+            _neighborPositions.Clear();
+            _neighborVelocities.Clear();
+            if (_humanManager != null)
+            {
+                _humanManager.GetNeighbors(
+                    _agentId,
+                    _currentPosition,
+                    _config.perceptionRadiusAgent,
+                    _neighborPositions,
+                    _neighborVelocities
+                );
+            }
+
+            // 4. Calcul de la vélocité par le contrôleur (inchangé)
+            Vector2 desiredVelocity = _controller.ComputeVelocity(
+                _currentPosition,
+                _currentVelocity,
+                _currentGoalPoint,
+                _neighborPositions.ToArray(),
+                _neighborVelocities.ToArray(),
+                Time.fixedDeltaTime
+            );
+
+            // Application directe (le contrôleur gère déjà les limites)
+            Vector3 finalVelocity3D = new Vector3(desiredVelocity.x, 0, desiredVelocity.y);
+
+            // Limite de sécurité (si le contrôleur dépasse)
+            float maxSpeed = _config != null ? _config.maxSpeed : _maxSpeed;
+            if (finalVelocity3D.sqrMagnitude > maxSpeed * maxSpeed)
+                finalVelocity3D = finalVelocity3D.normalized * maxSpeed;
+
+            _rb.linearVelocity = finalVelocity3D;
+
+            // Mise à jour de la vélocité dans l'avatar
+            _avatar?.SetVelocity(_rb.linearVelocity);
+
+            // Rotation vers la direction du mouvement
+            UpdateRotation(desiredVelocity);
         }
+
+        #endregion
+
+        #region Navigation
 
         private void UpdateNavMeshPath()
         {
+            if (_config == null) return;
             if (Time.time - _lastPathUpdate < _config.pathUpdateInterval) return;
             _lastPathUpdate = Time.time;
 
             Vector3 start3D = new Vector3(_currentPosition.x, 0, _currentPosition.y);
             Vector3 goal3D = new Vector3(_avatar.currentDestination.x, 0, _avatar.currentDestination.y);
 
-            if (UnityEngine.AI.NavMesh.CalculatePath(start3D, goal3D, UnityEngine.AI.NavMesh.AllAreas, _navMeshPath))
+            if (NavMesh.CalculatePath(start3D, goal3D, NavMesh.AllAreas, _navMeshPath))
             {
-                if (_navMeshPath.status == UnityEngine.AI.NavMeshPathStatus.PathComplete)
+                if (_navMeshPath.status == NavMeshPathStatus.PathComplete)
                 {
                     _pathCorners = _navMeshPath.corners;
                     UpdateCurrentGoalPoint();
+                }
+                else
+                {
+                    // Si le chemin est incomplet, on prend la destination directe
+                    _currentGoalPoint = _avatar.currentDestination;
                 }
             }
             else
@@ -160,15 +258,16 @@ namespace RobotSNAP.Agents
 
         private void UpdateCurrentGoalPoint()
         {
-            if (_navMeshPath.corners == null || _navMeshPath.corners.Length == 0)
+            if (_pathCorners == null || _pathCorners.Length == 0)
             {
                 _currentGoalPoint = _avatar.currentDestination;
                 return;
             }
 
-            foreach (Vector3 p in _navMeshPath.corners)
+            float goalReachedDist = _config != null ? _config.goalReachedDistance : 0.2f;
+            foreach (Vector3 p in _pathCorners)
             {
-                if (Util.Geometry.GroundPlaneDist(transform.position, p) > _config.goalReachedDistance)
+                if (Vector2.Distance(_currentPosition, new Vector2(p.x, p.z)) > goalReachedDist)
                 {
                     _currentGoalPoint = new Vector2(p.x, p.z);
                     return;
@@ -177,25 +276,40 @@ namespace RobotSNAP.Agents
             _currentGoalPoint = _avatar.currentDestination;
         }
 
+        #endregion
+
+        #region Neighbor Detection (optimisée sans doublon)
+
         private void DetectNeighbors()
         {
+            // Vide les listes et le HashSet de la frame précédente
             _neighborPositions.Clear();
             _neighborVelocities.Clear();
+            _processedAgents.Clear();
 
-            Collider[] colliders = Physics.OverlapSphere(
-                new Vector3(_currentPosition.x, 0.5f, _currentPosition.y),
-                _config.perceptionRadiusAgent
-            );
+            if (_config == null) return;
 
-            foreach (var collider in colliders)
+            float radius = _config.perceptionRadiusAgent;
+            Vector3 center = new Vector3(_currentPosition.x, 0.5f, _currentPosition.y);
+
+            int count = Physics.OverlapSphereNonAlloc(center, radius, _overlapCache);
+
+            for (int i = 0; i < count; i++)
             {
-                HumanAgent otherAvatar = collider.GetComponentInParent<HumanAgent>();
+                Collider col = _overlapCache[i];
+                if (col.transform == transform) continue; // ignorer soi-même
+
+                // --- Détection d'un HumanAgent ---
+                HumanAgent otherAvatar = col.GetComponentInParent<HumanAgent>();
                 if (otherAvatar != null && otherAvatar != _avatar && otherAvatar.gameObject.activeSelf)
                 {
+                    int id = otherAvatar.gameObject.GetInstanceID();
+                    if (_processedAgents.Contains(id)) continue;
+                    _processedAgents.Add(id);
+
                     Vector2 otherPos = otherAvatar.GetCurrentPosition2D();
                     float dist = Vector2.Distance(_currentPosition, otherPos);
-
-                    if (dist < _config.perceptionRadiusAgent && dist > 0.01f)
+                    if (dist < radius && dist > 0.01f)
                     {
                         _neighborPositions.Add(otherPos);
                         _neighborVelocities.Add(new Vector2(
@@ -206,74 +320,54 @@ namespace RobotSNAP.Agents
                     continue;
                 }
 
-                Robot robot = collider.GetComponentInParent<Robot>();
+                // --- Détection d'un Robot ---
+                Robot robot = col.GetComponentInParent<Robot>();
                 if (robot != null && robot.gameObject.activeSelf)
                 {
-                    Vector2 robotPos = new Vector2(robot.transform.position.x, robot.transform.position.z);
-                    float dist = Vector2.Distance(_currentPosition, robotPos);
+                    int id = robot.gameObject.GetInstanceID();
+                    if (_processedAgents.Contains(id)) continue;
+                    _processedAgents.Add(id);
 
-                    if (dist < _config.perceptionRadiusAgent)
+                    Vector3 robotPos = robot.Position;
+                    float dist = Vector2.Distance(_currentPosition, new Vector2(robotPos.x, robotPos.z));
+                    if (dist < radius)
                     {
-                        _neighborPositions.Add(robotPos);
+                        _neighborPositions.Add(new Vector2(robotPos.x, robotPos.z));
                         _neighborVelocities.Add(new Vector2(robot.Velocity.x, robot.Velocity.z));
                     }
+                    // float dist = Vector2.Distance(_currentPosition, robotPos);
+                    // if (dist < radius)
+                    // {
+                    //     _neighborPositions.Add(robotPos);
+                    //     _neighborVelocities.Add(new Vector2(robot.Velocity.x, robot.Velocity.z));
+                    // }
                 }
-            }
-        }
-
-        private void UpdateRotation(Vector2 movement)
-        {
-            if (_avatar == null || !_avatar.hasDestination) return;
-
-            // Si on est déjà arrivé, on ne force pas la rotation
-            float distanceToGoal = Vector2.Distance(_currentPosition, _avatar.currentDestination);
-            if (distanceToGoal < _config.goalReachedDistance) return;
-
-            // Direction vers le but (ou le prochain waypoint)
-            Vector2 directionToGoal = _avatar.currentDestination - _currentPosition;
-            if (directionToGoal.sqrMagnitude > 0.0001f)
-            {
-                float angle = Mathf.Atan2(directionToGoal.x, directionToGoal.y) * Mathf.Rad2Deg;
-                Quaternion targetRotation = Quaternion.Euler(0, angle, 0);
-                transform.rotation = Quaternion.RotateTowards(
-                    transform.rotation,
-                    targetRotation,
-                    _config.angularSpeed * Time.fixedDeltaTime
-                );
             }
         }
 
         #endregion
 
-        #region Public API - Movement Control
+        #region Rotation
 
-        public void move()
+        private void UpdateRotation(Vector2 movementDirection)
         {
-            if (!_isPlaying || _avatar == null || !_avatar.hasDestination) return;
+            if (movementDirection.sqrMagnitude < 0.001f) return;
 
-            _currentPosition = _avatar.GetCurrentPosition2D();
-            _currentVelocity = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
-
-            UpdateTrajectoryBuffer();
-            UpdateNavMeshPath();
-            DetectNeighbors();
-
-            Vector2 desiredVelocity = _controller.ComputeVelocity(
-                _currentPosition,
-                _currentVelocity,
-                _currentGoalPoint,
-                _neighborPositions.ToArray(),
-                _neighborVelocities.ToArray(),
-                Time.fixedDeltaTime
+            float angle = Mathf.Atan2(movementDirection.x, movementDirection.y) * Mathf.Rad2Deg;
+            Quaternion targetRotation = Quaternion.Euler(0, angle, 0);
+            float angularSpeed = _config != null ? _config.angularSpeed : _angularSpeed;
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation,
+                targetRotation,
+                angularSpeed * Time.fixedDeltaTime
             );
-
-            float desiredSpeed = _avatar.DesiredSpeed;
-            Vector2 finalVelocity = desiredVelocity.normalized * desiredSpeed;
-            _rb.linearVelocity = new Vector3(finalVelocity.x, _rb.linearVelocity.y, finalVelocity.y);
-            _avatar.SetVelocity(_rb.linearVelocity);
-
-            UpdateRotation(finalVelocity);
         }
+
+        #endregion
+
+        #region Public API
+
+        public void SetHumanManager(HumanManager manager) { _humanManager = manager; }
 
         public void SetPlaying(bool playing)
         {
@@ -299,19 +393,20 @@ namespace RobotSNAP.Agents
                 _avatar.currentDestination = goal;
                 _avatar.hasDestination = true;
             }
+            // Force une mise à jour du chemin au prochain FixedUpdate
             _lastPathUpdate = -_config.pathUpdateInterval;
-            UpdateNavMeshPath();
         }
 
         public void Reset()
         {
             _controller?.Reset();
-            System.Array.Clear(_trajectoryBuffer, 0, TRAJECTORY_BUFFER_SIZE);
-            _bufferIndex = 0;
             _rb.linearVelocity = Vector3.zero;
             _avatar?.SetVelocity(Vector3.zero);
             _pathCorners = new Vector3[0];
             _currentGoalPoint = Vector2.zero;
+            _neighborPositions.Clear();
+            _neighborVelocities.Clear();
+            _processedAgents.Clear();
         }
 
         public void SwitchController(MovementControllerType newType)
@@ -321,22 +416,16 @@ namespace RobotSNAP.Agents
             InitializeController(newType);
         }
 
-        #endregion
-
-        #region Public API - Scenario System
-
         public void SetControllerType(int type)
         {
             MovementControllerType controllerType = (MovementControllerType)Mathf.Clamp(type, 0, 2);
             if (_currentControllerType != controllerType)
-            {
                 SwitchController(controllerType);
-            }
         }
 
         #endregion
 
-        #region Public API - Getters
+        #region Getters
 
         public IMovementController GetController() => _controller;
         public MovementControllerType GetControllerType() => _currentControllerType;
@@ -358,7 +447,8 @@ namespace RobotSNAP.Agents
                 Vector3 lastPos = transform.position;
                 foreach (Vector3 position in _navMeshPath.corners)
                 {
-                    if (Util.Geometry.GroundPlaneDist(transform.position, position) > _config.goalReachedDistance)
+                    float dist = Vector2.Distance(_currentPosition, new Vector2(position.x, position.z));
+                    if (dist > _config.goalReachedDistance)
                     {
                         Debug.DrawLine(lastPos, position, Color.black);
                         Gizmos.DrawCube(position, new Vector3(0.15f, 0.15f, 0.15f));

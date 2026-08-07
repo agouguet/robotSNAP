@@ -133,6 +133,7 @@ GameObject:
   - component: {fileID: 4147490}
   - component: {fileID: 4147489}
   - component: {fileID: 4147492}
+  - component: {fileID: 4147494}
   - component: {fileID: 4147493}
   m_Layer: 0
   m_Name: Supervisor
@@ -178,6 +179,7 @@ Transform:
   - {fileID: 1469723305}
   - {fileID: 1187733929}
   - {fileID: 316566386}
+  - {fileID: 1672221279}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4147488
@@ -187,7 +189,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4147485}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7acef0b79454c9b4dae3f8139bc4ba77, type: 3}
   m_Name: 
@@ -268,6 +270,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   enabledInPlayMode: 1
+--- !u!114 &4147494
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4147485}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d78bf58d3f85187b81aa97d85062b26, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ScenarioDataService
+  _scenarioManager: {fileID: 4147489}
+  _useDebugData: 0
 --- !u!1 &316566385
 GameObject:
   m_ObjectHideFlags: 0
@@ -633,7 +649,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 572700764}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 99a04a6f1ef3476f28286ef2f64416c2, type: 3}
   m_Name: 
@@ -693,11 +709,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioSelectionController
   uiDocument: {fileID: 1187733928}
-  scenarioManager: {fileID: 4147489}
+  _dataService: {fileID: 4147494}
   _cardTemplate: {fileID: 9197481963319205126, guid: efb4d510811fa6ab5a4752b68470a224, type: 3}
   _columns: 4
   _cardSpacingPercent: 0.5
-  _useDebugData: 0
+  _searchPlaceholder: "Rechercher un sc\xE9nario..."
 --- !u!114 &732435987
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1267,6 +1283,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SidebarController
   uiDocument: {fileID: 1187733928}
+  _scenarioDataService: {fileID: 0}
 --- !u!114 &1187733934
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1398,10 +1415,10 @@ MonoBehaviour:
   robotPathColor: {r: 0, g: 1, b: 0, a: 1}
   robotGoalColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   robotVelocityColor: {r: 1, g: 0, b: 0, a: 1}
-  showHumanTrajectories: 1
+  showHumanTrajectories: 0
   showHumanGoals: 1
   showHumanVelocityVectors: 0
-  showHumanInteractionRadius: 1
+  showHumanInteractionRadius: 0
   colorHumansByState: 1
   humanOpacity: 1
   humanDefaultColor: {r: 0, g: 0, b: 1, a: 1}
@@ -1413,7 +1430,7 @@ MonoBehaviour:
   showCostmap: 0
   showLaserScans: 1
   showBoundingBoxes: 0
-  showAgentIDs: 1
+  showAgentIDs: 0
   showDistanceLabels: 0
   gridSize: 50
   gridDivisions: 50
@@ -1447,7 +1464,7 @@ MonoBehaviour:
   maxHeight: 30
   obstacleMask:
     serializedVersion: 2
-    m_Bits: 704
+    m_Bits: 4800
   collisionRadius: 0.2
   followableTags:
   - Robot
@@ -1471,6 +1488,59 @@ MonoBehaviour:
   splitViewCameras: []
   splitViewContainer: {fileID: 0}
   velocity: {x: 0, y: 0, z: 0}
+--- !u!1 &1672221278
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1672221279}
+  - component: {fileID: 1672221280}
+  m_Layer: 12
+  m_Name: InvibleWalls
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1672221279
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1672221278}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4147487}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &1672221280
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1672221278}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 20, y: 20, z: 20}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1821708844
 GameObject:
   m_ObjectHideFlags: 0
@@ -1579,12 +1649,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 89a1198d183afb5bbadd7cc58119bef0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  useRealTime: 1
+  useRealTime: 0
   timeScale: 1
   autoStart: 1
-  simulationStartHour: 4
+  simulationStartHour: 12
   logTimeChanges: 0
-  editorTimeDisplay: 14:17:59
+  editorTimeDisplay: 12:00:00
 --- !u!4 &2049586426
 Transform:
   m_ObjectHideFlags: 0

@@ -46,9 +46,36 @@ namespace RobotSNAP.Core.Scenario
         public event Action<ScenarioData> OnScenarioLoaded;
         public event Action<string> OnScenarioError;
         public event Action<string, Texture2D> OnMapLoaded;
+        public event Action OnPathsUpdated;
 
+        private void Awake()
+        {
+            var supervisor = Supervisor.Instance;
+            if (supervisor != null)
+            {
+                supervisor.OnConfigChanged += OnConfigChanged;
+            }
+        }
 
-        
+        private void OnDestroy()
+        {
+            var supervisor = Supervisor.Instance;
+            if (supervisor != null)
+            {
+                supervisor.OnConfigChanged -= OnConfigChanged;
+            }
+        }
+
+         private void OnConfigChanged(SimulationConfig config)
+        {
+            Debug.Log("[ScenarioLoader] Config changed, refreshing paths.");
+            RefreshPathsFromConfig();
+            
+            ClearScenarioCache();
+            ClearMapCache();
+            
+            OnPathsUpdated?.Invoke();
+        }
 
         /// <summary>
         /// Met à jour les chemins à partir de la SimulationConfig active.
@@ -62,12 +89,12 @@ namespace RobotSNAP.Core.Scenario
                 return;
             }
 
-            // Utiliser les chemins de la config, ou des valeurs par défaut
             string scenariosFolder = !string.IsNullOrEmpty(config.ScenariosFolder) ? config.ScenariosFolder : "Scenarios";
             string mapsFolder = !string.IsNullOrEmpty(config.DatasetPath) ? config.DatasetPath : "Dataset";
 
             _scenariosPath = Path.Combine(Application.streamingAssetsPath, scenariosFolder);
             _mapsPath = Path.Combine(Application.streamingAssetsPath, mapsFolder);
+            Debug.Log($"[ScenarioLoader] Scenarios path set to: {_scenariosPath}");
 
             EnsureDirectoriesExist();
             _isInitialized = true;
@@ -568,6 +595,7 @@ namespace RobotSNAP.Core.Scenario
         /// <returns>Liste des noms de scénarios (sans extension)</returns>
         public List<string> GetAvailableScenarios()
         {
+            Debug.LogWarning($"[ScenarioLoader] GetAvailableScenarios called, scenarios path: {_scenariosPath}" + $", exists: {Directory.Exists(_scenariosPath)}");
             if (!Directory.Exists(_scenariosPath))
             {
                 return new List<string>();
@@ -587,6 +615,8 @@ namespace RobotSNAP.Core.Scenario
                     }
                 }
             }
+
+            Debug.LogWarning($"[ScenarioLoader] Found {scenarios.Count} scenarios in {_scenariosPath}");
             
             return scenarios.OrderBy(x => x).ToList();
         }
@@ -777,6 +807,30 @@ namespace RobotSNAP.Core.Scenario
             }
             
             return Vector3.zero;
+        }
+
+        /// <summary>
+        /// Obtient la position et la rotation à partir d'une référence (point nommé).
+        /// </summary>
+        public (Vector3 position, Quaternion rotation) GetPositionAndRotation(ScenarioData scenario, string reference)
+        {
+            if (string.IsNullOrEmpty(reference)) 
+                return (Vector3.zero, Quaternion.identity);
+
+            if (scenario.Points != null && scenario.Points.TryGetValue(reference, out var point))
+            {
+                return (point.ToVector3(), point.Rotation);
+            }
+
+            // Fallback : essayer comme ID entier
+            if (int.TryParse(reference, out int id) && scenario.Points != null)
+            {
+                string key = id.ToString();
+                if (scenario.Points.TryGetValue(key, out point))
+                    return (point.ToVector3(), point.Rotation);
+            }
+
+            return (Vector3.zero, Quaternion.identity);
         }
 
         private Bounds GetBoundsFromRef(ScenarioData scenario, string reference)

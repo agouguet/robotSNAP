@@ -23,14 +23,14 @@ MonoBehaviour:
   desiredSpeed: 0.8
   maxSpeed: 1.2
   slowDownDistance: 1.5
-  controllerType: 2
+  controllerType: 0
   agentMass: 80
-  agentRadius: 0.25
+  agentRadius: 0.3
   relaxationTime: 0.5
   goalForceStrength: 10
   goalForceDistance: 5
-  perceptionRadiusAgent: 2.5
-  socialForceA: 2000
+  perceptionRadiusAgent: 10
+  socialForceA: 5000
   socialForceB: 0.08
   alignmentStrength: 0.3
   contactStiffnessK: 120000
@@ -60,7 +60,7 @@ MonoBehaviour:
   closeEnoughMinDistance: 0.2
   animationController: {fileID: 9100000, guid: d3b7ebf8605e64140b49960db196f694, type: 2}
   animationSmoothing: 0.6
-  idleSpeedThreshold: 0.5
+  idleSpeedThreshold: 0.15
   angularSpeed: 360
   showPredictionGizmos: 1
   predictionColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}

@@ -23,6 +23,7 @@ namespace RobotSNAP.CameraControl
             float speed = c.moveSpeed;
             if (Input.GetKey(c.fastMoveKey)) speed *= 3f;
             
+            // --- Mouvement (WASD/QE) avec collision ---
             Vector3 move = Vector3.zero;
             if (Input.GetKey(c.forwardKey)) move += c.mainCamera.transform.forward;
             if (Input.GetKey(c.backwardKey)) move -= c.mainCamera.transform.forward;
@@ -32,9 +33,21 @@ namespace RobotSNAP.CameraControl
             if (Input.GetKey(c.downKey)) move -= Vector3.up;
             
             if (move != Vector3.zero)
-                c.TargetPosition += move.normalized * speed * Time.unscaledDeltaTime;
+            {
+                Vector3 proposed = c.TargetPosition + move.normalized * speed * Time.unscaledDeltaTime;
+                // Vérifier la collision depuis la position actuelle de la caméra vers la position proposée
+                Vector3 origin = c.mainCamera.transform.position;
+                if (c.AdjustPositionForCollision(proposed, origin, c.collisionRadius, out Vector3 adjusted))
+                {
+                    c.TargetPosition = adjusted;
+                }
+                else
+                {
+                    c.TargetPosition = proposed;
+                }
+            }
             
-            // Mouse rotation
+            // --- Rotation de la caméra (clic droit) ---
             if (Input.GetKeyDown(c.rotateKey))
             {
                 c.IsRotating = true;
@@ -53,26 +66,37 @@ namespace RobotSNAP.CameraControl
                 c.TargetRotation = Quaternion.Euler(c.CurrentRotationX, c.CurrentRotationY, 0);
             }
             
+            // --- Zoom (molette) avec collision ---
             float scroll = Input.GetAxis("Mouse ScrollWheel");
             if (scroll != 0)
             {
                 if (c.mainCamera.orthographic)
+                {
                     c.mainCamera.orthographicSize -= scroll * c.zoomSpeed * Time.unscaledDeltaTime;
+                }
                 else
-                    c.TargetPosition += c.mainCamera.transform.forward * scroll * c.zoomSpeed;
+                {
+                    // Déplacement avant/arrière selon la direction de la caméra
+                    Vector3 proposed = c.TargetPosition + c.mainCamera.transform.forward * scroll * c.zoomSpeed;
+                    Vector3 origin = c.mainCamera.transform.position;
+                    if (c.AdjustPositionForCollision(proposed, origin, c.collisionRadius, out Vector3 adjusted))
+                    {
+                        c.TargetPosition = adjusted;
+                    }
+                    else
+                    {
+                        c.TargetPosition = proposed;
+                    }
+                }
             }
         }
 
         private void UpdateFreeCamera(CameraController c)
         {
+            // Appliquer la position (pas de lissage dans votre version)
             c.mainCamera.transform.position = c.TargetPosition;
-            // c.mainCamera.transform.position = Vector3.SmoothDamp(
-            //     c.mainCamera.transform.position,
-            //     c.TargetPosition,
-            //     ref c.velocity,
-            //     c.smoothTime
-            // );
             
+            // Appliquer la rotation
             if (!c.IsRotating)
             {
                 c.mainCamera.transform.rotation = Quaternion.Slerp(

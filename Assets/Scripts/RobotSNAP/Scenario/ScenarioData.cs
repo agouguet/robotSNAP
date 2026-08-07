@@ -45,6 +45,9 @@ namespace RobotSNAP.Core.Scenario
         [YamlMember("preview")]
         public string PreviewImage { get; set; }
 
+        [YamlMember("robot_type")]
+        public string RobotType { get; set; } = "TurtleBot4";
+
 
 
         /// <summary>
@@ -100,6 +103,9 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("z")]
         public float? Z { get; set; }
+
+        [YamlMember("yaw")]
+        public float? Yaw { get; set; }
         
         [YamlMember("center")]
         public Point Center { get; set; }
@@ -118,6 +124,13 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         [YamlIgnore]
         public bool IsBounds => Center != null && Size != null;
+
+        /// <summary>
+        /// Obtient la rotation (quaternion) à partir du yaw.
+        /// Si null, retourne Quaternion.identity.
+        /// </summary>
+        [YamlIgnore]
+        public Quaternion Rotation => Yaw.HasValue ? Quaternion.Euler(0, Yaw.Value, 0) : Quaternion.identity;
         
         /// <summary>
         /// Convertit en Vector3 (pour les points)

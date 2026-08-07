@@ -139,6 +139,21 @@ namespace RobotSNAP.CameraControl
                 int direction = Input.GetKey(KeyCode.LeftShift) ? -1 : 1;
                 CycleFollowTarget(direction);
             }
+            UpdateWallVisibility();
+        }
+
+        private void UpdateWallVisibility()
+        {
+            // Récupère tous les colliders proches de la caméra
+            // Collider[] hitColliders = Physics.OverlapSphere(mainCamera.transform.position, 5f, obstacleMask);
+            // foreach (var col in hitColliders)
+            // {
+            //     // Active un indicateur sur le mur (ex: un enfant avec un renderer)
+            //     var wallIndicator = col.GetComponentInChildren<WallIndicator>();
+            //     if (wallIndicator != null)
+            //         wallIndicator.Show();
+            // }
+            // Désactiver les indicateurs trop loin ? (à gérer avec un système de pooling ou de durée)
         }
         
         #endregion
@@ -357,6 +372,31 @@ namespace RobotSNAP.CameraControl
         
         public Transform GetCurrentFollowTarget() => _currentFollowTarget;
         public bool IsSplitViewActive() => _isSplitView;
+
+        /// <summary>
+        /// Ajuste une position désirée pour éviter les obstacles en effectuant un raycast depuis un point d'origine.
+        /// </summary>
+        /// <param name="desiredPos">Position souhaitée de la caméra.</param>
+        /// <param name="origin">Point de départ du raycast (généralement la cible suivie).</param>
+        /// <param name="radius">Rayon de la sphère de collision (évite les coins).</param>
+        /// <param name="adjustedPos">Position ajustée (la plus proche possible de desiredPos sans traverser).</param>
+        /// <returns>True si un obstacle a été rencontré, false sinon.</returns>
+        public bool AdjustPositionForCollision(Vector3 desiredPos, Vector3 origin, float radius, out Vector3 adjustedPos)
+        {
+            adjustedPos = desiredPos;
+            Vector3 direction = (desiredPos - origin).normalized;
+            float distance = Vector3.Distance(origin, desiredPos);
+
+            // Lance un spherecast depuis l'origine vers la position désirée.
+            if (Physics.SphereCast(origin, radius, direction, out RaycastHit hit, distance, obstacleMask))
+            {
+                // On place la caméra juste avant l'obstacle, en retirant un petit offset pour éviter le z-fighting.
+                float safeDistance = Mathf.Max(0.1f, hit.distance - radius);
+                adjustedPos = origin + direction * safeDistance;
+                return true;
+            }
+            return false;
+        }
         
         #endregion
     }

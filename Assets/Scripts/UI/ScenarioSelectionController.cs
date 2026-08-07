@@ -3,14 +3,13 @@ using UnityEngine.UIElements;
 using RobotSNAP.Core;
 using RobotSNAP.Core.Scenario;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 public class ScenarioSelectionController : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private UIDocument uiDocument;
-    [SerializeField] private ScenarioManager scenarioManager;
+    [SerializeField] private ScenarioDataService _dataService;
     [SerializeField] private VisualTreeAsset _cardTemplate;
 
     [Header("Card Grid Settings")]
@@ -19,17 +18,12 @@ public class ScenarioSelectionController : MonoBehaviour
 
     [Header("Search / Filter / Sort Settings")]
     [SerializeField] private string _searchPlaceholder = "Rechercher un scénario...";
-    [SerializeField] private string[] _filterOptions = { "Tous", "Mes scénarios", "Scénarios partagés" };
-    [SerializeField] private string[] _sortOptions = { "Nom (A-Z)", "Nom (Z-A)", "Date récent", "Date ancien" };
-
-    [Header("Debug")]
-    [SerializeField] private bool _useDebugData = true;
 
     // Éléments UI du popup
     private VisualElement _root;
     private VisualElement _popupOverlay;
     private ScrollView _scenarioListView;
-    private VisualElement _cardContainer; // conteneur des cartes (en grille)
+    private VisualElement _cardContainer;
     private TextField _searchField;
     private DropdownField _filterDropdown;
     private DropdownField _sortDropdown;
@@ -39,17 +33,33 @@ public class ScenarioSelectionController : MonoBehaviour
 
     // État
     private string _selectedScenarioId = null;
-    private string _loadedScenarioId = null;
-    private Dictionary<string, ScenarioInfo> _scenarioDictionary = new Dictionary<string, ScenarioInfo>();
 
-    public event System.Action<string> OnScenarioSelected;
-    public event System.Action OnPopupClosed;
+    public event Action<string> OnScenarioSelected;
+    public event Action OnPopupClosed;
 
     private void Start()
     {
-        if (scenarioManager == null)
-            scenarioManager = FindObjectOfType<ScenarioManager>();
+        if (_dataService == null)
+            _dataService = FindObjectOfType<ScenarioDataService>();
+        if (_dataService == null)
+            Debug.LogError("[ScenarioSelectionController] ScenarioDataService not found!");
+
         InitializeUI();
+        SubscribeToDataService();
+    }
+
+    private void SubscribeToDataService()
+    {
+        if (_dataService == null) return;
+        _dataService.OnScenarioListChanged += RefreshScenarioList;
+        // On pourrait aussi écouter OnScenarioLoaded pour mettre à jour l'affichage
+    }
+
+    private void OnDestroy()
+    {
+        if (_dataService != null)
+            _dataService.OnScenarioListChanged -= RefreshScenarioList;
+        UnsubscribeUI();
     }
 
     private void InitializeUI()
@@ -59,7 +69,6 @@ public class ScenarioSelectionController : MonoBehaviour
         if (uiDocument == null) return;
 
         _root = uiDocument.rootVisualElement;
-
         _popupOverlay = _root.Q<VisualElement>("PopupOverlay");
         if (_popupOverlay == null)
             _popupOverlay = uiDocument.rootVisualElement.Q<VisualElement>("PopupOverlay");
@@ -75,7 +84,7 @@ public class ScenarioSelectionController : MonoBehaviour
             _newScenarioButton = _popupOverlay.Q<Button>("NewScenarioButton");
         }
 
-        // === Configuration du conteneur des cartes (grid) ===
+        // Config du conteneur de cartes
         if (_scenarioListView != null)
         {
             _scenarioListView.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
@@ -96,48 +105,17 @@ public class ScenarioSelectionController : MonoBehaviour
             _scenarioListView.Add(_cardContainer);
         }
 
-        // Abonnements
-        if (_cancelButton != null)
-            _cancelButton.clicked += ClosePopup;
-        if (_loadButton != null)
-            _loadButton.clicked += OnConfirmLoadScenario;
-        if (_newScenarioButton != null)
-            _newScenarioButton.clicked += OnNewScenarioClicked;
-        if (_searchField != null){
-            _searchField.RegisterValueChangedCallback(OnSearchValueChanged);
-            _searchField.RegisterCallback<FocusInEvent>(_ =>
-            {
-                _searchField.textEdition.placeholder = "";
-            });
-            _searchField.RegisterCallback<FocusOutEvent>(_ =>
-            {
-                if (string.IsNullOrEmpty(_searchField.value))
-                    _searchField.textEdition.placeholder = _searchPlaceholder;
-            });
-        }
-        if (_filterDropdown != null)
-        {
-            _filterDropdown.RegisterValueChangedCallback(OnFilterChanged);
-            FixDropdownDarkMode(_filterDropdown);
-        }
-        if (_sortDropdown != null)
-        {
-            FixDropdownDarkMode(_sortDropdown);
-            _sortDropdown.RegisterValueChangedCallback(OnSortChanged);
-        }
+        // Abonnements UI
+        SubscribeUI();
 
         // Fermeture en cliquant sur l'overlay
         if (_popupOverlay != null)
         {
             VisualElement panel = _popupOverlay.Q<VisualElement>(className: "popup-panel");
-            
             _popupOverlay.RegisterCallback<PointerDownEvent>(evt =>
             {
-                // Si le panneau existe et que le clic est à l'intérieur de ses limites (coordonnées écran), on ne ferme pas
                 if (panel != null && panel.worldBound.Contains(evt.position))
                     return;
-
-                // Sinon, on ferme
                 ClosePopup();
             });
         }
@@ -145,20 +123,35 @@ public class ScenarioSelectionController : MonoBehaviour
         ClosePopup();
     }
 
-    private void OnDestroy()
+    private void SubscribeUI()
     {
-        if (_cancelButton != null)
-            _cancelButton.clicked -= ClosePopup;
-        if (_loadButton != null)
-            _loadButton.clicked -= OnConfirmLoadScenario;
-        if (_newScenarioButton != null)
-            _newScenarioButton.clicked -= OnNewScenarioClicked;
+        if (_cancelButton != null) _cancelButton.clicked += ClosePopup;
+        if (_loadButton != null) _loadButton.clicked += OnConfirmLoadScenario;
+        if (_newScenarioButton != null) _newScenarioButton.clicked += OnNewScenarioClicked;
         if (_searchField != null)
-            _searchField.UnregisterValueChangedCallback(OnSearchValueChanged);
+        {
+            _searchField.RegisterValueChangedCallback(OnSearchValueChanged);
+            _searchField.RegisterCallback<FocusInEvent>(_ => _searchField.textEdition.placeholder = "");
+            _searchField.RegisterCallback<FocusOutEvent>(_ =>
+            {
+                if (string.IsNullOrEmpty(_searchField.value))
+                    _searchField.textEdition.placeholder = _searchPlaceholder;
+            });
+        }
         if (_filterDropdown != null)
-            _filterDropdown.UnregisterValueChangedCallback(OnFilterChanged);
+            _filterDropdown.RegisterValueChangedCallback(OnFilterChanged);
         if (_sortDropdown != null)
-            _sortDropdown.UnregisterValueChangedCallback(OnSortChanged);
+            _sortDropdown.RegisterValueChangedCallback(OnSortChanged);
+    }
+
+    private void UnsubscribeUI()
+    {
+        if (_cancelButton != null) _cancelButton.clicked -= ClosePopup;
+        if (_loadButton != null) _loadButton.clicked -= OnConfirmLoadScenario;
+        if (_newScenarioButton != null) _newScenarioButton.clicked -= OnNewScenarioClicked;
+        if (_searchField != null) _searchField.UnregisterValueChangedCallback(OnSearchValueChanged);
+        if (_filterDropdown != null) _filterDropdown.UnregisterValueChangedCallback(OnFilterChanged);
+        if (_sortDropdown != null) _sortDropdown.UnregisterValueChangedCallback(OnSortChanged);
     }
 
     // ==========================================
@@ -167,27 +160,22 @@ public class ScenarioSelectionController : MonoBehaviour
 
     public void OpenPopup()
     {
-        if (_popupOverlay == null)
-        {
-            Debug.LogWarning("[ScenarioSelectionController] PopupOverlay non trouvé.");
-            return;
-        }
+        if (_popupOverlay == null) return;
 
         _selectedScenarioId = null;
-        if (_searchField != null){
+        if (_searchField != null)
+        {
             _searchField.value = "";
             _searchField.textEdition.placeholder = _searchPlaceholder;
         }
-        // Récupérer le scénario actuellement chargé
-        _loadedScenarioId = scenarioManager?.CurrentScenarioId;
 
-        LoadAllScenarioInfos();
+        _dataService.EnsureLoaded();
+
+        // Rafraîchir les filtres (tags)
         UpdateFilterOptions();
 
-        if (_filterDropdown != null)
-            _filterDropdown.value = "Tous";
-        if (_sortDropdown != null)
-            _sortDropdown.value = "Nom (A-Z)";
+        if (_filterDropdown != null) _filterDropdown.value = "Tous";
+        if (_sortDropdown != null) _sortDropdown.value = "Nom (A-Z)";
 
         RefreshScenarioList();
         _popupOverlay.style.display = DisplayStyle.Flex;
@@ -201,157 +189,28 @@ public class ScenarioSelectionController : MonoBehaviour
     }
 
     // ==========================================
-    //          MÉTHODES PRIVÉES
+    //          MÉTHODES UI
     // ==========================================
-
-    private void LoadAllScenarioInfos()
-    {
-        _scenarioDictionary.Clear();
-
-        if (_useDebugData)
-        {
-            var debugList = GenerateDebugScenarioInfos();
-            foreach (var info in debugList)
-                _scenarioDictionary[info.Name] = info; // On utilise le nom comme ID pour debug
-            Debug.Log($"[ScenarioSelectionController] Utilisation de {_scenarioDictionary.Count} scénarios fictifs (mode debug)");
-            return;
-        }
-
-        if (scenarioManager == null) return;
-
-        var fileIds = scenarioManager.GetAvailableScenarios(); // liste des noms de fichiers
-        foreach (var fileId in fileIds)
-        {
-            var info = scenarioManager.GetScenarioInfo(fileId);
-            if (info != null)
-            {
-                _scenarioDictionary[fileId] = info; // clé = nom du fichier, valeur = infos
-            }
-        }
-        Debug.Log($"[ScenarioSelectionController] Chargé {_scenarioDictionary.Count} scénarios réels.");
-    }
-
-    private List<ScenarioInfo> GenerateDebugScenarioInfos()
-    {
-        return new List<ScenarioInfo>
-        {
-            new ScenarioInfo
-            {
-                Name = "Corridor Crowd",
-                Type = "Crowd",
-                Location = "Office Building 01",
-                Created = "2025-07-27 14:30",
-                Tags = new[] { "crowd", "corridor" },
-                Description = "Dense crowd in narrow corridor"
-            },
-            new ScenarioInfo
-            {
-                Name = "Intersection Busy",
-                Type = "Crossing",
-                Location = "Urban Plaza",
-                Created = "2025-07-25 10:12",
-                Tags = new[] { "intersection", "crossing" },
-                Description = "Busy intersection with pedestrians"
-            },
-            new ScenarioInfo
-            {
-                Name = "Narrow Passage",
-                Type = "Navigation",
-                Location = "Office Building 02",
-                Created = "2025-07-24 16:45",
-                Tags = new[] { "navigation", "narrow" },
-                Description = "Navigation through tight passage"
-            },
-            new ScenarioInfo
-            {
-                Name = "Circular Flow",
-                Type = "Crowd",
-                Location = "Town Square",
-                Created = "2025-07-23 09:18",
-                Tags = new[] { "circular", "flow" },
-                Description = "Circular pedestrian flow"
-            },
-            new ScenarioInfo
-            {
-                Name = "Frontal Approach",
-                Type = "Interaction",
-                Location = "Office Building 01",
-                Created = "2025-07-22 11:05",
-                Tags = new[] { "frontal", "approach" },
-                Description = "Head-on interaction"
-            },
-            new ScenarioInfo
-            {
-                Name = "Corner Turn",
-                Type = "Navigation",
-                Location = "Office Building 02",
-                Created = "2025-07-21 15:22",
-                Tags = new[] { "corner", "turn" },
-                Description = "Turning around corners"
-            },
-            new ScenarioInfo
-            {
-                Name = "Perpendicular Traffic",
-                Type = "Crossing",
-                Location = "Urban Street",
-                Created = "2025-07-20 13:47",
-                Tags = new[] { "perpendicular", "traffic" },
-                Description = "Perpendicular crossing"
-            },
-            new ScenarioInfo
-            {
-                Name = "Dense Crowd",
-                Type = "Crowd",
-                Location = "Main Hall",
-                Created = "2025-07-19 08:33",
-                Tags = new[] { "dense", "crowd" },
-                Description = "Extremely dense crowd"
-            }
-        };
-    }
 
     private void UpdateFilterOptions()
     {
-        if (_filterDropdown == null) return;
-
-        // Récupérer tous les tags uniques de tous les scénarios
-        var allTags = new HashSet<string>();
-        allTags.Add("Tous");
-        
-        foreach (var entry in _scenarioDictionary)
-        {
-            var info = entry.Value;
-            if (info.Tags != null)
-            {
-                foreach (var tag in info.Tags)
-                    allTags.Add(tag);
-            }
-        }
-
-        var sortedTags = allTags.ToList();
-        sortedTags.Sort();
-
-        _filterDropdown.choices = sortedTags;
+        if (_filterDropdown == null || _dataService == null) return;
+        var tags = _dataService.GetAllTags();
+        _filterDropdown.choices = tags;
         if (!_filterDropdown.choices.Contains(_filterDropdown.value))
             _filterDropdown.value = "Tous";
     }
 
     private void RefreshScenarioList()
     {
-        if (_cardContainer == null) return;
+        if (_cardContainer == null || _dataService == null) return;
         _cardContainer.Clear();
 
         string filter = _filterDropdown?.value ?? "Tous";
         string search = _searchField?.value ?? "";
         string sort = _sortDropdown?.value ?? "Nom (A-Z)";
 
-        // Filtrer et trier les entrées du dictionnaire
-        var filtered = _scenarioDictionary
-            .Where(entry => FilterMatches(entry, filter, search))
-            .Select(entry => (Id: entry.Key, Info: entry.Value))
-            .ToList();
-
-        filtered = SortScenarios(filtered, sort);
+        var filtered = _dataService.GetFilteredAndSortedScenarios(filter, search, sort);
 
         if (filtered.Count == 0)
         {
@@ -366,17 +225,15 @@ public class ScenarioSelectionController : MonoBehaviour
         }
 
         foreach (var item in filtered)
-        {
             AddCard(item.Id, item.Info);
-        }
 
-        // Appliquer la classe "loaded" au scénario actuellement chargé
-        if (!string.IsNullOrEmpty(_loadedScenarioId))
+        // Appliquer la classe "loaded" au scénario chargé
+        string loadedId = _dataService.LoadedScenarioId;
+        if (!string.IsNullOrEmpty(loadedId))
         {
             foreach (var child in _cardContainer.Children())
             {
-                string cardId = child.userData as string;
-                if (string.Equals(cardId, _loadedScenarioId, System.StringComparison.OrdinalIgnoreCase))
+                if (child.userData as string == loadedId)
                 {
                     child.AddToClassList("loaded");
                     break;
@@ -385,65 +242,19 @@ public class ScenarioSelectionController : MonoBehaviour
         }
     }
 
-    private bool FilterMatches(KeyValuePair<string, ScenarioInfo> entry, string filter, string search)
-    {
-        var info = entry.Value;
-        
-        // Filtre par tag
-        if (filter != "Tous")
-        {
-            bool tagMatch = info.Tags != null && info.Tags.Contains(filter);
-            if (!tagMatch) return false;
-        }
-
-        // Recherche textuelle
-        if (!string.IsNullOrEmpty(search))
-        {
-            string lowerSearch = search.ToLower();
-            if (!info.Name.ToLower().Contains(lowerSearch))
-                return false;
-        }
-        return true;
-    }
-
-    private List<(string Id, ScenarioInfo Info)> SortScenarios(List<(string Id, ScenarioInfo Info)> list, string sortOption)
-    {
-        switch (sortOption)
-        {
-            case "Nom (A-Z)":
-                return list.OrderBy(x => x.Info.Name).ToList();
-            case "Nom (Z-A)":
-                return list.OrderByDescending(x => x.Info.Name).ToList();
-            case "Date récent":
-                return list.OrderByDescending(x => x.Info.Created).ToList();
-            case "Date ancien":
-                return list.OrderBy(x => x.Info.Created).ToList();
-            default:
-                return list;
-        }
-    }
-
     private void AddCard(string fileId, ScenarioInfo info)
     {
-        if (_cardTemplate == null)
-        {
-            Debug.LogWarning("[ScenarioSelectionController] Card template not assigned.");
-            return;
-        }
+        // (La méthode AddCard reste quasi inchangée, mais elle utilise info fourni par le service)
+        // Je la réécris brièvement pour montrer l'utilisation.
+        if (_cardTemplate == null) return;
 
         var templateContainer = _cardTemplate.Instantiate();
-        var card = templateContainer.Q<VisualElement>("CardRoot");
-        if (card == null)
-        {
-            card = templateContainer.Children().FirstOrDefault() as VisualElement;
-            if (card == null)
-                return;
-        }
+        var card = templateContainer.Q<VisualElement>("CardRoot") ?? templateContainer.Children().FirstOrDefault() as VisualElement;
+        if (card == null) return;
 
-        // Stocker l'ID du fichier comme userData
         card.userData = fileId;
 
-        // Calcul des dimensions
+        // Dimensions
         float spacing = _cardSpacingPercent / 100f;
         float cardWidthPercent = (1f - (_columns - 1) * spacing) / _columns;
         float marginPercent = spacing / 2f;
@@ -454,157 +265,114 @@ public class ScenarioSelectionController : MonoBehaviour
         card.style.marginBottom = 8;
         card.style.flexShrink = 0;
 
-        // Remplir les labels avec info
+        // Titre
         var titleLabel = card.Q<Label>("CardTitle");
-        if (titleLabel != null)
-            titleLabel.text = info.Name;
+        if (titleLabel != null) titleLabel.text = info.Name;
 
+        // Tags
         var tagsContainer = card.Q<VisualElement>("CardTagsContainer");
         if (tagsContainer != null && info.Tags != null)
         {
             tagsContainer.Clear();
-            
             foreach (var tag in info.Tags)
             {
                 if (string.IsNullOrWhiteSpace(tag)) continue;
-
-                var tagElement = new VisualElement();
-                tagElement.AddToClassList("card-tag");
-
-                var colorTag = GetColorFromTag(tag);
-
-                // var colorDot = new VisualElement();
-                // colorDot.AddToClassList("card-tag-color-dot");
-                // colorDot.style.backgroundColor = GetColorFromTag(tag);
-                // tagElement.Add(colorDot);
-
-                var label = new Label(tag);
-                var colorText = Color.Lerp(colorTag, Color.white, 0.3f);
-                label.style.color = colorText;
-                tagElement.Add(label);
-
-
-                var tagColorFilter = new VisualElement();
-                tagColorFilter.AddToClassList("card-tag-color-filter");
-                tagColorFilter.style.backgroundColor = colorTag;
-                tagElement.Add(tagColorFilter);
-
-                // Clic → filtrer par ce tag
-                tagElement.RegisterCallback<ClickEvent>(_ =>
-                {
-                    if (_filterDropdown != null)
-                    {
-                        _filterDropdown.value = tag;
-                        RefreshScenarioList();
-                    }
-                });
-
+                var tagElement = CreateTagElement(tag);
                 tagsContainer.Add(tagElement);
             }
         }
 
-        // === LOCATION ===
+        // Location
         var locationLabel = card.Q<Label>("CardLocation");
-        if (locationLabel != null)
-            locationLabel.text = info.Location ?? "";
+        if (locationLabel != null) locationLabel.text = info.Location ?? "";
 
+        // Date
         var dateLabel = card.Q<Label>("CardDate");
-        if (dateLabel != null)
-            dateLabel.text = info.Created ?? "";
+        if (dateLabel != null) dateLabel.text = info.Created ?? "";
 
-        // Charger l'image de prévisualisation
+        // Preview
         var previewImage = card.Q<Image>("CardPreviewImage");
-        if (previewImage != null)
-        {
-            // Charger asynchrone (ou synchrone selon le contexte)
-            LoadPreviewImage(previewImage, info);
-        }
+        if (previewImage != null) LoadPreviewImage(previewImage, info);
 
-        // Clic pour sélectionner
-        card.RegisterCallback<ClickEvent>(evt =>
+        // Sélection
+        card.RegisterCallback<ClickEvent>(_ =>
         {
             foreach (var child in _cardContainer.Children())
                 child.RemoveFromClassList("selected");
-
             card.AddToClassList("selected");
-            _selectedScenarioId = fileId; // on stocke l'ID du fichier
+            _selectedScenarioId = fileId;
         });
 
         _cardContainer.Add(card);
     }
 
-    private void LoadPreviewImage(Image imageElement, ScenarioInfo info)
+    private VisualElement CreateTagElement(string tag)
     {
-        if (imageElement == null || info == null) return;
+        var tagElement = new VisualElement();
+        tagElement.AddToClassList("card-tag");
 
-        string previewName = info.PreviewImage;
-        Debug.Log($"[ScenarioSelectionController] Preview name from YAML: '{previewName}'");
+        // Vous pouvez ici recréer votre logique de tag avec couleur et texte
+        // par simplicité, je fais un Label avec couleur
+        var label = new Label(tag);
+        var color = GetColorFromTag(tag);
+        label.style.color = Color.Lerp(color, Color.white, 0.4f);
+        tagElement.Add(label);
 
-        if (string.IsNullOrEmpty(previewName))
+        // Le fond coloré derrière
+        var colorFilter = new VisualElement();
+        colorFilter.AddToClassList("card-tag-color-filter");
+        colorFilter.style.backgroundColor = color;
+        tagElement.Add(colorFilter);
+
+        tagElement.RegisterCallback<ClickEvent>(_ =>
         {
-            SetDefaultImage(imageElement);
-            return;
-        }
+            if (_filterDropdown != null)
+            {
+                _filterDropdown.value = tag;
+                RefreshScenarioList();
+            }
+        });
 
-        // Enlever l'extension si présente (Resources.Load n'en a pas besoin)
-        string fileNameWithoutExt = System.IO.Path.GetFileNameWithoutExtension(previewName);
-        string resourcePath = $"ScenarioPreviews/{fileNameWithoutExt}";
-        
-        Debug.Log($"[ScenarioSelectionController] Trying to load: {resourcePath}");
-        
-        Texture2D previewTexture = Resources.Load<Texture2D>(resourcePath);
-        if (previewTexture != null)
-        {
-            imageElement.image = previewTexture;
-            imageElement.style.backgroundImage = StyleKeyword.Null;
-            Debug.Log($"[ScenarioSelectionController] Preview loaded successfully: {previewName}");
-        }
-        else
-        {
-            Debug.LogWarning($"[ScenarioSelectionController] Preview not found at: {resourcePath}");
-            SetDefaultImage(imageElement);
-        }
-    }
-
-    private void SetDefaultImage(Image imageElement)
-    {
-        Texture2D defaultTex = Resources.Load<Texture2D>("ScenarioPreviews/default");
-        if (defaultTex != null)
-            imageElement.image = defaultTex;
-        else
-            imageElement.style.backgroundColor = new Color(0.2f, 0.2f, 0.25f);
+        return tagElement;
     }
 
     private Color GetColorFromTag(string tag)
     {
         int hash = Mathf.Abs(tag.GetHashCode());
         float hue = (hash % 360) / 360f;
-        float saturation = 0.85f;
-        float value = 0.9f; // Couleurs vives, car elles sont utilisées uniquement pour la pastille
-        return Color.HSVToRGB(hue, saturation, value);
+        return Color.HSVToRGB(hue, 0.85f, 0.9f);
     }
 
-    private void FixDropdownDarkMode(DropdownField dropdown)
+    private void LoadPreviewImage(Image imageElement, ScenarioInfo info)
     {
-        if (dropdown == null) return;
+        // (inchangé)
+        if (imageElement == null || info == null) return;
+        Texture2D previewTexture = _dataService.GetScenarioPreviewImage(info);
+        imageElement.image = previewTexture;
+        imageElement.style.backgroundImage = StyleKeyword.Null;
 
-        // Dès que le dropdown est focus (ou qu'il s'ouvre), on intercepte le popup
-        dropdown.RegisterCallback<FocusEvent>(evt =>
-        {
-            var panel = dropdown.panel;
-            Debug.LogWarning($"[ScenarioSelectionController] Dropdown opened. Panel: {panel}");
-            if (panel != null)
-            {
-                // Chercher un élément de type "unity-base-dropdown" dans le panel (non garanti)
-                // Ceci est un hack et peut ne pas fonctionner
-                var popup = panel.visualTree.Q<VisualElement>("unity-base-dropdown");
-                if (popup != null && _root.ClassListContains("dark-mode"))
-                {
-                    popup.AddToClassList("dark-mode");
-                }
-            }
-        });
+
+        // string previewName = info.PreviewImage;
+        // if (string.IsNullOrEmpty(previewName))
+        // {
+        //     SetDefaultImage(imageElement);
+        //     return;
+        // }
+        // string fileNameWithoutExt = System.IO.Path.GetFileNameWithoutExtension(previewName);
+        // string resourcePath = $"ScenarioPreviews/{fileNameWithoutExt}";
+        // Texture2D previewTexture = Resources.Load<Texture2D>(resourcePath);
+        // if (previewTexture != null)
+        // {
+        //     imageElement.image = previewTexture;
+        //     imageElement.style.backgroundImage = StyleKeyword.Null;
+        // }
+        // else
+        // {
+        //     SetDefaultImage(imageElement);
+        // }
     }
+
+    
 
     // ==========================================
     //          CALLBACKS UI
@@ -624,18 +392,7 @@ public class ScenarioSelectionController : MonoBehaviour
 
         ClosePopup();
         OnScenarioSelected?.Invoke(_selectedScenarioId);
-
-        // Charger via ScenarioManager en utilisant l'ID du fichier
-        if (_useDebugData)
-        {
-            Debug.Log($"[ScenarioSelectionController] (Debug) Scénario fictif sélectionné : {_selectedScenarioId}");
-        }
-        else if (scenarioManager != null)
-        {
-            scenarioManager.LoadScenario(_selectedScenarioId, startClock: false, autoApply: false);
-            // Mettre à jour l'ID chargé pour la prochaine ouverture
-            _loadedScenarioId = _selectedScenarioId;
-        }
+        _dataService?.LoadScenario(_selectedScenarioId);
     }
 
     private void OnNewScenarioClicked()

@@ -26,6 +26,8 @@ namespace RobotSNAP.Agents
         [Header("Debug")]
         [SerializeField] private bool _logEvents = true;
         
+
+        private HumanManager _humanManager;
         private Queue<GameObject> _availablePool = new Queue<GameObject>();
         private List<GameObject> _activeHumans = new List<GameObject>();
         private bool _isPlaying = true;
@@ -40,6 +42,9 @@ namespace RobotSNAP.Agents
         private void Awake()
         {
             InitializePoolParent();
+            _humanManager = GetComponentInParent<HumanManager>();
+            if (_humanManager == null)
+                Debug.LogWarning("[HumanPoolManager] HumanManager not found in parent hierarchy!");
         }
         
         private void Start()
@@ -130,9 +135,10 @@ namespace RobotSNAP.Agents
             instance.name = $"Human_{_totalCreated}";
             instance.GetComponent<HumanAgent>()?.SetAgentId(_totalCreated);
             instance.GetComponent<HumanAgent>()?.SetAgentName($"Human {_totalCreated}");
+            if (_humanManager != null)
+                instance.GetComponent<HumanAgent>()?.SetHumanManager(_humanManager);
             _totalCreated++;
-            
-            // Aucune configuration métier ici. Le ScenarioApplier s'en chargera.
+        
             
             return instance;
         }
@@ -229,6 +235,7 @@ namespace RobotSNAP.Agents
         public IEnumerator Reset()
         {
             ReturnAllHumans();
+            Debug.Log($"[HumanPoolManager] Reset complete. Active: {ActiveCount}, Available: {_availablePool.Count}");
             yield return null;
         }
         

@@ -23,6 +23,7 @@ namespace RobotSNAP.Agents
         public bool hasDestination = false;
 
         // Composants
+        public HumanManager humanManager;
         private HumanMovement _movement;
         private Animator _animator;
         private bool _wasPlaying = true;
@@ -60,11 +61,9 @@ namespace RobotSNAP.Agents
             
             if (isPaused && !_wasPaused)
             {
-                // Passer en mode cinématique pour figer le Rigidbody sans perdre la vélocité
                 if (_rb != null)
                 {
                     _rb.isKinematic = true;
-                    // Optionnel : stocker la vélocité si besoin (mais elle est conservée)
                     // _storedVelocity = _rb.linearVelocity;
                 }
                 _wasPaused = true;
@@ -74,7 +73,6 @@ namespace RobotSNAP.Agents
                 if (_rb != null)
                 {
                     _rb.isKinematic = false;
-                    // Remettre la vélocité stockée (si on l'a stockée)
                     // _rb.linearVelocity = _storedVelocity;
                 }
                 _wasPaused = false;
@@ -151,8 +149,8 @@ namespace RobotSNAP.Agents
 
         private void UpdateMovement()
         {
-            if (_movement == null || !_movement.IsPlaying) return;
-            _movement.move();
+            // if (_movement == null || !_movement.IsPlaying) return;
+            // _movement.move();
 
             if (_rb != null)
                 _rb.linearVelocity = currentVelocity3D;
@@ -304,6 +302,12 @@ namespace RobotSNAP.Agents
         #endregion
 
         #region Public Methods
+
+        public void SetHumanManager(HumanManager manager)
+        {
+            humanManager = manager;
+            _movement?.SetHumanManager(manager);
+        }
 
         public void SetDestination(Vector2 destination) => SetGoal(destination);
         public void SetAgentId(int id) => agentId = id;

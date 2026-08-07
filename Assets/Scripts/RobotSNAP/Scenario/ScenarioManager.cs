@@ -477,6 +477,7 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         public List<string> GetAvailableScenarios()
         {
+            Debug.LogWarning($"[ScenarioManager] GetAvailableScenarios called, loader is null? {_scenarioLoader == null}");
             return _scenarioLoader?.GetAvailableScenarios() ?? new List<string>();
         }
 

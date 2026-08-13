@@ -133,6 +133,13 @@ public class ScenarioDataService : MonoBehaviour
         return info;
     }
 
+    public Color GetColorFromTag(string tag)
+    {
+        int hash = Mathf.Abs(tag.GetHashCode());
+        float hue = (hash % 360) / 360f;
+        return Color.HSVToRGB(hue, 0.85f, 0.9f);
+    }
+
     public Texture2D GetScenarioPreviewImage(ScenarioInfo info)
     {
         if (info == null) return GetDefaultImage();

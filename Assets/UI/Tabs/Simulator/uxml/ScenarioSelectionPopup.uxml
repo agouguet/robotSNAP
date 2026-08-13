@@ -5,7 +5,7 @@
         <ui:VisualElement class="popup-panel">
             <ui:Label text="Choisir un scénario" class="popup-title"/>
             <ui:Label text="Sélectionnez un scénario existant ou créez-en un nouveau." class="popup-subtitle"/>
-            <ui:VisualElement class="popup-toolbar">
+            <ui:VisualElement name="VisualElement" class="popup-toolbar">
                 <ui:VisualElement name="ScenarioSearch" style="flex-grow: 1;">
                     <ui:VisualElement name="ScenarioSearchIcon" class="scenario-search-icon" style="background-image: resource(&quot;Icons/search&quot;);"/>
                     <ui:TextField name="ScenarioSearchField" class="popup-search"/>
@@ -15,7 +15,7 @@
                     <ui:DropdownField name="SortDropdown" class="popup-sort-dropdown"/>
                 </ui:VisualElement>
             </ui:VisualElement>
-            <ui:ScrollView name="ScenarioListView" class="popup-list"/>
+            <ui:ScrollView name="ScenarioListView" class="popup-list" style="height: auto; width: auto; flex-grow: 1;"/>
             <ui:VisualElement class="popup-footer">
                 <ui:Button name="NewScenarioButton" text="+ Nouveau scénario" class="action-button secondary"/>
                 <ui:VisualElement style="flex-direction: row;">

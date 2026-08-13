@@ -27,14 +27,14 @@
                         <ui:VisualElement class="menu-icon scenarios-icon" style="background-image: url(&quot;project://database/Assets/Resources/Icons/scenarios.png?fileID=2800000&amp;guid=2147e330b9e5341879d660a43c111aa8&amp;type=3#scenarios&quot;);"/>
                         <ui:Label text="Scenarios" class="menu-label" style="-unity-text-align: middle-left;"/>
                     </ui:Button>
-                    <ui:Button class="menu-item ">
+                    <!-- <ui:Button class="menu-item ">
                         <ui:VisualElement class="menu-icon agents-icon" style="background-image: url(&quot;project://database/Assets/Resources/Icons/agents.png?fileID=2800000&amp;guid=a97cd45acfb812964a672d49c457b879&amp;type=3#agents&quot;);"/>
                         <ui:Label text="Agents" class="menu-label" style="-unity-text-align: middle-left;"/>
-                    </ui:Button>
-                    <ui:Button name="Button" class="menu-item " style="margin-bottom: 6px;">
+                    </ui:Button> -->
+                    <!-- <ui:Button name="Button" class="menu-item " style="margin-bottom: 6px;">
                         <ui:VisualElement class="menu-icon recordings-icon" style="background-image: url(&quot;project://database/Assets/Resources/Icons/recordings.png?fileID=2800000&amp;guid=00a71f1eb3d06923985e0acc64225796&amp;type=3#recordings&quot;);"/>
                         <ui:Label text="Recordings" class="menu-label" style="-unity-text-align: middle-left;"/>
-                    </ui:Button>
+                    </ui:Button> -->
                 </ui:VisualElement>
                 <ui:VisualElement name="Seperator2" class="separator"/>
                 <ui:VisualElement name="SettingsMenuGroup" class="menu-group">
@@ -42,17 +42,20 @@
                         <ui:VisualElement class="menu-icon settings-icon" style="background-image: url(&quot;project://database/Assets/Resources/Icons/settings.png?fileID=2800000&amp;guid=16a7fca752443e1eb95e2f89fc0df5a1&amp;type=3#settings&quot;);"/>
                         <ui:Label text="Settings" class="menu-label" style="-unity-text-align: middle-left;"/>
                     </ui:Button>
-                    <ui:Button class="menu-item ">
+                    <!-- <ui:Button class="menu-item ">
                         <ui:VisualElement class="menu-icon profile-icon" style="background-image: url(&quot;project://database/Assets/Resources/Icons/profile.png?fileID=2800000&amp;guid=8a5f573cadf0ac386861c7e15b6054d8&amp;type=3#profile&quot;);"/>
                         <ui:Label text="Profile" class="menu-label" style="-unity-text-align: middle-left;"/>
-                    </ui:Button>
-                    <ui:Button class="menu-item ">
+                    </ui:Button> -->
+                    <!-- <ui:Button class="menu-item ">
                         <ui:VisualElement class="menu-icon documentation-icon" style="background-image: url(&quot;project://database/Assets/Resources/Icons/documentation.png?fileID=2800000&amp;guid=e778a3081051758f78a1bf5454190279&amp;type=3#documentation&quot;);"/>
                         <ui:Label text="Documentation" class="menu-label" style="-unity-text-align: middle-left;"/>
-                    </ui:Button>
+                    </ui:Button> -->
                 </ui:VisualElement>
-                <ui:VisualElement name="Seperator3" class="separator"/>
+                <!-- <ui:VisualElement name="Seperator3" class="separator"/> -->
+
+                <ui:VisualElement style="flex-grow: 1;"/>
                 <ui:VisualElement name="Seperator5" class="separator"/>
+
                 <ui:VisualElement name="ScenarioMenuGroup" class="scenario-card">
                     <ui:Label text="Scénario actif" class="scenario-title"/>
                     <ui:VisualElement class="scenario-status">
@@ -73,7 +76,7 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement name="Seperator4" class="separator"/>
-                <ui:VisualElement style="flex-grow: 1;"/>
+                
                 <ui:VisualElement class="bottom-actions">
                     <ui:VisualElement name="DarkModeContainer" class="menu-item dark-mode-container">
                         <RobotSNAP.UI.SlideToggle label="Dark Mode" name="DarkModeToggle" icon-texture="project://database/Assets/Resources/Icons/dark.png?fileID=2800000&amp;guid=895b89a7b37c36d35a5b071cc3054685&amp;type=3#dark" class="dark-mode-switch" style="flex-grow: 1;"/>

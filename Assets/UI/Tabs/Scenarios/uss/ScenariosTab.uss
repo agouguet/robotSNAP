@@ -1,0 +1,55 @@
+/* ================================================================
+   SCENARIO PAGE
+   ================================================================ */
+
+.scenario-page {
+    flex-grow: 1;
+    flex-direction: column;
+    background-color: var(--bg-primary);
+    padding: 28px 32px 24px 32px;
+}
+
+
+/* ================================================================
+   HEADER
+   ================================================================ */
+
+.scenario-page-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-shrink: 0;
+}
+
+
+.scenario-header-content {
+    flex-direction: column;
+}
+
+
+.scenario-page-title {
+    font-size: 26px;
+    font-weight: bold;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+
+.scenario-page-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+
+/* ================================================================
+   MAIN CONTENT
+   ================================================================ */
+
+.scenario-page-content {
+    flex-grow: 1;
+    flex-direction: row;
+    min-height: 0;
+}
+
+

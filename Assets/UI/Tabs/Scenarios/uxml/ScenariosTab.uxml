@@ -1,0 +1,85 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Template name="ScenarioCreationTab" src="project://database/Assets/UI/Tabs/Scenarios/uxml/ScenarioCreationTab.uxml?fileID=9197481963319205126&amp;guid=156a6a07d94c3ab348ccfbad2e068c2f&amp;type=3#ScenarioCreationTab"/>
+    <ui:Template name="ScenarioListTab" src="project://database/Assets/UI/Tabs/Scenarios/uxml/ScenarioListTab.uxml?fileID=9197481963319205126&amp;guid=4dfeb9efbe4da683eaa96b4a620c756c&amp;type=3#ScenarioListTab"/>
+    <Style src="project://database/Assets/UI/Tabs/Scenarios/uss/ScenariosTab.uss?fileID=7433441132597879392&amp;guid=2f590b4dd56d265e895157a48dd3f24b&amp;type=3#ScenariosTab"/>
+    <Style src="project://database/Assets/UI/Tabs/Simulator/uss/Card.uss?fileID=7433441132597879392&amp;guid=a9a5bee9a32b7d59993bfb9607bf0c7e&amp;type=3#Card"/>
+    <ui:VisualElement name="ScenarioPage" class="scenario-page">
+        <!-- <ui:VisualElement name="ScenarioBrowserView" class="scenario-browser-view">
+            <ui:VisualElement name="ScenarioHeader" class="scenario-page-header">
+                <ui:VisualElement class="scenario-header-content">
+                    <ui:Label name="ScenarioPageTitle" text="Scenarios" class="scenario-page-title"/>
+                    <ui:Label name="ScenarioPageSubtitle" text="Gérez et configurez vos scénarios de simulation." class="scenario-page-subtitle"/>
+                </ui:VisualElement>
+                <ui:Button name="NewScenarioButton" text="+  Nouveau scénario" class="action-button primary scenario-new-button"/>
+            </ui:VisualElement>
+            <ui:VisualElement name="ScenarioContent" class="scenario-page-content">
+                <ui:VisualElement name="ScenarioBrowser" class="scenario-browser">
+                    <ui:VisualElement name="ScenarioToolbar" class="scenario-toolbar">
+                        <ui:VisualElement name="ScenarioSearch" class="scenario-search-container">
+                            <ui:VisualElement name="ScenarioSearchIcon" class="scenario-search-icon" style="background-image: resource(&quot;Icons/search&quot;);"/>
+                            <ui:TextField name="ScenarioSearchField" class="scenario-search-field"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="ScenarioFilters" class="scenario-filters">
+                            <ui:DropdownField name="FilterDropdown" class="scenario-filter-dropdown"/>
+                            <ui:DropdownField name="SortDropdown" class="scenario-sort-dropdown"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="ScenarioListHeader" class="scenario-list-header">
+                        <ui:Label name="ScenarioCountLabel" text="0 scénarios" class="scenario-count-label"/>
+                    </ui:VisualElement>
+                    <ui:ScrollView name="ScenarioListView" mode="Vertical" class="scenario-list-view">
+                        <ui:VisualElement name="ScenarioGrid" class="scenario-grid"/>
+                    </ui:ScrollView>
+                </ui:VisualElement>
+                <ui:VisualElement name="ScenarioDetailsContainer" class="scenario-details-container">
+                    <ui:VisualElement name="ScenarioDetailsHeader" class="scenario-details-header">
+                        <ui:VisualElement class="scenario-details-title-container">
+                            <ui:Label name="SelectedScenarioTitle" text="Aucun scénario sélectionné" class="scenario-details-title"/>
+                            <ui:Label name="SelectedScenarioCategory" text="" class="scenario-details-category"/>
+                        </ui:VisualElement>
+                        <ui:Button name="ScenarioMoreButton" text="•••" class="scenario-more-button"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="ScenarioDetailsPreview" class="scenario-details-preview">
+                        <ui:Image name="ScenarioDetailsPreviewImage" class="scenario-details-preview-image"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="ScenarioDescriptionSection" class="scenario-details-section">
+                        <ui:Label text="Description" class="scenario-section-title"/>
+                        <ui:Label name="ScenarioDescription" text="Sélectionnez un scénario pour afficher sa description." class="scenario-description"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="ScenarioInformationSection" class="scenario-details-section">
+                        <ui:Label text="Informations" class="scenario-section-title"/>
+                        <ui:VisualElement name="ScenarioInfoGrid" class="scenario-info-grid">
+                            <ui:VisualElement class="scenario-info-item">
+                                <ui:Label text="Environnement" class="scenario-info-label"/>
+                                <ui:Label name="ScenarioEnvironment" text="—" class="scenario-info-value"/>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="scenario-info-item">
+                                <ui:Label text="Robot" class="scenario-info-label"/>
+                                <ui:Label name="ScenarioRobot" text="—" class="scenario-info-value"/>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="scenario-info-item">
+                                <ui:Label text="Agents" class="scenario-info-label"/>
+                                <ui:Label name="ScenarioAgents" text="—" class="scenario-info-value"/>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="scenario-info-item">
+                                <ui:Label text="Durée" class="scenario-info-label"/>
+                                <ui:Label name="ScenarioDuration" text="—" class="scenario-info-value"/>
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="ScenarioTagsSection" class="scenario-details-section">
+                        <ui:Label text="Tags" class="scenario-section-title"/>
+                        <ui:VisualElement name="ScenarioTags" class="scenario-tags"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="ScenarioDetailsSpacer" class="scenario-details-spacer" style="flex-grow: 1;"/>
+                    <ui:VisualElement name="ScenarioDetailsActions" class="scenario-details-actions">
+                        <ui:Button name="EditScenarioButton" text="Modifier" class="action-button secondary"/>
+                        <ui:Button name="UseScenarioButton" text="Utiliser le scénario" class="action-button primary"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement> -->
+        <ui:Instance template="ScenarioListTab" name="ScenarioBrowserView" class="scenario-browser-view"/>
+        <ui:Instance template="ScenarioCreationTab" name="ScenarioEditorView" class="scenario-creation-view" style="display: none;"/>
+    </ui:VisualElement>
+</ui:UXML>

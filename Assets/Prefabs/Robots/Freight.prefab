@@ -779,6 +779,8 @@ MonoBehaviour:
   rightWheel: {fileID: 992840485019981305}
   wheelTrackLength: 0.37476
   wheelRadius: 0.0605
+  forceLimitNormal: 50
+  forceLimitBrake: 500
 --- !u!1 &2625991535975762110
 GameObject:
   m_ObjectHideFlags: 0

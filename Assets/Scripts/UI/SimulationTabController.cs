@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using RobotSNAP;
 using RobotSNAP.Core;
+using RobotSNAP.CameraControl;
 using RobotSNAP.Core.Scenario;
 
 public class SimulationTabController : MonoBehaviour
@@ -9,6 +10,10 @@ public class SimulationTabController : MonoBehaviour
     [SerializeField] private UIDocument uiDocument;
     [SerializeField] private ScenarioManager scenarioManager;
     [SerializeField] private ScenarioSelectionController scenarioSelectionController;
+
+    [Header("Minimap")]
+    [SerializeField] private Camera minimapCamera;
+    [SerializeField] private RenderTexture minimapRenderTexture;
 
     private Supervisor _supervisor;
     private bool _isInitialized = false;
@@ -21,6 +26,10 @@ public class SimulationTabController : MonoBehaviour
     private Button _startStopButton;
     private Button _pauseResumeButton;
     private VisualElement _cameraOverlay;
+
+    private MinimapRenderer _minimapRenderer;
+    private Transform _minimapTarget;
+    private CameraController _cameraController;
 
     private SimulationState _currentState = SimulationState.Idle;
 
@@ -38,6 +47,8 @@ public class SimulationTabController : MonoBehaviour
 
         if (_loadScenarioButton != null)
             _loadScenarioButton.clicked -= OnLoadScenarioClicked;
+        if (_cameraController != null)
+            _cameraController.OnFollowTargetChanged -= OnFollowTargetChanged;
     }
 
     private void OnViewLoaded(string viewName)
@@ -86,11 +97,14 @@ public class SimulationTabController : MonoBehaviour
             return;
         }
 
-        // Récupération du ScenarioSelectionController
         if (scenarioSelectionController == null)
             scenarioSelectionController = GetComponent<ScenarioSelectionController>();
         if (scenarioSelectionController == null)
             scenarioSelectionController = FindObjectOfType<ScenarioSelectionController>();
+        
+        _cameraController = FindObjectOfType<CameraController>();
+        if (_cameraController == null)
+            Debug.LogWarning("CameraController non trouvé dans la scène.");
 
         _isInitialized = true;
         Initialize();
@@ -138,11 +152,96 @@ public class SimulationTabController : MonoBehaviour
         // === Pause / Resume ===
         _pauseResumeButton.clicked += OnPauseResumeClicked;
 
+        SetupMinimap();
+
+        // === Abonnement aux événements de changement de cible ===
+        if (_cameraController != null)
+        {
+            _cameraController.OnFollowTargetChanged += OnFollowTargetChanged;
+            // Initialiser la cible avec la valeur actuelle
+            if (_cameraController.CurrentFollowTarget != null)
+                _minimapTarget = _cameraController.CurrentFollowTarget;
+        }
+
         // === Abonnement aux événements d'état ===
         EventBus.Instance.Subscribe<SimulationStateChangedEvent>(OnStateChanged);
 
         // === État initial ===
         UpdateUI();
+    }
+
+    private void SetupMinimap()
+    {
+        var minimapContainer = _root.Q<VisualElement>("MinimapContainer");
+        if (minimapContainer == null)
+        {
+            Debug.LogWarning("MinimapContainer non trouvé.");
+            return;
+        }
+
+        // Cacher l'ancien élément (MinimapImage)
+        var minimapImage = minimapContainer.Q<VisualElement>("MinimapImage");
+        if (minimapImage != null)
+            minimapImage.style.display = DisplayStyle.None;
+
+        // Créer le renderer ImmediateModeElement
+        _minimapRenderer = new MinimapRenderer
+        {
+            minimapRT = minimapRenderTexture,
+            style =
+            {
+                position = Position.Absolute,
+                top = 8,
+                left = 8,
+                right = 8,
+                bottom = 8
+            }
+        };
+        minimapContainer.Add(_minimapRenderer);
+
+        // Configurer la caméra de minicarte
+        if (minimapCamera != null)
+        {
+            minimapCamera.targetTexture = minimapRenderTexture;
+            minimapCamera.orthographic = true;
+            minimapCamera.orthographicSize = 15f; // Ajustez
+            minimapCamera.transform.rotation = Quaternion.Euler(90, 0, 0);
+        }
+    }
+
+    private void Update()
+    {
+        UpdateMinimap();
+    }
+
+    private void UpdateMinimap()
+    {
+        if (minimapCamera == null || _minimapRenderer == null) return;
+
+        Vector3 targetPos;
+        if (_minimapTarget != null)
+        {
+            // Suivre la cible
+            targetPos = _minimapTarget.position;
+            targetPos.y = 30f; // Hauteur fixe de la caméra de minicarte
+        }
+        else
+        {
+            // Fallback : suivre la caméra principale (projetée au sol)
+            Camera mainCam = Camera.main;
+            if (mainCam != null)
+            {
+                targetPos = mainCam.transform.position;
+                targetPos.y = 30f;
+            }
+            else
+            {
+                // Position par défaut (centre de la scène)
+                targetPos = new Vector3(0, 30, 0);
+            }
+        }
+
+        minimapCamera.transform.position = targetPos;
     }
 
     private void OnLoadScenarioClicked()
@@ -151,6 +250,12 @@ public class SimulationTabController : MonoBehaviour
             scenarioSelectionController.OpenPopup();
         else
             Debug.LogWarning("[SimulationTabController] ScenarioSelectionController non trouvé.");
+    }
+
+    private void OnFollowTargetChanged(Transform newTarget)
+    {
+        _minimapTarget = newTarget;
+        Debug.Log($"[Minimap] Suivi de : {newTarget?.name ?? "aucune cible"}");
     }
 
     private void OnStateChanged(SimulationStateChangedEvent evt)

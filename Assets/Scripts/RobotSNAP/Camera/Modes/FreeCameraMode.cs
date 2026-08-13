@@ -77,7 +77,7 @@ namespace RobotSNAP.CameraControl
                 else
                 {
                     // Déplacement avant/arrière selon la direction de la caméra
-                    Vector3 proposed = c.TargetPosition + c.mainCamera.transform.forward * scroll * c.zoomSpeed;
+                    Vector3 proposed = c.TargetPosition + c.mainCamera.transform.forward * scroll * c.zoomSpeed * Time.unscaledDeltaTime;
                     Vector3 origin = c.mainCamera.transform.position;
                     if (c.AdjustPositionForCollision(proposed, origin, c.collisionRadius, out Vector3 adjusted))
                     {

@@ -190,7 +190,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4147485}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7acef0b79454c9b4dae3f8139bc4ba77, type: 3}
   m_Name: 
@@ -1037,7 +1037,7 @@ MonoBehaviour:
   _cardTemplate: {fileID: 9197481963319205126, guid: efb4d510811fa6ab5a4752b68470a224, type: 3}
   _scenarioLoader: {fileID: 4147492}
   _columns: 4
-  _cardSpacingPercent: 0.5
+  _cardSpacingPercent: 1
   _logEvents: 1
 --- !u!1 &1185419207
 GameObject:
@@ -1747,7 +1747,7 @@ MonoBehaviour:
   cameraTarget: {fileID: 0}
   moveSpeed: 5
   rotateSpeed: 50
-  zoomSpeed: 300
+  zoomSpeed: 50
   smoothTime: 0.3
   minDistance: 2
   maxDistance: 50

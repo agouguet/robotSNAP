@@ -1,0 +1,52 @@
+scenario_info:
+  name: "Door Passing"
+  description: "Scenario with robot passing through a door with multiple pedestrians"
+  version: "1.0"
+  map: "basic/door_passing"
+  preview: "door_passing.png"
+  tags: ["Basic", "Indoor", "Narrow"]
+
+simulation:
+  duration: 0.1
+  random_seed: 42
+  time_scale: 1.0
+  min_humans: 0
+  max_humans: 50
+
+points:
+  start_robot: {x: 9, y: 0, z: 0, yaw: -90}
+  end_robot: {x: 0, y: 0, z: -9}
+
+robot:
+  start: "start_robot"
+  goal: "end_robot"
+  behavior: "normal"
+  speed: 1.2
+
+humans:
+  # Groupe 1 : simples piétons spawn aléatoire dans une zone
+  - id: "pedestrians"
+    count: 1
+    spawn:
+      type: "point"
+      position: {x: 7, y: 0, z: 0}
+    goal:
+      type: "point"
+      position: {x: -7, y: 0, z: 0}
+    behavior: "normal"
+    speed: 1.0
+    movement_controller:
+      type: "SFM"
+
+  # - id: "pedestrians2"
+  #   count: 1
+  #   spawn:
+  #     type: "point"
+  #     position: {x: -7, y: 0, z: 0}
+  #   goal:
+  #     type: "point"
+  #     position: {x: 7, y: 0, z: 0}
+  #   behavior: "normal"
+  #   speed: 1.0
+  #   movement_controller:
+  #     type: "SFM"

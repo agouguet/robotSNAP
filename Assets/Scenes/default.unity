@@ -201,7 +201,7 @@ MonoBehaviour:
   m_KeepaliveTime: 1
   m_NetworkTimeoutSeconds: 2
   m_SleepTimeSeconds: 0.01
-  m_ShowHUD: 1
+  m_ShowHUD: 0
   m_TFTopics:
   - /tf
   listenForTFMessages: 1
@@ -292,7 +292,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4147485}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cda6e7ed4d2377113bf5d6d80b60c01f, type: 3}
   m_Name: 
@@ -726,7 +726,7 @@ MonoBehaviour:
   _cardTemplate: {fileID: 9197481963319205126, guid: efb4d510811fa6ab5a4752b68470a224, type: 3}
   _columns: 4
   _cardSpacingPercent: 1
-  _searchPlaceholder: "Rechercher un sc\xE9nario..."
+  _searchPlaceholder: Search a scenario...
 --- !u!114 &732435987
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1940,12 +1940,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 89a1198d183afb5bbadd7cc58119bef0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  useRealTime: 0
+  useRealTime: 1
   timeScale: 1
   autoStart: 1
   simulationStartHour: 12
+  _timeZoneId: Europe/Paris
   logTimeChanges: 0
-  editorTimeDisplay: 12:00:00
+  editorTimeDisplay: 11:20:38
 --- !u!4 &2049586426
 Transform:
   m_ObjectHideFlags: 0

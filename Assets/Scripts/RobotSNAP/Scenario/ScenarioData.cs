@@ -241,6 +241,12 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("ref")]
         public string Reference { get; set; }
+
+        [YamlMember("position")]
+        public Point Position { get; set; }
+
+        [YamlMember("zone")]
+        public RefPoint Zone { get; set; } 
         
         [YamlMember("formation")]
         public string Formation { get; set; }
@@ -263,6 +269,12 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("ref")]
         public string Reference { get; set; }
+
+        [YamlMember("position")]
+        public Point Position { get; set; }
+        
+        [YamlMember("zone")]
+        public RefPoint Zone { get; set; }
         
         [YamlMember("target")]
         public string Target { get; set; }

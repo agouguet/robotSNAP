@@ -2,8 +2,9 @@ scenario_info:
   name: "Default"
   description: "Default minimal scenario"
   version: "1.0"
-  map: "basic"
-  preview: "default.png"
+  map: "basic/corner"
+  preview: "corner.png"
+  tags: ["Basic", "Indoor", "Corner", "Corridor"]
 
 simulation:
   duration: 0.1
@@ -13,13 +14,14 @@ simulation:
   max_humans: 50
 
 points:
-  start_robot: {x: 0, y: 0, z: -7}
-  end_robot: {x: 7, y: 0, z: 0}
-  start_human: {x: 7, y: 0, z: 0}
-  end_human: {x: 0, y: 0, z: -7}
+  start_robot: {x: 9, y: 0, z: 0, yaw: -90}
+  end_robot: {x: 0, y: 0, z: -9}
   spawn_zone:
-    center: {x: 0, y: 0, z: 0}
-    size: {x: 7, y: 1, z: 7}
+    center: {x: 0, y: 0, z: -9}
+    size: {x: 1.0, y: 1, z: 1.0}
+  end_zone:
+    center: {x: 9, y: 0, z: 0}
+    size: {x: 1.0, y: 1, z: 1.0}
 
 robot:
   start: "start_robot"
@@ -30,14 +32,71 @@ robot:
 humans:
   # Groupe 1 : simples piétons spawn aléatoire dans une zone
   - id: "pedestrians"
-    count: 4
+    count: 1
     spawn:
       type: "random"
       ref: "spawn_zone"
     goal:
-      type: "random"
-      ref: "spawn_zone"
+      type: "point"
+      ref: "end_zone"
     behavior: "normal"
     speed: 1.0
     movement_controller:
       type: "SFM"
+
+  - id: "pedestrians2"
+    count: 1
+    spawn:
+      type: "point"
+      position: {x: 0, y: 0, z: 0}
+    goal:
+      type: "point"
+      position: {x: 0, y: 0, z: -9}
+    behavior: "normal"
+    speed: 1.0
+    movement_controller:
+      type: "SFM"
+
+# scenario_info:
+#   name: "Default"
+#   description: "Default minimal scenario"
+#   version: "1.0"
+#   map: "basic"
+#   preview: "default.png"
+
+# simulation:
+#   duration: 0.1
+#   random_seed: 42
+#   time_scale: 1.0
+#   min_humans: 0
+#   max_humans: 50
+
+# points:
+#   start_robot: {x: 0, y: 0, z: -7}
+#   end_robot: {x: 7, y: 0, z: 0}
+#   start_human: {x: 7, y: 0, z: 0}
+#   end_human: {x: 0, y: 0, z: -7}
+#   spawn_zone:
+#     center: {x: 0, y: 0, z: 0}
+#     size: {x: 7, y: 1, z: 7}
+
+# robot:
+#   start: "start_robot"
+#   goal: "end_robot"
+#   behavior: "normal"
+#   speed: 1.2
+
+# humans:
+#   # Groupe 1 : simples piétons spawn aléatoire dans une zone
+#   - id: "pedestrians"
+#     count: 4
+#     spawn:
+#       type: "random"
+#       ref: "spawn_zone"
+#     goal:
+#       type: "random"
+#       ref: "spawn_zone"
+#     behavior: "normal"
+#     speed: 1.0
+#     movement_controller:
+#       type: "SFM"

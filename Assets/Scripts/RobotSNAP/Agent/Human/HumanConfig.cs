@@ -72,6 +72,13 @@ namespace RobotSNAP.Agents
         [Tooltip("Frottement de contact")]
         public float contactFrictionKappa = 240000f; // 2.4E5
 
+        [Header("SFM - Overtaking")]
+        [Tooltip("Force de dépassement latéral (face-à-face)")]
+        public float overtakingStrength = 2.0f;
+
+        [Tooltip("Amplitude du bruit aléatoire pour briser les symétries")]
+        public float noiseStrength = 0.05f;
+
         [Header("SFM - Wall Forces")]
         [Tooltip("Force d'interaction avec les murs (A)")]
         public float wallForceA = 2400f;        // 600*4

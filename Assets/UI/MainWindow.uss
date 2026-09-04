@@ -42,6 +42,7 @@
     --icon-tint: rgb(241, 245, 249);
 }
 
+/* ===== GLOBAL ROOT ===== */
 .root {
     background-color: var(--bg-primary);
     background-size: cover;
@@ -49,15 +50,56 @@
 
 .root,
 #MainContainer,
-#MainContent {
+#MainContent,
+.main-container,
+.main-content {
     height: 100%;
     width: 100%;
 }
 
-#MainContainer {
+.main-container {
     background-color: var(--bg-primary);
+    flex-direction: column;
 }
 
+.main-row {
+    flex-grow: 1;
+    flex-direction: row;
+    min-height: 0;
+}
+
+.main-content {
+    flex-grow: 1;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+/* ===== STATUS BAR ===== */
+.status-bar {
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    height: 28px;
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 16px;
+}
+
+.status-message {
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-grow: 1;
+}
+
+.status-time {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-left: 16px;
+}
+
+/* ===== GENERIC ELEMENTS ===== */
 .unity-label {
     color: var(--text-primary);
     font-size: 12px;
@@ -83,7 +125,6 @@
 .unity-button:hover {
     background-color: var(--button-hover);
 }
-
 
 .button-icon {
     width: 28px;
@@ -296,7 +337,6 @@
     border-color: var(--accent-glow);
 }
 
-
 .panel-inner {
     flex-direction: column;
     margin-top: 6px;
@@ -308,85 +348,7 @@
     margin-bottom: 6px;
 }
 
-
-/* === DROPDOWN FIELD (le champ visible) === */
-/* .unity-base-field__input {
-    background-color: var(--bg-secondary);
-    color: var(--text-secondary);
-    border-radius: 8px;
-    padding: 0 12px;
-    font-size: 14px;
-    height: 100%;
-    border-color: var(--border-color);
-    border-radius: 8px;
-    overflow: hidden; 
-    white-space: nowrap; 
-    text-overflow: ellipsis; 
-}
-
-.unity-base-field__input:hover {
-    border-color: var(--accent-soft);
-}
-
-.unity-base-field__input:focus {
-    border-color: var(--accent);
-}
-
-.unity-base-popup-field__text {
-    color: var(--text-secondary);
-    font-size: 14px;
-    padding: 0;
-    flex-grow: 1;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-} */
-
-/* === FLÈCHE DU DROPDOWN === */
-/* .unity-base-popup-field__arrow {
-    color: var(--text-secondary);
-    font-size: 12px;
-    margin-left: 6px;
-    -unity-background-image-tint-color: var(--text-secondary);
-}
-
-
-.unity-base-dropdown__container-inner {
-    background-color: var(--bg-secondary) !important;
-    border-radius: 4px !important;
-    padding: 4px 0 !important;
-    margin-top: 4px !important;
-    min-width: 100% !important;
-    max-height: 400px !important;
-}
-
-.unity-base-dropdown__item {
-    color: #FF0000 !important;
-    padding: 8px 14px !important;
-    font-size: 4px !important;
-    transition: background-color 0.15s, color 0.15s !important;
-    border-radius: 4px !important;
-    margin: 0 4px !important;
-    background-color: var(--bg-secondary);
-}
-
-.unity-base-dropdown__container-inner .unity-base-dropdown__item:hover {
-    background-color: var(--button-hover) !important;
-}
-
-.unity-base-dropdown__container-inner .unity-base-dropdown__item.selected {
-    background-color: var(--accent-glow) !important;
-    color: var(--accent) !important;
-}
-
-.unity-base-dropdown__container-inner .unity-base-dropdown__item:active {
-    background-color: var(--accent-soft) !important;
-    color: white !important;
-} */
-
-
-
-
+/* ===== DROPDOWN STYLES ===== */
 .unity-base-field__input {
     color: var(--text-secondary);
     background-color: var(--bg-secondary);
@@ -409,7 +371,6 @@
     border-color: var(--border-color);
     border-radius: 4px;
 }
-
 
 .unity-base-dropdown__item {
     flex-grow: 1;

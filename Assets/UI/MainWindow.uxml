@@ -2,8 +2,14 @@
     <ui:Template name="Sidebar" src="project://database/Assets/UI/Sidebar.uxml?fileID=9197481963319205126&amp;guid=c13731eb285ae0729a9f9a6f6118ce39&amp;type=3#Sidebar"/>
     <ui:Template name="SimulationTab" src="project://database/Assets/UI/Tabs/Simulator/Simulator.uxml?fileID=9197481963319205126&amp;guid=cbda52829e825662596fd6c254609f8a&amp;type=3#Simulator"/>
     <Style src="project://database/Assets/UI/MainWindow.uss?fileID=7433441132597879392&amp;guid=a8f8b32c4d27d9bedaf2031c6a9bf7d5&amp;type=3#MainWindow"/>
-    <ui:VisualElement name="MainContainer" style="flex-grow: 1; width: 100%; height: 100%; flex-direction: row; -unity-text-outline-color: rgba(0, 0, 0, 0);">
-        <ui:Instance template="Sidebar"/>
-        <ui:VisualElement name="MainContent" style="flex-grow: 1; height: 100%; min-height: 0; flex-direction: column; background-color: rgba(0, 0, 0, 0);"/>
+    <ui:VisualElement name="MainContainer" class="main-container">
+        <ui:VisualElement class="main-row" style="flex-grow: 1; flex-direction: row; min-height: 0;">
+            <ui:Instance template="Sidebar"/>
+            <ui:VisualElement name="MainContent" class="main-content"/>
+        </ui:VisualElement>
+        <ui:VisualElement name="StatusBar" class="status-bar">
+            <ui:Label name="StatusMessage" class="status-message"/>
+            <ui:Label name="StatusTime" class="status-time"/>
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

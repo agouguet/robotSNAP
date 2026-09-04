@@ -35,13 +35,15 @@ MonoBehaviour:
   alignmentStrength: 0.3
   contactStiffnessK: 120000
   contactFrictionKappa: 240000
+  overtakingStrength: 2
+  noiseStrength: 0.05
   wallForceA: 2400
   wallForceB: 0.12
   wallContactStiffnessK: 120000
   wallContactFrictionKappa: 240000
-  obstaclePerceptionRadius: 2
-  obstacleForceStrength: 8
-  obstacleForceDistance: 0.5
+  obstaclePerceptionRadius: 3
+  obstacleForceStrength: 100
+  obstacleForceDistance: 0.3
   robotPerceptionRadius: 3
   robotRepulsionStrength: 10
   robotForceDistance: 0.8

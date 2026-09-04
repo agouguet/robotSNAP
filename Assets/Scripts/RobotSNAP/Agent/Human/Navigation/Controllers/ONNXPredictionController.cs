@@ -35,6 +35,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2 goalPosition,
             Vector2[] neighbors,
             Vector2[] neighborVelocities,
+            Vector2[] staticObstacles,
             float deltaTime)
         {
             // Mise à jour du buffer de trajectoire (historique)

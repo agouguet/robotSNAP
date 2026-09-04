@@ -96,7 +96,7 @@ public class ScenarioDataService : MonoBehaviour
             var debugList = GenerateDebugScenarioInfos();
             foreach (var info in debugList)
                 _scenarioDictionary[info.Name] = info;
-            Debug.Log($"[ScenarioDataService] Utilisation de {_scenarioDictionary.Count} scénarios fictifs (mode debug)");
+            Debug.Log($"[ScenarioDataService] Usage of {_scenarioDictionary.Count} fake scenarios (debug mode)");
             _isLoaded = true;
             OnScenarioListChanged?.Invoke();
             return;
@@ -115,11 +115,11 @@ public class ScenarioDataService : MonoBehaviour
         foreach (var fileId in fileIds)
         {
             var info = _scenarioManager.GetScenarioInfo(fileId);
-            Debug.LogWarning($"[ScenarioDataService] Chargé scénario réel: {fileId} - {info?.Name}");
+            Debug.LogWarning($"[ScenarioDataService] Loaded real scenario: {fileId} - {info?.Name}");
             if (info != null)
                 _scenarioDictionary[fileId] = info;
         }
-        Debug.Log($"[ScenarioDataService] Chargé {_scenarioDictionary.Count} scénarios réels.");
+        Debug.Log($"[ScenarioDataService] Loaded {_scenarioDictionary.Count} scenarios.");
         _isLoaded = true;
         OnScenarioListChanged?.Invoke();
     }
@@ -187,7 +187,7 @@ public class ScenarioDataService : MonoBehaviour
     /// </summary>
     public List<string> GetAllTags()
     {
-        var allTags = new HashSet<string> { "Tous" };
+        var allTags = new HashSet<string> { "All" };
         foreach (var entry in _scenarioDictionary)
         {
             var info = entry.Value;
@@ -217,7 +217,7 @@ public class ScenarioDataService : MonoBehaviour
     private bool FilterMatches(KeyValuePair<string, ScenarioInfo> entry, string filter, string search)
     {
         var info = entry.Value;
-        if (filter != "Tous")
+        if (filter != "All")
         {
             bool tagMatch = info.Tags != null && info.Tags.Contains(filter);
             if (!tagMatch) return false;
@@ -235,10 +235,10 @@ public class ScenarioDataService : MonoBehaviour
     {
         switch (sortOption)
         {
-            case "Nom (A-Z)": return list.OrderBy(x => x.Info.Name).ToList();
-            case "Nom (Z-A)": return list.OrderByDescending(x => x.Info.Name).ToList();
-            case "Date récent": return list.OrderByDescending(x => x.Info.Created).ToList();
-            case "Date ancien": return list.OrderBy(x => x.Info.Created).ToList();
+            case "Name (A-Z)": return list.OrderBy(x => x.Info.Name).ToList();
+            case "Name (Z-A)": return list.OrderByDescending(x => x.Info.Name).ToList();
+            case "Date recent": return list.OrderByDescending(x => x.Info.Created).ToList();
+            case "Date old": return list.OrderBy(x => x.Info.Created).ToList();
             default: return list;
         }
     }

@@ -199,7 +199,7 @@ MonoBehaviour:
   m_OverrideVoxelSize: 0
   m_VoxelSize: 0.21666665
   m_MinRegionArea: 2
-  m_NavMeshData: {fileID: 23800000, guid: c7266b74d24dc080cad0f2c25e4fad5e, type: 2}
+  m_NavMeshData: {fileID: 23800000, guid: babbf65076a44914e9a281871486291c, type: 2}
   m_BuildHeightMesh: 0
 --- !u!114 &6262913427228473794
 MonoBehaviour:
@@ -231,7 +231,7 @@ MonoBehaviour:
   m_OverrideVoxelSize: 0
   m_VoxelSize: 0.1
   m_MinRegionArea: 2
-  m_NavMeshData: {fileID: 23800000, guid: e06e599f98fe745aaa7552e1659fab5a, type: 2}
+  m_NavMeshData: {fileID: 23800000, guid: db67740d5c6f6ec95863ba73da5a3550, type: 2}
   m_BuildHeightMesh: 0
 --- !u!114 &518648269625183668
 MonoBehaviour:
@@ -613,7 +613,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f532b5c33b75d6a29b7ab08120159a3e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.Agents.HumanManager
-  _maxAgents: 100
+  _initialCapacity: 50
+  _logEvents: 0
 --- !u!1 &8390315431583928309
 GameObject:
   m_ObjectHideFlags: 0

@@ -19,6 +19,7 @@ namespace RobotSNAP.Agents.Movement.Interfaces
             Vector2 goalPosition,
             Vector2[] neighbors,
             Vector2[] neighborVelocities,
+            Vector2[] staticObstacles,
             float deltaTime
         );
         

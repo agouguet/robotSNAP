@@ -4,7 +4,6 @@ using UnityEngine.AI;
 using Unity.AI.Navigation;
 using RobotSNAP.Utils;
 using System.Collections.Generic;
-
 using UnityEngine.UI;
 using System;
 using System.IO;
@@ -33,7 +32,8 @@ namespace RobotSNAP.Core
         
         private void Awake()
         {
-            InitializeFilters();
+            // Ne pas initialiser les filtres ici, attendre que les surfaces soient prêtes
+            // On s'abonne aux événements
             EventBus.Instance.Subscribe<EnvironmentCreatedEvent>(OnEnvironmentCreated);
             EventBus.Instance.Subscribe<ResetRequestEvent>(OnResetRequest);
         }
@@ -44,15 +44,19 @@ namespace RobotSNAP.Core
             EventBus.Instance.Unsubscribe<ResetRequestEvent>(OnResetRequest);
         }
         
+        /// <summary>
+        /// Initialise les filtres avec les valeurs valides des surfaces.
+        /// À appeler après que les surfaces aient été construites.
+        /// </summary>
         private void InitializeFilters()
         {
+            // Filtrer spawn
             if (spawnSurface != null)
             {
-                // Utilisez l'agentTypeID par défaut (0) si le vôtre est invalide
                 int agentTypeID = spawnSurface.agentTypeID;
                 if (agentTypeID < 0)
                 {
-                    Debug.LogWarning($"AgentTypeID invalide ({agentTypeID}) pour spawnSurface, utilisation de 0");
+                    Debug.LogWarning($"[NavMeshManager] AgentTypeID invalide ({agentTypeID}) pour spawnSurface, utilisation de 0");
                     agentTypeID = 0;
                 }
                 
@@ -62,15 +66,20 @@ namespace RobotSNAP.Core
                     areaMask = spawnSurface.layerMask
                 };
                 
-                Debug.Log($"Spawn Filter corrigé - AgentTypeID: {_spawnFilter.agentTypeID}, AreaMask: {_spawnFilter.areaMask}");
+                Debug.Log($"[NavMeshManager] Spawn Filter initialisé - AgentTypeID: {_spawnFilter.agentTypeID}, AreaMask: {_spawnFilter.areaMask}");
+            }
+            else
+            {
+                Debug.LogWarning("[NavMeshManager] spawnSurface est null, le filtre ne sera pas créé.");
             }
             
+            // Filtrer navigation
             if (navigationSurface != null)
             {
                 int agentTypeID = navigationSurface.agentTypeID;
                 if (agentTypeID < 0)
                 {
-                    Debug.LogWarning($"AgentTypeID invalide ({agentTypeID}) pour navigationSurface, utilisation de 0");
+                    Debug.LogWarning($"[NavMeshManager] AgentTypeID invalide ({agentTypeID}) pour navigationSurface, utilisation de 0");
                     agentTypeID = 0;
                 }
                 
@@ -80,7 +89,11 @@ namespace RobotSNAP.Core
                     areaMask = navigationSurface.layerMask
                 };
                 
-                Debug.Log($"Navigation Filter corrigé - AgentTypeID: {_navigationFilter.agentTypeID}, AreaMask: {_navigationFilter.areaMask}");
+                Debug.Log($"[NavMeshManager] Navigation Filter initialisé - AgentTypeID: {_navigationFilter.agentTypeID}, AreaMask: {_navigationFilter.areaMask}");
+            }
+            else
+            {
+                Debug.LogWarning("[NavMeshManager] navigationSurface est null, le filtre ne sera pas créé.");
             }
         }
         
@@ -88,17 +101,15 @@ namespace RobotSNAP.Core
         {
             if (autoBuildOnEnvironmentReady)
             {
-                // Attendre que l'environnement soit complètement instancié
                 StartCoroutine(DelayedBuildNavMeshes());
             }
         }
         
         private IEnumerator DelayedBuildNavMeshes()
         {
-            // Attendre plusieurs frames pour que Unity ait fini d'instancier tous les objets
-            // yield return new WaitForEndOfFrame();
-            // yield return new WaitForEndOfFrame();
-            // yield return new WaitForSeconds(0.2f);
+            // Attendre quelques frames pour que l'environnement soit complètement instancié
+            yield return new WaitForEndOfFrame();
+            yield return new WaitForEndOfFrame();
             
             yield return BuildNavMeshes();
         }
@@ -120,38 +131,30 @@ namespace RobotSNAP.Core
             _isReady = false;
             
             Debug.Log("[NavMeshManager] Starting NavMesh rebuild...");
+            
+            // 1. S'assurer que les références sont valides
+            if (spawnSurface == null && navigationSurface == null)
+            {
+                Debug.LogError("[NavMeshManager] No NavMeshSurface assigned! Aborting build.");
+                _isRebuilding = false;
+                yield break;
+            }
+            
+            // 2. Nettoyer les anciennes données (optionnel, mais recommandé)
+            if (spawnSurface != null)
+                spawnSurface.RemoveData();
+            if (navigationSurface != null)
+                navigationSurface.RemoveData();
+            
+            // 3. Forcer la mise à jour des surfaces (certaines surfaces ont besoin d'être réinitialisées)
             yield return null;
             
-            // 2. Nettoyage COMPLET du NavMesh
-            // 2a. Supprimer les données des surfaces
-            // if (spawnSurface != null)
-            // {
-            //     spawnSurface.RemoveData();
-            // }
-            
-            // if (navigationSurface != null)
-            // {
-            //     navigationSurface.RemoveData();
-            // }
-            
-            yield return null;
-            
-            // 2b. Supprimer TOUTES les données NavMesh
-            // NavMesh.RemoveAllNavMeshData();
-            // 2c. Forcer un garbage collect et libérer les assets
-            // Resources.UnloadUnusedAssets();
-            // GC.Collect();
-            
-            yield return null;
-            // yield return new WaitForSeconds(0.2f);
-            
-            // 3. Reconstruire avec un délai entre chaque
+            // 4. Reconstruire avec un délai entre chaque
             if (spawnSurface != null)
             {
                 Debug.Log("[NavMeshManager] Building spawn surface...");
                 spawnSurface.BuildNavMesh();
                 yield return null;
-                // yield return new WaitForSeconds(0.1f);
             }
             
             if (navigationSurface != null)
@@ -159,13 +162,15 @@ namespace RobotSNAP.Core
                 Debug.Log("[NavMeshManager] Building navigation surface...");
                 navigationSurface.BuildNavMesh();
                 yield return null;
-                // yield return new WaitForSeconds(0.3f); // Attendre plus longtemps
             }
+            
+            // 5. Initialiser les filtres MAINTENANT (après le build, les agentTypeID sont stables)
+            InitializeFilters();
             
             _isReady = true;
             _isRebuilding = false;
             
-            Debug.Log("[NavMeshManager] NavMesh rebuild completed");
+            Debug.Log("[NavMeshManager] NavMesh rebuild completed successfully.");
             
             EventBus.Instance.Publish(new NavMeshBuiltEvent { success = true });
         }
@@ -173,16 +178,12 @@ namespace RobotSNAP.Core
         public void ClearNavMeshes()
         {
             if (spawnSurface != null)
-            {
                 spawnSurface.RemoveData();
-            }
-            
             if (navigationSurface != null)
-            {
                 navigationSurface.RemoveData();
-            }
             
             NavMesh.RemoveAllNavMeshData();
+            _isReady = false;
         }
         
         public Vector3 GetRandomNavigationPoint(float radius)
@@ -193,7 +194,6 @@ namespace RobotSNAP.Core
                 return transform.position;
             }
             return GetRandomPointSimple(radius);
-            return NavMeshUtils.GetRandomPointOnNavMesh(transform.position, radius, _navigationFilter);
         }
 
         public Vector3 GetRandomSpawnPoint(float radius)
@@ -204,37 +204,27 @@ namespace RobotSNAP.Core
                 return transform.position;
             }
             return GetRandomPointSimple(radius);
-            return NavMeshUtils.GetRandomPointOnNavMesh(transform.position, radius, _spawnFilter);
         }
 
         public Vector3 GetRandomPointSimple(float radius)
         {
-            // Ne pas utiliser de filtre, juste le NavMesh par défaut
+            // Utilise la méthode simple sans filtre spécifique
             return NavMeshUtils.GetRandomPointOnNavMeshSimple(transform.position, radius);
         }
         
         public float GetPathLength(Vector3 start, Vector3 end)
         {
-            if (!_isReady)
+            if (!_isReady || navigationSurface == null)
             {
                 return Vector3.Distance(start, end);
             }
-            
-            if (navigationSurface == null)
-            {
-                return Vector3.Distance(start, end);
-            }
-            
+
             return NavMeshUtils.GetNavMeshPathLength(start, end, _navigationFilter);
         }
         
         public IEnumerator Reset()
         {
             Debug.Log("[NavMeshManager] Reset requested, rebuilding NavMeshes...");
-            
-            // Attendre que l'environnement soit détruit et recréé
-            // yield return new WaitForSeconds(0.1f);
-            
             yield return BuildNavMeshes();
         }
         

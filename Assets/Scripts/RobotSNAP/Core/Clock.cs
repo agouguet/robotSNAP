@@ -7,6 +7,10 @@ using UnityEditor;
 
 namespace RobotSNAP.Core
 {
+    /// <summary>
+    /// Manages simulation time, either in real-time (UTC) or simulated (with a start hour).
+    /// Supports named time zones for display purposes.
+    /// </summary>
     [ExecuteAlways]
     public class Clock : MonoBehaviour
     {
@@ -18,8 +22,12 @@ namespace RobotSNAP.Core
         [SerializeField] private float timeScale = 1f;
         [SerializeField] private bool autoStart = true;
 
-        [Header("Simulation Start (ignoré si useRealTime)")]
+        [Header("Simulation Start (ignored if useRealTime)")]
         [SerializeField] [Range(0, 24)] private float simulationStartHour = 8f;
+
+        [Header("Time Zone (Advanced)")]
+        [Tooltip("The IANA time zone ID (e.g., 'Europe/Paris', 'America/New_York')")]
+        [SerializeField] private string _timeZoneId = "UTC";
 
         [Header("Debug")]
         [SerializeField] private bool logTimeChanges = false;
@@ -27,6 +35,7 @@ namespace RobotSNAP.Core
         [Header("Editor Debug (Read-Only)")]
         [SerializeField] private string editorTimeDisplay = "00:00:00";
 
+        // Internal state
         private double _simulatedTimeSeconds = 0f;
         private double _pauseTimeSeconds = 0f;
         private bool _isPaused = false;
@@ -36,15 +45,22 @@ namespace RobotSNAP.Core
         private bool _isInitialized = false;
         private bool _previousUseRealTime;
 
+        // Time zone
+        private TimeZoneInfo _timeZone;
+
+        // Events
         public event Action<double> OnTimeUpdated;
         public event Action<bool> OnPauseStateChanged;
 
+        // Public properties
         public double CurrentTimeMillis => GetCurrentTimeMillis();
         public double CurrentTimeSeconds => CurrentTimeMillis / 1000.0;
         public bool IsPaused => _isPaused;
         public float TimeScale => timeScale;
         public bool UseRealTime => useRealTime;
+        public DateTime LocalNow => GetLocalTime();
 
+        // Unix epoch
         public static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 
         #region Unity Lifecycle
@@ -62,6 +78,8 @@ namespace RobotSNAP.Core
             {
                 DontDestroyOnLoad(gameObject);
             }
+
+            LoadTimeZone();
         }
 
         private void OnEnable()
@@ -84,6 +102,9 @@ namespace RobotSNAP.Core
 #if UNITY_EDITOR
         private void OnValidate()
         {
+            // Reload time zone if the ID changed
+            LoadTimeZone();
+
             if (useRealTime != _previousUseRealTime)
             {
                 _previousUseRealTime = useRealTime;
@@ -124,6 +145,7 @@ namespace RobotSNAP.Core
 
             if (!autoStart || !_isInitialized) return;
 
+            // Advance simulated time if not paused
             if (!useRealTime && !_isPaused)
             {
                 _simulatedTimeSeconds += Time.deltaTime * timeScale;
@@ -141,60 +163,106 @@ namespace RobotSNAP.Core
                 }
             }
 
-            // Mise à jour de l'affichage dans l'inspecteur (toutes les 0.5s)
+            // Update editor display every 0.5s
             _editorDisplayUpdateTimer += Time.deltaTime;
             if (_editorDisplayUpdateTimer >= 0.5f)
             {
                 _editorDisplayUpdateTimer = 0f;
-                if (useRealTime)
-                    UpdateEditorDisplay();       // affiche l'heure UTC
-                else
-                    UpdateEditorDisplayFromCurrentTime(); // affiche l'heure simulée
+                UpdateEditorDisplay();
             }
         }
 
         #endregion
 
-        #region Editor Debug
+        #region Time Zone Management
 
         /// <summary>
-        /// Met à jour l'affichage pour le mode Édition ou pour le mode RealTime en jeu.
-        /// Affiche l'heure UTC actuelle.
+        /// Loads the time zone from the configured ID.
+        /// Falls back to UTC if the ID is not valid.
+        /// </summary>
+        private void LoadTimeZone()
+        {
+            try
+            {
+                _timeZone = TimeZoneInfo.FindSystemTimeZoneById(_timeZoneId);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                Debug.LogWarning($"[Clock] TimeZone '{_timeZoneId}' not found. Using UTC.");
+                _timeZone = TimeZoneInfo.Utc;
+                _timeZoneId = "UTC";
+            }
+            catch (InvalidTimeZoneException)
+            {
+                Debug.LogWarning($"[Clock] Invalid TimeZone '{_timeZoneId}'. Using UTC.");
+                _timeZone = TimeZoneInfo.Utc;
+                _timeZoneId = "UTC";
+            }
+        }
+
+        /// <summary>
+        /// Gets the current local time according to the selected time zone.
+        /// </summary>
+        public DateTime GetLocalTime()
+        {
+            DateTime utc = DateTime.UtcNow;
+            return TimeZoneInfo.ConvertTimeFromUtc(utc, _timeZone);
+        }
+
+        /// <summary>
+        /// Returns the current time zone ID.
+        /// </summary>
+        public string GetTimeZoneId() => _timeZoneId;
+
+        /// <summary>
+        /// Sets the time zone by ID and reloads it.
+        /// </summary>
+        public void SetTimeZone(string timeZoneId)
+        {
+            if (_timeZoneId == timeZoneId) return;
+            _timeZoneId = timeZoneId;
+            LoadTimeZone();
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+                UpdateEditorDisplay();
+#endif
+        }
+
+        #endregion
+
+        #region Editor Display
+
+        /// <summary>
+        /// Updates the editor display string with the current time (respecting time zone).
         /// </summary>
         private void UpdateEditorDisplay()
         {
             if (useRealTime)
             {
-                DateTime now = DateTime.UtcNow;
-                editorTimeDisplay = now.ToString("HH:mm:ss");
+                DateTime local = GetLocalTime();
+                editorTimeDisplay = local.ToString("HH:mm:ss");
             }
             else
             {
-                double totalSeconds = simulationStartHour * 3600.0;
-                int hours = Mathf.FloorToInt((float)(totalSeconds / 3600.0));
-                int minutes = Mathf.FloorToInt((float)((totalSeconds % 3600.0) / 60.0));
-                int seconds = Mathf.FloorToInt((float)(totalSeconds % 60.0));
+                // For simulated time, apply the time zone offset to the display
+                TimeSpan offset = _timeZone.GetUtcOffset(DateTime.UtcNow);
+                double secondsInDay = (CurrentTimeSeconds % 86400.0) + offset.TotalSeconds;
+                if (secondsInDay < 0) secondsInDay += 86400.0;
+                if (secondsInDay >= 86400.0) secondsInDay -= 86400.0;
+                int hours = Mathf.FloorToInt((float)(secondsInDay / 3600.0));
+                int minutes = Mathf.FloorToInt((float)((secondsInDay % 3600.0) / 60.0));
+                int seconds = Mathf.FloorToInt((float)(secondsInDay % 60.0));
                 editorTimeDisplay = $"{hours:D2}:{minutes:D2}:{seconds:D2}";
             }
-        }
-
-        /// <summary>
-        /// Met à jour l'affichage à partir du temps simulé (pour mode simulation).
-        /// </summary>
-        private void UpdateEditorDisplayFromCurrentTime()
-        {
-            double secondsInDay = CurrentTimeSeconds % 86400.0;
-            if (secondsInDay < 0) secondsInDay += 86400.0;
-            int hours = Mathf.FloorToInt((float)(secondsInDay / 3600.0));
-            int minutes = Mathf.FloorToInt((float)((secondsInDay % 3600.0) / 60.0));
-            int seconds = Mathf.FloorToInt((float)(secondsInDay % 60.0));
-            editorTimeDisplay = $"{hours:D2}:{minutes:D2}:{seconds:D2}";
         }
 
         #endregion
 
         #region Initialization
 
+        /// <summary>
+        /// Initializes the clock. Resets time to start of simulation or real time.
+        /// </summary>
         public void Initialize()
         {
             if (useRealTime)
@@ -217,11 +285,7 @@ namespace RobotSNAP.Core
             _isInitialized = true;
             _previousUseRealTime = useRealTime;
 
-            // Mise à jour initiale de l'affichage
-            if (useRealTime)
-                UpdateEditorDisplay();
-            else
-                UpdateEditorDisplayFromCurrentTime();
+            UpdateEditorDisplay();
 
             if (logTimeChanges)
             {
@@ -229,6 +293,9 @@ namespace RobotSNAP.Core
             }
         }
 
+        /// <summary>
+        /// Resets the time to the initial state.
+        /// </summary>
         public void ResetTime()
         {
             Initialize();
@@ -238,6 +305,9 @@ namespace RobotSNAP.Core
 
         #region Time Management
 
+        /// <summary>
+        /// Gets the current time in milliseconds.
+        /// </summary>
         private double GetCurrentTimeMillis()
         {
             if (_isPaused)
@@ -254,6 +324,9 @@ namespace RobotSNAP.Core
             }
         }
 
+        /// <summary>
+        /// Pauses the clock.
+        /// </summary>
         public void Pause()
         {
             if (_isPaused) return;
@@ -264,6 +337,9 @@ namespace RobotSNAP.Core
                 Debug.Log($"[Clock] Paused at {_pauseTimeSeconds:F3}s");
         }
 
+        /// <summary>
+        /// Resumes the clock.
+        /// </summary>
         public void Resume()
         {
             if (!_isPaused) return;
@@ -284,11 +360,17 @@ namespace RobotSNAP.Core
                 Debug.Log($"[Clock] Resumed at {CurrentTimeSeconds:F3}s");
         }
 
+        /// <summary>
+        /// Toggles pause state.
+        /// </summary>
         public void TogglePause()
         {
             if (_isPaused) Resume(); else Pause();
         }
 
+        /// <summary>
+        /// Sets the time scale.
+        /// </summary>
         public void SetTimeScale(float scale)
         {
             timeScale = Mathf.Max(0f, scale);

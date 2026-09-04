@@ -10,12 +10,12 @@ public class ScenarioSelectionController : MonoBehaviour
     [Header("References")]
     [SerializeField] private UIDocument uiDocument;
     [SerializeField] private ScenarioDataService _dataService;
-    [SerializeField] private VisualTreeAsset _cardTemplate;   // Template pour les cartes
+    [SerializeField] private VisualTreeAsset _cardTemplate;
 
     [Header("Pop-up settings")]
     [SerializeField] private int _columns = 4;
     [SerializeField] private float _cardSpacingPercent = 1f;
-    [SerializeField] private string _searchPlaceholder = "Rechercher un scénario...";
+    [SerializeField] private string _searchPlaceholder = "Search a scenario...";
 
     // Éléments UI du popup
     private VisualElement _root;
@@ -24,7 +24,6 @@ public class ScenarioSelectionController : MonoBehaviour
     private Button _loadButton;
     private Button _newScenarioButton;
 
-    // Nouveau composant de liste
     private ScenarioListView _listView;
 
     // État
@@ -49,7 +48,6 @@ public class ScenarioSelectionController : MonoBehaviour
 
     private void OnDestroy()
     {
-        // Nettoyer les abonnements du composant de liste
         _listView?.Dispose();
         UnsubscribeUI();
     }
@@ -75,28 +73,17 @@ public class ScenarioSelectionController : MonoBehaviour
             return;
         }
 
-        // Récupérer les boutons du footer
         _cancelButton = _popupOverlay.Q<Button>("CancelPopupButton");
         _loadButton = _popupOverlay.Q<Button>("LoadScenarioConfirmButton");
         _newScenarioButton = _popupOverlay.Q<Button>("NewScenarioButton");
 
-        // --- Créer et insérer la ScenarioListView ---
-        // On supprime les anciens éléments de liste (ScrollView, Toolbar, etc.)
-        // On les remplace par notre composant.
         var panel = _popupOverlay.Q<VisualElement>(className: "popup-panel");
         if (panel == null) return;
 
-        // On garde le titre, sous-titre, et le footer (boutons).
-        // On retire tout ce qui se trouve entre le sous-titre et le footer.
-        // Pour simplifier, on va tout enlever après le sous-titre et avant le footer,
-        // puis on ajoute la ScenarioListView à cet endroit.
-
-        // Trouver le titre et le sous-titre
         var title = panel.Q<Label>(className: "popup-title");
         var subtitle = panel.Q<Label>(className: "popup-subtitle");
         var footer = panel.Q<VisualElement>(className: "popup-footer");
 
-        // Supprimer tout ce qui est entre le sous-titre et le footer
         var children = panel.Children().ToList();
         bool startRemoving = false;
         foreach (var child in children)
@@ -116,7 +103,6 @@ public class ScenarioSelectionController : MonoBehaviour
             }
         }
 
-        // Créer le ScenarioListView
         _listView = new ScenarioListView(_cardTemplate, _columns, _cardSpacingPercent);
         _listView.Initialize(_dataService);
         _listView.style.flexGrow = 1;
@@ -126,14 +112,11 @@ public class ScenarioSelectionController : MonoBehaviour
         _listView.style.marginBottom = 8;
         
 
-        // Insérer la liste juste après le sous-titre
         int insertIndex = panel.IndexOf(subtitle) + 1;
         panel.Insert(insertIndex, _listView);
 
-        // Abonnements du composant
         _listView.OnScenarioSelected += OnListViewSelectionChanged;
 
-        // Abonnements des boutons
         SubscribeUI();
 
         if (_popupOverlay != null)
@@ -175,15 +158,12 @@ public class ScenarioSelectionController : MonoBehaviour
     {
         if (_popupOverlay == null) return;
 
-        // Réinitialiser l'état
         _selectedScenarioId = null;
-        _loadButton?.SetEnabled(false); // Désactiver le bouton "Charger" tant qu'aucun scénario n'est sélectionné
+        _loadButton?.SetEnabled(false);
 
-        // Forcer le rafraîchissement des données
         _dataService?.EnsureLoaded();
         _listView?.Refresh();
 
-        // Afficher le popup
         _popupOverlay.style.display = DisplayStyle.Flex;
     }
 

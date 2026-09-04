@@ -10,9 +10,9 @@ using RobotSNAP.Agents;
 namespace RobotSNAP.Core.Scenario
 {
     /// <summary>
-    /// Applique un scénario YAML à un GameManager.
-    /// Gère la carte (via GridEnvironmentBuilder), le positionnement du robot,
-    /// la configuration des humains (via le HumanPoolManager), les objectifs, formations et comportements.
+    /// Applies a YAML scenario to a GameManager.
+    /// Handles map building (via EnvironmentBuilder), robot positioning (position + yaw),
+    /// human configuration (via HumanPoolManager), goals, formations, and behaviors.
     /// </summary>
     public sealed class ScenarioApplier : MonoBehaviour
     {
@@ -43,6 +43,13 @@ namespace RobotSNAP.Core.Scenario
 
         public void SetLoader(ScenarioLoader loader) => _loader = loader;
 
+        // ==========================================
+        //          PUBLIC API
+        // ==========================================
+
+        /// <summary>
+        /// Applies the given scenario to the specified GameManager.
+        /// </summary>
         public IEnumerator ApplyScenario(GameManager gameManager, ScenarioData scenario)
         {
             if (gameManager == null)
@@ -80,6 +87,9 @@ namespace RobotSNAP.Core.Scenario
             if (_logEvents) Debug.Log($"[ScenarioApplier] Successfully applied scenario: {scenario.Name}");
         }
 
+        /// <summary>
+        /// Stops all active behavior coroutines (e.g., wander, follow).
+        /// </summary>
         public void StopAllBehaviours()
         {
             foreach (var coroutine in _activeCoroutines)
@@ -87,39 +97,49 @@ namespace RobotSNAP.Core.Scenario
             _activeCoroutines.Clear();
         }
 
+        /// <summary>
+        /// Clears the internal tracking of spawned humans.
+        /// </summary>
         public void ClearTrackedHumans()
         {
             _spawnedHumans.Clear();
             _humanCounter = 0;
         }
 
+        // ==========================================
+        //          APPLICATION COROUTINE
+        // ==========================================
+
         private IEnumerator ApplyScenarioCoroutine()
         {
-            // 1. Charger et construire la carte
+            // 1. Build the map (if needed). Currently disabled in favor of external build.
             // yield return StartCoroutine(BuildMapFromScenario());
-            // yield return StartCoroutine(_environmentBuilder.BuildEnvironment(_currentScenario.MapImage));
 
-            // 2. Nettoyer les humains existants (les retourner au pool)
+            // 2. Clear existing humans (return them to the pool)
             if (_clearExistingHumans)
             {
                 yield return StartCoroutine(ClearExistingHumans());
                 ClearTrackedHumans();
             }
 
-            // 3. Attendre que le GameManager soit prêt
+            // 3. Wait until the GameManager is ready (NavMesh, pool, etc.)
             yield return StartCoroutine(WaitForGameManagerReady());
 
-            // 4. Appliquer la configuration de simulation (seed, time scale, durée)
+            // 4. Apply simulation configuration (seed, time scale, duration)
             ApplySimulationConfig();
 
-            // 5. Positionner et configurer le robot
+            // 5. Setup the robot (position, rotation, goal, behavior, speed)
             yield return StartCoroutine(SetupRobot());
 
-            // 6. Configurer les humains via le pool
+            // 6. Setup humans via the pool
             yield return StartCoroutine(SetupHumans());
 
             if (_logEvents) Debug.Log($"[ScenarioApplier] Scenario application complete: {_currentScenario.Name}");
         }
+
+        // ==========================================
+        //          MAP BUILDING (OPTIONAL)
+        // ==========================================
 
         private IEnumerator BuildMapFromScenario()
         {
@@ -147,6 +167,10 @@ namespace RobotSNAP.Core.Scenario
             yield return null;
         }
 
+        // ==========================================
+        //          CLEANUP & WAITING
+        // ==========================================
+
         private IEnumerator ClearExistingHumans()
         {
             var poolManager = _gameManager?.HumanPool;
@@ -171,6 +195,10 @@ namespace RobotSNAP.Core.Scenario
                 yield return null;
             yield return new WaitForSeconds(0.1f);
         }
+
+        // ==========================================
+        //          CONFIGURATION
+        // ==========================================
 
         private void ApplySimulationConfig()
         {
@@ -199,6 +227,10 @@ namespace RobotSNAP.Core.Scenario
             if (_logEvents) Debug.Log($"[ScenarioApplier] Duration {duration}s reached. Simulation paused.");
         }
 
+        // ==========================================
+        //          ROBOT SETUP
+        // ==========================================
+
         private IEnumerator SetupRobot()
         {
             var robot = FindRobot();
@@ -225,7 +257,7 @@ namespace RobotSNAP.Core.Scenario
 
             if (_resetRobotPosition)
             {
-                // Récupérer position ET rotation (yaw) du point de départ
+                // Resolve position AND rotation (yaw) from the start reference
                 var (startPos, startRot) = _loader.GetPositionAndRotation(_currentScenario, robotConfig.StartRef);
                 var robotComponent = robot.GetComponent<Robot>();
                 if (robotComponent != null)
@@ -233,12 +265,11 @@ namespace RobotSNAP.Core.Scenario
 
                 if (robotComponent != null)
                 {
-                    // Utiliser la méthode SetBaseLinkPose qui accepte position + rotation
                     robotComponent.SetBaseLinkPose(startPos, startRot);
                 }
                 else
                 {
-                    // Fallback si pas de composant Robot
+                    // Fallback
                     robot.transform.position = startPos;
                     robot.transform.rotation = startRot;
                 }
@@ -246,8 +277,7 @@ namespace RobotSNAP.Core.Scenario
                     Debug.Log($"[ScenarioApplier] Robot position set to {startPos}, rotation yaw: {startRot.eulerAngles.y}");
             }
 
-            // Pour le but, on peut aussi récupérer la rotation si besoin (ex: pour orienter le robot vers le but)
-            // Mais actuellement, le goal est utilisé uniquement pour la position.
+            // Set goal (position only), behavior, and speed
             Vector3 goalPos = ResolvePosition(robotConfig.GoalRef);
             SetRobotGoal(robot, goalPos);
             SetRobotBehavior(robot, robotConfig.Behavior);
@@ -281,6 +311,10 @@ namespace RobotSNAP.Core.Scenario
             comp?.SetSpeed(speed);
         }
 
+        // ==========================================
+        //          HUMAN SETUP
+        // ==========================================
+
         private IEnumerator SetupHumans()
         {
             if (_currentScenario.Humans == null || _currentScenario.Humans.Count == 0)
@@ -296,14 +330,14 @@ namespace RobotSNAP.Core.Scenario
                 yield break;
             }
 
-            // Calculer le nombre total d'humains
+            // Calculate total number of humans
             int totalHumans = 0;
             foreach (var config in _currentScenario.Humans)
                 totalHumans += config.Count;
 
             if (totalHumans == 0) yield break;
 
-            // Récupérer les instances depuis le pool
+            // Get instances from the pool
             List<HumanAgent> allHumans = new List<HumanAgent>();
             for (int i = 0; i < totalHumans; i++)
             {
@@ -317,9 +351,9 @@ namespace RobotSNAP.Core.Scenario
                 }
             }
 
-            yield return null; // laisser Unity stabiliser
+            yield return null; // let Unity stabilize
 
-            // Configurer chaque humain selon sa définition YAML
+            // Configure each human according to its YAML definition
             int humanIndex = 0;
             foreach (var config in _currentScenario.Humans)
             {
@@ -338,9 +372,13 @@ namespace RobotSNAP.Core.Scenario
             if (_logEvents) Debug.Log($"[ScenarioApplier] Configured {humanIndex} humans");
         }
 
+        // ==========================================
+        //          INDIVIDUAL HUMAN CONFIGURATION
+        // ==========================================
+
         private void ConfigureHuman(HumanAgent human, HumanScenarioConfig config, int index, int total)
         {
-            // Positionnement
+            // --- Spawn Position ---
             if (config.Spawn != null)
             {
                 Vector3 spawnPos = ResolveSpawnPosition(config.Spawn, index, total);
@@ -348,106 +386,154 @@ namespace RobotSNAP.Core.Scenario
                     human.transform.position = spawnPos;
             }
 
-            // Objectif
+            // --- Goal ---
             if (config.Goal != null)
                 ResolveAndSetGoal(human, config.Goal);
 
-            // Paramètres de base
+            // --- Basic Parameters ---
             human.SetSpeed(config.Speed);
             if (!string.IsNullOrEmpty(config.Behavior))
                 human.SetBehavior(config.Behavior);
 
-            // Couleur
+            // --- Color ---
             if (config.Color != null && config.Color.Length >= 3)
                 SetHumanColor(human, new Color(config.Color[0], config.Color[1], config.Color[2]));
 
-            // Personnalité (assertiveness, personal space, reaction time)
+            // --- Personality (SFM parameters) ---
             if (config.Personality != null)
                 SetHumanPersonality(human, config.Personality);
 
-            // Contrôleur de mouvement (SFM, ONNX, Hybrid) et paramètres SFM avancés
+            // --- Movement Controller (SFM, ONNX, Hybrid) ---
             if (config.MovementController != null)
                 SetHumanMovementController(human, config.MovementController);
         }
 
-        private void SetHumanMovementController(HumanAgent human, MovementControllerConfig movementConfig)
-        {
-            var movement = human.GetComponent<HumanMovement>();
-            if (movement == null) return;
+        // ==========================================
+        //          FLEXIBLE RESOLUTION HELPERS
+        // ==========================================
 
-            // Déterminer le type de contrôleur (0=SFM, 1=ONNX, 2=Hybrid)
-            int controllerType = 0;
-            switch (movementConfig.Type?.ToLower())
-            {
-                case "sfm": controllerType = 0; break;
-                case "onnx": controllerType = 1; break;
-                case "hybrid": controllerType = 2; break;
-                default: controllerType = 0; break;
-            }
-            movement.SetControllerType(controllerType);
-
-            // Les paramètres SFM personnalisés (force_strength, social_force, etc.)
-            // ne sont pas directement exposés dans HumanMovement actuellement.
-            // On pourrait étendre HumanMovement pour les passer au contrôleur SFM.
-            // Pour l'instant, on ignore ces valeurs ou on les loggue.
-            if (movementConfig.SFMParameters != null && _logEvents)
-            {
-                Debug.Log($"[ScenarioApplier] SFM advanced parameters provided but not yet applied to {human.name}. " +
-                          $"Values: ForceStrength={movementConfig.SFMParameters.ForceStrength}, " +
-                          $"SocialForce={movementConfig.SFMParameters.SocialForce}, etc.");
-            }
-        }
-
+        /// <summary>
+        /// Resolves a spawn position from a SpawnConfig.
+        /// Supports: 'ref' (legacy), direct 'position', or 'zone'.
+        /// Handles 'point', 'random', and 'formation' types.
+        /// </summary>
         private Vector3 ResolveSpawnPosition(SpawnConfig spawn, int index, int total)
         {
-            switch (spawn.Type?.ToLower())
+            // PRIORITY 1: Use a named reference (legacy/backward compatible)
+            if (!string.IsNullOrEmpty(spawn.Reference))
             {
-                case "point": return ResolvePosition(spawn.Reference);
-                case "random":
-                    Bounds bounds = ResolveBounds(spawn.Reference);
-                    return new Vector3(
-                        UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
-                        bounds.center.y,
-                        UnityEngine.Random.Range(bounds.min.z, bounds.max.z)
-                    );
-                case "formation":
-                    Vector3 center = GetFormationCenter(spawn);
-                    if (spawn.Formation == "line")
-                    {
-                        float offset = (index - (total - 1) / 2f) * spawn.Spacing;
-                        return center + new Vector3(offset, 0, 0);
-                    }
-                    if (spawn.Formation == "circle")
-                    {
-                        float angle = (index / (float)total) * Mathf.PI * 2;
-                        return center + new Vector3(Mathf.Cos(angle) * spawn.Spacing, 0, Mathf.Sin(angle) * spawn.Spacing);
-                    }
-                    break;
+                switch (spawn.Type?.ToLower())
+                {
+                    case "point":
+                        return ResolvePosition(spawn.Reference);
+
+                    case "random":
+                        Bounds refBounds = ResolveBounds(spawn.Reference);
+                        return new Vector3(
+                            UnityEngine.Random.Range(refBounds.min.x, refBounds.max.x),
+                            refBounds.center.y,
+                            UnityEngine.Random.Range(refBounds.min.z, refBounds.max.z)
+                        );
+
+                    case "formation":
+                        Vector3 center = GetFormationCenter(spawn);
+                        if (spawn.Formation == "line")
+                        {
+                            float offset = (index - (total - 1) / 2f) * spawn.Spacing;
+                            return center + new Vector3(offset, 0, 0);
+                        }
+                        if (spawn.Formation == "circle")
+                        {
+                            float angle = (index / (float)total) * Mathf.PI * 2;
+                            return center + new Vector3(Mathf.Cos(angle) * spawn.Spacing, 0, Mathf.Sin(angle) * spawn.Spacing);
+                        }
+                        break;
+                }
+                return Vector3.zero;
             }
+
+            // PRIORITY 2: Direct position
+            if (spawn.Position != null)
+                return spawn.Position.ToVector3();
+
+            // PRIORITY 3: Zone definition (center + size)
+            if (spawn.Zone != null && spawn.Zone.IsBounds)
+            {
+                switch (spawn.Type?.ToLower())
+                {
+                    case "point":
+                        return spawn.Zone.Center.ToVector3();
+
+                    case "random":
+                        Bounds zoneBounds = spawn.Zone.ToBounds();
+                        return new Vector3(
+                            UnityEngine.Random.Range(zoneBounds.min.x, zoneBounds.max.x),
+                            zoneBounds.center.y,
+                            UnityEngine.Random.Range(zoneBounds.min.z, zoneBounds.max.z)
+                        );
+
+                    case "formation":
+                        // Use the zone center as the formation anchor
+                        Vector3 formationBase = spawn.Zone.Center.ToVector3();
+                        // If relative_to is provided, we could offset, but for simplicity we use the center.
+                        // For a full implementation, we would check spawn.RelativeTo here.
+                        return formationBase;
+
+                    default:
+                        return spawn.Zone.Center.ToVector3();
+                }
+            }
+
             return Vector3.zero;
         }
 
-        private Vector3 GetFormationCenter(SpawnConfig spawn)
+        /// <summary>
+        /// Resolves a goal position from a GoalConfig.
+        /// Supports: 'ref' (legacy), direct 'position', or 'zone' (takes the center).
+        /// </summary>
+        private Vector3 ResolveGoalPosition(GoalConfig goal)
         {
-            if (spawn.RelativeTo == "robot")
-            {
-                var robot = FindRobot();
-                if (robot != null) return robot.transform.position;
-            }
-            else if (!string.IsNullOrEmpty(spawn.RelativeTo))
-                return ResolvePosition(spawn.RelativeTo);
+            if (!string.IsNullOrEmpty(goal.Reference))
+                return _loader?.GetPosition(_currentScenario, goal.Reference) ?? Vector3.zero;
+
+            if (goal.Position != null)
+                return goal.Position.ToVector3();
+
+            if (goal.Zone != null && goal.Zone.IsBounds)
+                return goal.Zone.Center.ToVector3();
+
             return Vector3.zero;
         }
+
+        /// <summary>
+        /// Resolves a Bounds from a GoalConfig (for random goals).
+        /// Supports: 'ref' (legacy) or direct 'zone'.
+        /// </summary>
+        private Bounds ResolveBoundsFromGoal(GoalConfig goal)
+        {
+            if (!string.IsNullOrEmpty(goal.Reference))
+                return _loader?.GetBounds(_currentScenario, goal.Reference) ?? new Bounds();
+
+            if (goal.Zone != null && goal.Zone.IsBounds)
+                return goal.Zone.ToBounds();
+
+            return new Bounds();
+        }
+
+        // ==========================================
+        //          GOAL RESOLUTION & BEHAVIORS
+        // ==========================================
 
         private void ResolveAndSetGoal(HumanAgent human, GoalConfig goal)
         {
             switch (goal.Type?.ToLower())
             {
                 case "point":
-                    human.SetGoal(ResolvePosition(goal.Reference));
+                    human.SetGoal(ResolveGoalPosition(goal));
                     break;
+
                 case "random":
-                    Bounds bounds = ResolveBounds(goal.Reference);
+                    Bounds bounds = ResolveBoundsFromGoal(goal);
                     Vector3 randomGoal = new Vector3(
                         UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
                         bounds.center.y,
@@ -455,18 +541,29 @@ namespace RobotSNAP.Core.Scenario
                     );
                     human.SetGoal(randomGoal);
                     break;
+
                 case "wander":
                     _activeCoroutines.Add(StartCoroutine(WanderRoutine(human, goal.Radius)));
                     break;
+
                 case "follow":
                     if (goal.Target == "robot")
                         _activeCoroutines.Add(StartCoroutine(FollowRobotRoutine(human)));
                     break;
+
                 case "stay":
                     human.SetGoal(human.transform.position);
                     break;
+
+                default:
+                    if (_logEvents) Debug.LogWarning($"[ScenarioApplier] Unknown goal type: {goal.Type}");
+                    break;
             }
         }
+
+        // ==========================================
+        //          BEHAVIOR COROUTINES
+        // ==========================================
 
         private IEnumerator WanderRoutine(HumanAgent human, float radius)
         {
@@ -490,11 +587,27 @@ namespace RobotSNAP.Core.Scenario
             }
         }
 
+        // ==========================================
+        //          UTILITY METHODS (RESOLVE, COLOR, PERSONALITY)
+        // ==========================================
+
         private Vector3 ResolvePosition(string reference) =>
             _loader?.GetPosition(_currentScenario, reference) ?? Vector3.zero;
 
         private Bounds ResolveBounds(string reference) =>
             _loader?.GetBounds(_currentScenario, reference) ?? new Bounds();
+
+        private Vector3 GetFormationCenter(SpawnConfig spawn)
+        {
+            if (spawn.RelativeTo == "robot")
+            {
+                var robot = FindRobot();
+                if (robot != null) return robot.transform.position;
+            }
+            else if (!string.IsNullOrEmpty(spawn.RelativeTo))
+                return ResolvePosition(spawn.RelativeTo);
+            return Vector3.zero;
+        }
 
         private void SetHumanColor(HumanAgent human, Color color)
         {
@@ -507,7 +620,30 @@ namespace RobotSNAP.Core.Scenario
             human.SetAssertiveness(personality.Assertiveness);
             human.SetPersonalSpace(personality.PersonalSpace);
             human.SetReactionTime(personality.ReactionTime);
-            
+        }
+
+        private void SetHumanMovementController(HumanAgent human, MovementControllerConfig movementConfig)
+        {
+            var movement = human.GetComponent<HumanMovement>();
+            if (movement == null) return;
+
+            int controllerType = 0;
+            switch (movementConfig.Type?.ToLower())
+            {
+                case "sfm": controllerType = 0; break;
+                case "onnx": controllerType = 1; break;
+                case "hybrid": controllerType = 2; break;
+                default: controllerType = 0; break;
+            }
+            movement.SetControllerType(controllerType);
+
+            // Log advanced SFM parameters (not yet applied)
+            if (movementConfig.SFMParameters != null && _logEvents)
+            {
+                Debug.Log($"[ScenarioApplier] SFM advanced parameters provided but not yet applied to {human.name}. " +
+                          $"Values: ForceStrength={movementConfig.SFMParameters.ForceStrength}, " +
+                          $"SocialForce={movementConfig.SFMParameters.SocialForce}, etc.");
+            }
         }
     }
 }

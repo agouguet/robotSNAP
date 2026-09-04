@@ -46,8 +46,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e6bd66268f561617f9b3fa3cd339ab31, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  humanConfig: {fileID: 11400000, guid: 76dbe31736cc5c08e9e8b0e3a7d3db12, type: 2}
   agentName: 
+  radius: 0.25
+  mass: 80
+  interactionRadius: 1.5
+  personalSpace: 0.8
+  assertiveness: 0.5
+  reactionTime: 0.3
+  desiredSpeed: 1.2
+  humanConfig: {fileID: 11400000, guid: 76dbe31736cc5c08e9e8b0e3a7d3db12, type: 2}
+  agentId: 0
   isStatic: 0
   perceptionRadius: 5
   avatars:
@@ -57,6 +65,7 @@ MonoBehaviour:
   currentDestination: {x: 0, y: 0}
   currentVelocity3D: {x: 0, y: 0, z: 0}
   hasDestination: 0
+  humanManager: {fileID: 0}
 --- !u!114 &5597565183493263474
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -69,13 +78,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 78e549a5bbeb7da36b063a1df64c9ecb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _defaultSpeed: 1.2
   _maxSpeed: 2
-  _currentBehavior: normal
-  _interactionRadius: 1.5
-  _personalSpace: 0.8
-  _assertiveness: 0.5
-  _reactionTime: 0.3
+  _angularSpeed: 180
+  _sphereCastRadiusScale: 0.8
+  _raycastCountPerSide: 6
+  _angleStepDegrees: 30
+  _verticalOffset: 0.5
 --- !u!54 &4064441718572326281
 Rigidbody:
   m_ObjectHideFlags: 0

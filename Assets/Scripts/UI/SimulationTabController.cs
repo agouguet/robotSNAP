@@ -197,6 +197,7 @@ public class SimulationTabController : MonoBehaviour
                 bottom = 8
             }
         };
+        _minimapRenderer.AddToClassList("minimap-image");
         minimapContainer.Add(_minimapRenderer);
 
         // Configurer la caméra de minicarte

@@ -168,10 +168,10 @@ public class ScenariosTabController : MonoBehaviour
 
             var actions = new VisualElement();
             actions.AddToClassList("scenario-details-actions");
-            _useButton = new Button(OnUseClicked) { text = "Utiliser le scénario" };
+            _useButton = new Button(OnUseClicked) { text = "Use Scenario" };
             _useButton.AddToClassList("action-button");
             _useButton.AddToClassList("primary");
-            _editButton = new Button(OnEditClicked) { text = "Modifier" };
+            _editButton = new Button(OnEditClicked) { text = "Edit Scenario" };
             _editButton.AddToClassList("action-button");
             _editButton.AddToClassList("secondary");
             actions.Add(_editButton);
@@ -239,9 +239,9 @@ public class ScenariosTabController : MonoBehaviour
         var title = uiDocument.rootVisualElement.Q<Label>("ScenarioPageTitle");
         if (title != null) title.text = "Scénarios";
         var subtitle = uiDocument.rootVisualElement.Q<Label>("ScenarioPageSubtitle");
-        if (subtitle != null) subtitle.text = "Gérez et configurez vos scénarios de simulation.";
+        if (subtitle != null) subtitle.text = "Manage and configure your simulation scenarios.";
         // Réactiver le bouton "Nouveau"
-        if (_newButton != null) _newButton.text = "+  Nouveau scénario";
+        if (_newButton != null) _newButton.text = "+  New Scenario";
         _listView?.Refresh();
     }
 
@@ -257,12 +257,12 @@ public class ScenariosTabController : MonoBehaviour
 
         // Mettre à jour le titre de la page
         var title = uiDocument.rootVisualElement.Q<Label>("ScenarioPageTitle");
-        if (title != null) title.text = info == null ? "Nouveau scénario" : "Modifier le scénario";
+        if (title != null) title.text = info == null ? "New Scenario" : "Edit Scenario";
         var subtitle = uiDocument.rootVisualElement.Q<Label>("ScenarioPageSubtitle");
-        if (subtitle != null) subtitle.text = info == null ? "Remplissez les informations du nouveau scénario." : "Modifiez les informations du scénario.";
+        if (subtitle != null) subtitle.text = info == null ? "Fill in the details for the new scenario." : "Modify the details for the scenario.";
 
         // Désactiver le bouton "Nouveau" (ou changer son texte)
-        if (_newButton != null) _newButton.text = "← Retour";
+        if (_newButton != null) _newButton.text = "← Back";
 
         // Remplir le formulaire
         FillEditorForm(info);
@@ -276,7 +276,7 @@ public class ScenariosTabController : MonoBehaviour
     {
         if (info == null)
         {
-            _editTitleLabel.text = "Nouveau scénario";
+            _editTitleLabel.text = "New Scenario";
             _editNameField.value = "";
             _editTypeField.value = "";
             _editLocationField.value = "";
@@ -284,12 +284,12 @@ public class ScenariosTabController : MonoBehaviour
             _editTagsField.value = "";
             _editRobotTypeField.value = "TurtleBot4";
             _editDurationField.value = 0f;
-            _editMapDropdown.value = "Aucune";
-            _editPreviewDropdown.value = "Aucune";
+            _editMapDropdown.value = "None";
+            _editPreviewDropdown.value = "None";
         }
         else
         {
-            _editTitleLabel.text = $"Modifier : {info.Name}";
+            _editTitleLabel.text = $"Edit : {info.Name}";
             _editNameField.value = info.Name ?? "";
             _editTypeField.value = info.Type ?? "";
             _editLocationField.value = info.Location ?? "";
@@ -303,14 +303,14 @@ public class ScenariosTabController : MonoBehaviour
             if (!string.IsNullOrEmpty(mapName) && _editMapDropdown.choices.Contains(mapName))
                 _editMapDropdown.value = mapName;
             else
-                _editMapDropdown.value = "Aucune";
+                _editMapDropdown.value = "None";
 
             // Preview
             string previewName = info.PreviewImage ?? "";
             if (!string.IsNullOrEmpty(previewName) && _editPreviewDropdown.choices.Contains(previewName))
                 _editPreviewDropdown.value = previewName;
             else
-                _editPreviewDropdown.value = "Aucune";
+                _editPreviewDropdown.value = "None";
         }
     }
 
@@ -318,23 +318,23 @@ public class ScenariosTabController : MonoBehaviour
     {
         if (_editMapDropdown == null || _scenarioLoader == null) return;
         var maps = _scenarioLoader.GetAvailableMaps();
-        var choices = new List<string> { "Aucune" };
+        var choices = new List<string> { "None" };
         choices.AddRange(maps);
         _editMapDropdown.choices = choices;
-        _editMapDropdown.value = "Aucune";
+        _editMapDropdown.value = "None";
     }
 
     private void RefreshPreviewOptions()
     {
         if (_editPreviewDropdown == null) return;
         var previews = Resources.LoadAll<Texture2D>("ScenarioPreviews");
-        var choices = new List<string> { "Aucune" };
+        var choices = new List<string> { "None" };
         foreach (var tex in previews)
         {
             choices.Add(tex.name);
         }
         _editPreviewDropdown.choices = choices;
-        _editPreviewDropdown.value = "Aucune";
+        _editPreviewDropdown.value = "None";
     }
 
     // ==========================================
@@ -345,7 +345,7 @@ public class ScenariosTabController : MonoBehaviour
     {
         if (string.IsNullOrWhiteSpace(_editNameField.value))
         {
-            Debug.LogWarning("[ScenariosTabController] Le nom est obligatoire.");
+            Debug.LogWarning("[ScenariosTabController] The name is required.");
             return;
         }
 
@@ -359,8 +359,8 @@ public class ScenariosTabController : MonoBehaviour
                         .Select(t => t.Trim()).ToArray(),
             RobotType = _editRobotTypeField.value.Trim(),
             Duration = _editDurationField.value,
-            MapImage = _editMapDropdown.value != "Aucune" ? _editMapDropdown.value : "",
-            PreviewImage = _editPreviewDropdown.value != "Aucune" ? _editPreviewDropdown.value : ""
+            MapImage = _editMapDropdown.value != "None" ? _editMapDropdown.value : "",
+            PreviewImage = _editPreviewDropdown.value != "None" ? _editPreviewDropdown.value : ""
         };
 
         // Créer un ScenarioData complet (minimal)

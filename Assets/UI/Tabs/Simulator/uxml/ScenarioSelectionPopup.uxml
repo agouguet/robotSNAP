@@ -3,8 +3,8 @@
     <Style src="project://database/Assets/UI/Tabs/Simulator/uss/Card.uss?fileID=7433441132597879392&amp;guid=a9a5bee9a32b7d59993bfb9607bf0c7e&amp;type=3#Card"/>
     <ui:VisualElement name="PopupOverlay" class="popup-overlay">
         <ui:VisualElement class="popup-panel">
-            <ui:Label text="Choisir un scénario" class="popup-title"/>
-            <ui:Label text="Sélectionnez un scénario existant ou créez-en un nouveau." class="popup-subtitle"/>
+            <ui:Label text="Choose a scenario" class="popup-title"/>
+            <ui:Label text="Select an existing scenario or create a new one." class="popup-subtitle"/>
             <ui:VisualElement name="VisualElement" class="popup-toolbar">
                 <ui:VisualElement name="ScenarioSearch" style="flex-grow: 1;">
                     <ui:VisualElement name="ScenarioSearchIcon" class="scenario-search-icon" style="background-image: resource(&quot;Icons/search&quot;);"/>
@@ -17,10 +17,10 @@
             </ui:VisualElement>
             <ui:ScrollView name="ScenarioListView" class="popup-list" style="height: auto; width: auto; flex-grow: 1;"/>
             <ui:VisualElement class="popup-footer">
-                <ui:Button name="NewScenarioButton" text="+ Nouveau scénario" class="action-button secondary"/>
+                <ui:Button name="NewScenarioButton" text="+ New Scenario" class="action-button secondary"/>
                 <ui:VisualElement style="flex-direction: row;">
-                    <ui:Button name="CancelPopupButton" text="Annuler" class="action-button secondary"/>
-                    <ui:Button name="LoadScenarioConfirmButton" text="Charger le scénario" class="action-button primary"/>
+                    <ui:Button name="CancelPopupButton" text="Cancel" class="action-button secondary"/>
+                    <ui:Button name="LoadScenarioConfirmButton" text="Load Scenario" class="action-button primary"/>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

@@ -11,11 +11,10 @@
                 <ui:Button name="ViewButton" text="3D" class="view-button"/>
                 <ui:VisualElement name="ViewMenu" class="view-menu" style="display: none; flex-direction: column;"/>
             </ui:VisualElement>
-            <ui:VisualElement name="MinimapContainer" class="minimap-container" style="position: absolute; width: 200px; height: 200px;">
+            <ui:VisualElement name="MinimapContainer" class="minimap-container" style="position: absolute;">
                 <ui:Label text="Minimap" class="minimap-title"/>
-                <ui:VisualElement name="MinimapImage" class="minimap-image"/>
             </ui:VisualElement>
-            <ui:Button name="FullScreenButton" class="full-screen-button" style="position: absolute; pointer-events: auto; background-image: url(&quot;project://database/Assets/UI/Icons/fullscreen.png?fileID=2800000&amp;guid=573a03db3500544a4a9653eed5db98df&amp;type=3#fullscreen&quot;);"/>
+            <ui:Button name="FullScreenButton" class="full-screen-button" style="position: absolute; pointer-events: auto; background-image: url(&quot;project://database/Assets/Resources/Icons/fullscreen.png?fileID=2800000&amp;guid=573a03db3500544a4a9653eed5db98df&amp;type=3#fullscreen&quot;);"/>
             <ui:VisualElement name="AgentFocusBar" class="agent-focus-bar" style="position: absolute; pointer-events: auto;">
                 <ui:VisualElement class="focus-block">
                     <ui:Label text="AGENT ID" class="block-label"/>

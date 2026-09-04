@@ -10,11 +10,11 @@
         <ui:VisualElement name="CentralSplit" style="flex-grow: 1; flex-direction: row; min-height: 0;">
             <ui:VisualElement name="Center" style="flex-grow: 1; min-height: 0; flex-direction: column;">
                 <ui:Instance template="SimulationOverlay" style="flex-grow: 1; min-height: 0;"/>
-                <ui:Instance template="BottomPanel" style="flex-shrink: 0;"/>
+                <!-- <ui:Instance template="BottomPanel" style="flex-shrink: 0;"/> -->
             </ui:VisualElement>
-            <ui:VisualElement name="RightBar">
+            <!-- <ui:VisualElement name="RightBar">
                 <ui:Instance template="SimulationView" style="flex-grow: 1;"/>
-            </ui:VisualElement>
+            </ui:VisualElement> -->
         </ui:VisualElement>
     </ui:VisualElement>
     <ui:Instance template="ScenarioSelectionPopup" name="PopupOverlay" style="flex-grow: 1; position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none;"/>

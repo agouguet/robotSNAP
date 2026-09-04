@@ -38,13 +38,12 @@ public class SidebarController : MonoBehaviour
         _collapseContainer = root.Q<VisualElement>("CollapseContainer");
         _darkModeToggle = root.Q<SlideToggle>("DarkModeToggle");
 
-        // === Récupération des éléments du scenario ===
+
         var scenarioGroup = root.Q<VisualElement>("ScenarioMenuGroup");
         if (scenarioGroup != null)
         {
             _scenarioNameLabel = scenarioGroup.Q<Label>(className: "scenario-name");
             _scenarioLocationLabel = scenarioGroup.Q<Label>(className: "scenario-info-value");
-            // Le robot est le deuxième .scenario-info-value
             var infoValues = scenarioGroup.Query<Label>(className: "scenario-info-value").ToList();
             if (infoValues.Count >= 2)
             {
@@ -76,14 +75,12 @@ public class SidebarController : MonoBehaviour
 
         EventBus.Instance.Subscribe<SimulationStateChangedEvent>(OnSimulationStateChanged);
 
-        // === Abonnement au service de données ===
         if (_scenarioDataService == null)
             _scenarioDataService = FindObjectOfType<ScenarioDataService>();
 
         if (_scenarioDataService != null)
         {
             _scenarioDataService.OnScenarioLoaded += UpdateScenarioInfo;
-            // Mise à jour initiale
             UpdateScenarioInfo(_scenarioDataService.LoadedScenarioId);
         }
         else
@@ -106,9 +103,6 @@ public class SidebarController : MonoBehaviour
         UpdateDotColor(evt.NewState);
     }
 
-    // ==========================================
-    //          GESTION DU SCÉNARIO AFFICHÉ
-    // ==========================================
 
     private void UpdateScenarioInfo(string scenarioId)
     {
@@ -126,7 +120,7 @@ public class SidebarController : MonoBehaviour
         {
             // Aucun scénario chargé
             if (_scenarioNameLabel != null)
-                _scenarioNameLabel.text = "Aucun scénario";
+                _scenarioNameLabel.text = "No scenario loaded";
             if (_scenarioLocationLabel != null)
                 _scenarioLocationLabel.text = "—";
             if (_scenarioRobotLabel != null)
@@ -151,10 +145,10 @@ public class SidebarController : MonoBehaviour
             _scenarioNameLabel.text = info.Name;
 
         if (_scenarioLocationLabel != null)
-            _scenarioLocationLabel.text = info.Location ?? "Lieu inconnu";
+            _scenarioLocationLabel.text = info.Location ?? "Unknown Location";
 
         if (_scenarioRobotLabel != null)
-            _scenarioRobotLabel.text = info.RobotType ?? "Robot inconnu";
+            _scenarioRobotLabel.text = info.RobotType ?? "Unknown Robot";
 
         // Dot actif
         if (_scenarioStatusDot != null)
@@ -190,10 +184,6 @@ public class SidebarController : MonoBehaviour
                 _scenarioStatusDot.AddToClassList("dot-paused");
                 break;
         }
-
-        // Si on veut aussi changer la couleur en dur (sans CSS), on peut faire :
-        // Color color = state switch { ... };
-        // _scenarioStatusDot.style.backgroundColor = color;
     }
 
     private void LoadThumbnail(ScenarioInfo info)
@@ -203,10 +193,6 @@ public class SidebarController : MonoBehaviour
         _scenarioThumbnail.image = previewTexture;
         _scenarioThumbnail.style.backgroundImage = StyleKeyword.Null;
     }
-
-    // ==========================================
-    //          AUTRES MÉTHODES (inchangées)
-    // ==========================================
 
     private void ToggleDarkMode(bool isOn)
     {

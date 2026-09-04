@@ -428,7 +428,7 @@ namespace RobotSNAP.Environment
             _walls = new GameObject("Walls");
             _walls.transform.parent = transform;
             _walls.transform.position = new Vector3(_walls.transform.parent.position.x + width * resolution / 2, 0, _walls.transform.parent.position.z + height * resolution / 2);
-            _walls.layer = LayerMask.NameToLayer("Wall");
+            _walls.layer = LayerMask.NameToLayer("Obstacle");
             _walls.tag = "Wall";
 
             var finalMesh = new Mesh();

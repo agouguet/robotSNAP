@@ -3,16 +3,22 @@ using RobotSNAP.Agents.Movement.Interfaces;
 
 namespace RobotSNAP.Agents.Movement.Controllers
 {
+    /// <summary>
+    /// Social Force Model (SFM) controller with social repulsion, contact forces,
+    /// static obstacle avoidance, and overtaking behavior to prevent deadlocks.
+    /// </summary>
     public class SFMController : IMovementController
     {
         private HumanConfig _config;
+
+        // Physical
         private float _mass;
         private float _relaxationTime;
         private float _desiredSpeed;
         private float _maxSpeed;
         private float _agentRadius;
 
-        // Paramètres sociaux
+        // Social
         private float _socialForceA;
         private float _socialForceB;
         private float _perceptionRadius;
@@ -20,15 +26,24 @@ namespace RobotSNAP.Agents.Movement.Controllers
         private float _contactStiffnessK;
         private float _contactFrictionKappa;
 
-        // Amortissement
+        // Obstacles
+        private float _obstaclePerceptionRadius;
+        private float _obstacleForceStrength;
+        private float _obstacleForceDistance;
+
+        // Overtaking (face-to-face avoidance)
+        private float _overtakingStrength;
+        private float _noiseStrength;
+
+        // Damping
         private float _backwardDampening;
         private float _lateralDampening;
 
-        // Paramètres d'approche
+        // Goal approach
         private float _slowDownDistance;
         private float _goalReachedDistance;
 
-        // Stabilité numérique
+        // Numerical stability
         private const float MAX_ACCELERATION = 20f;
         private const float ANISOTROPIC_FACTOR = 0.5f;
 
@@ -48,6 +63,14 @@ namespace RobotSNAP.Agents.Movement.Controllers
             _contactStiffnessK = config.contactStiffnessK;
             _contactFrictionKappa = config.contactFrictionKappa;
 
+            _obstaclePerceptionRadius = config.obstaclePerceptionRadius;
+            _obstacleForceStrength = config.obstacleForceStrength;
+            _obstacleForceDistance = config.obstacleForceDistance;
+
+            // Overtaking parameters (use defaults if not present in config)
+            _overtakingStrength = 2.0f; // can be made configurable
+            _noiseStrength = 0.05f;     // can be made configurable
+
             _backwardDampening = config.backwardDampening;
             _lateralDampening = config.lateralDampening;
 
@@ -61,9 +84,10 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2 goalPosition,
             Vector2[] neighbors,
             Vector2[] neighborVelocities,
+            Vector2[] staticObstacles,
             float deltaTime)
         {
-            // ---- 1. Force d'attraction vers le but ----
+            // ---- 1. Goal attraction ----
             Vector2 toGoal = goalPosition - currentPosition;
             float distToGoal = toGoal.magnitude;
 
@@ -73,6 +97,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2 desiredDir = toGoal / distToGoal;
 
             float desiredSpeed = _desiredSpeed;
+            Debug.Log($"[SFMController] Desired speed before slowdown: {desiredSpeed}, distance to goal: {distToGoal}");
             if (distToGoal < _slowDownDistance)
             {
                 float t = distToGoal / _slowDownDistance;
@@ -83,7 +108,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2 desiredVelocity = desiredDir * desiredSpeed;
             Vector2 attractionAccel = (desiredVelocity - currentVelocity) / _relaxationTime;
 
-            // ---- 2. Forces sociales et de contact ----
+            // ---- 2. Social and contact forces ----
             Vector2 socialAccel = Vector2.zero;
             Vector2 contactAccel = Vector2.zero;
             Vector2 alignmentAccel = Vector2.zero;
@@ -102,40 +127,73 @@ namespace RobotSNAP.Agents.Movement.Controllers
 
                 Vector2 dirToNeighbor = toNeighbor / distance;
 
-                // ---- Répulsion sociale (ANISOTROPE) ----
+                // ---- Social repulsion (anisotropic) ----
                 float angle = Vector2.Angle(desiredDir, dirToNeighbor) * Mathf.Deg2Rad;
                 float cosPhi = Mathf.Cos(angle);
                 float angularFactor = ANISOTROPIC_FACTOR + (1f - ANISOTROPIC_FACTOR) * (1f + cosPhi) / 2f;
 
                 float socialForceMag = _socialForceA * Mathf.Exp((_agentRadius * 2f - distance) / _socialForceB);
-                // ICI LE SIGNE CORRIGÉ : on repousse dans la direction OPPOSÉE
                 Vector2 socialForce = -socialForceMag * angularFactor * dirToNeighbor;
                 socialAccel += socialForce / _mass;
 
-                // ---- Alignement (cohésion) ----
+                // ---- Overtaking force (face-to-face avoidance) ----
+                // Detect if both agents are moving towards each other
+                Vector2 otherVelocity = neighborVel;
+                float dotForward = Vector2.Dot(desiredDir, dirToNeighbor);
+                float dotOtherForward = Vector2.Dot(otherVelocity.normalized, -desiredDir);
+
+                if (dotForward < -0.2f && dotOtherForward < -0.2f && distance < _perceptionRadius * 0.6f)
+                {
+                    // Right direction in agent's local frame
+                    Vector2 rightDir = new Vector2(-desiredDir.y, desiredDir.x);
+                    float overtakeWeight = Mathf.Exp(-distance / 1.2f);
+                    float overtakeForce = _overtakingStrength * overtakeWeight;
+                    socialAccel += rightDir * overtakeForce / _mass;
+
+                    // Add slight random noise to break symmetry
+                    float noise = (Random.Range(-1f, 1f) * _noiseStrength);
+                    socialAccel += rightDir * noise / _mass;
+                }
+
+                // ---- Alignment ----
                 float alignmentWeight = Mathf.Exp(-distance / _perceptionRadius);
                 Vector2 velDiff = neighborVel - currentVelocity;
                 alignmentAccel += alignmentWeight * velDiff * _alignmentStrength / _mass;
 
-                // ---- Contact (si les rayons se touchent) ----
+                // ---- Contact forces (when overlapping) ----
                 float overlap = _agentRadius * 2f - distance;
                 if (overlap > 0)
                 {
-                    // Force normale (répulsive)
                     Vector2 normalForce = _contactStiffnessK * overlap * -dirToNeighbor;
-
-                    // Frottement tangentiel
                     Vector2 relativeVel = neighborVel - currentVelocity;
                     Vector2 tangentDir = new Vector2(-dirToNeighbor.y, dirToNeighbor.x);
                     float tangentSpeed = Vector2.Dot(relativeVel, tangentDir);
                     Vector2 frictionForce = _contactFrictionKappa * overlap * tangentSpeed * tangentDir;
-
                     Vector2 contactForce = normalForce + frictionForce;
                     contactAccel += contactForce / _mass;
                 }
             }
 
-            // ---- 3. Amortissement directionnel ----
+            // ---- 3. Static obstacle repulsion ----
+            Vector2 obstacleAccel = Vector2.zero;
+            if (staticObstacles != null)
+            {
+                foreach (Vector2 obstaclePos in staticObstacles)
+                {
+                    Vector2 toObstacle = obstaclePos - currentPosition;
+                    float distance = toObstacle.magnitude;
+
+                    if (distance <= 0.001f || distance > _obstaclePerceptionRadius)
+                        continue;
+
+                    Vector2 dirToObstacle = toObstacle / distance;
+                    float forceMag = _obstacleForceStrength * Mathf.Exp((_agentRadius - distance) / _obstacleForceDistance);
+                    Vector2 obstacleForce = -forceMag * dirToObstacle;
+                    obstacleAccel += obstacleForce / _mass;
+                }
+            }
+
+            // ---- 4. Directional damping ----
             Vector2 forwardDir = desiredDir;
             Vector2 lateralDir = new Vector2(-forwardDir.y, forwardDir.x);
 
@@ -148,24 +206,26 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2 dampAccel = -dampForward * forwardSpeed * forwardDir
                                 - dampLateral * lateralSpeed * lateralDir;
 
-            // ---- 4. Accélération totale ----
-            Vector2 totalAccel = attractionAccel + socialAccel + contactAccel + alignmentAccel + dampAccel;
+            // ---- 5. Total acceleration ----
+            Vector2 totalAccel = attractionAccel + socialAccel + contactAccel + alignmentAccel + obstacleAccel + dampAccel;
 
-            // Limiter l'accélération
+            // Clamp acceleration
             float accelMag = totalAccel.magnitude;
             if (accelMag > MAX_ACCELERATION)
                 totalAccel = (totalAccel / accelMag) * MAX_ACCELERATION;
 
-            // ---- 5. Intégration ----
+            // ---- 6. Integration ----
             Vector2 newVelocity = currentVelocity + totalAccel * deltaTime;
 
-            // Limiter la vitesse
+            // Clamp speed
             float speed = newVelocity.magnitude;
             if (speed > _maxSpeed)
                 newVelocity = (newVelocity / speed) * _maxSpeed;
 
             if (newVelocity.sqrMagnitude < 0.0001f)
                 newVelocity = Vector2.zero;
+
+            Debug.Log($"Attraction: {attractionAccel}, Social: {socialAccel}, Contact: {contactAccel}, Obstacle: {obstacleAccel}, Damp: {dampAccel}");
 
             return newVelocity;
         }
@@ -188,10 +248,14 @@ namespace RobotSNAP.Agents.Movement.Controllers
             _alignmentStrength = config.alignmentStrength;
             _contactStiffnessK = config.contactStiffnessK;
             _contactFrictionKappa = config.contactFrictionKappa;
+            _obstaclePerceptionRadius = config.obstaclePerceptionRadius;
+            _obstacleForceStrength = config.obstacleForceStrength;
+            _obstacleForceDistance = config.obstacleForceDistance;
             _backwardDampening = config.backwardDampening;
             _lateralDampening = config.lateralDampening;
             _slowDownDistance = config.slowDownDistance;
             _goalReachedDistance = config.goalReachedDistance;
+            // Keep overtaking and noise as defined (could be extended from config)
         }
     }
 }

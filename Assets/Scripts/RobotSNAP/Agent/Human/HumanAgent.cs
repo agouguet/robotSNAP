@@ -59,24 +59,9 @@ namespace RobotSNAP.Agents
         {
             bool isPaused = Supervisor.Instance != null && Supervisor.Instance.IsPaused;
             
-            if (isPaused && !_wasPaused)
-            {
-                if (_rb != null)
-                {
-                    _rb.isKinematic = true;
-                    // _storedVelocity = _rb.linearVelocity;
-                }
-                _wasPaused = true;
-            }
-            else if (!isPaused && _wasPaused)
-            {
-                if (_rb != null)
-                {
-                    _rb.isKinematic = false;
-                    // _rb.linearVelocity = _storedVelocity;
-                }
-                _wasPaused = false;
-            }
+            // Déléguer la pause au mouvement
+            if (_movement != null)
+                _movement.SetPlaying(!isPaused);
 
             if (isPaused)
             {
@@ -90,16 +75,14 @@ namespace RobotSNAP.Agents
                     _animator.speed = 1f;
             }
 
-            HandlePlayPause();
+            // Mise à jour de l'animation (utilise currentVelocity3D)
             UpdateAnimation();
         }
 
+        // FixedUpdate est vide, car le mouvement est géré par HumanMovement
         private void FixedUpdate()
         {
-            // On laisse le Rigidbody gérer si cinématique
-            if (Supervisor.Instance != null && Supervisor.Instance.IsPaused)
-                return;
-            UpdateMovement();
+            // Rien
         }
 
         #region Initialization
@@ -117,6 +100,11 @@ namespace RobotSNAP.Agents
                 _rb.useGravity = false;
                 _rb.mass = 1f;
                 _rb.linearDamping = 0.5f;
+                _rb.isKinematic = true; // On laisse le mouvement gérer
+            }
+            else
+            {
+                _rb.isKinematic = true;
             }
         }
 
@@ -147,38 +135,9 @@ namespace RobotSNAP.Agents
             _animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
         }
 
-        private void UpdateMovement()
-        {
-            // if (_movement == null || !_movement.IsPlaying) return;
-            // _movement.move();
-
-            if (_rb != null)
-                _rb.linearVelocity = currentVelocity3D;
-            else
-                transform.position += currentVelocity3D * Time.fixedDeltaTime;
-
-            if (currentVelocity3D.magnitude > 0.1f)
-            {
-                Quaternion targetRotation = Quaternion.LookRotation(currentVelocity3D.normalized);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.fixedDeltaTime * 10f);
-            }
-        }
-
         #endregion
 
         #region Animation
-
-        private void HandlePlayPause()
-        {
-            if (_movement == null) return;
-            bool isPlaying = _movement.IsPlaying;
-            if (isPlaying != _wasPlaying && _animator != null)
-            {
-                _animator.enabled = isPlaying;
-                if (isPlaying) _animator.Rebind();
-                _wasPlaying = isPlaying;
-            }
-        }
 
         private void UpdateAnimation()
         {
@@ -244,7 +203,12 @@ namespace RobotSNAP.Agents
         public Vector3 GetVelocity() => currentVelocity3D;
         public Vector3 GetCurrentPosition3D() => Position;
         public Vector2 GetCurrentPosition2D() => Position2D;
-        public void SetVelocity(Vector3 velocity) => currentVelocity3D = velocity;
+        
+        // Cette méthode est appelée par HumanMovement pour transmettre la vitesse réelle
+        public void SetVelocity(Vector3 velocity)
+        {
+            currentVelocity3D = velocity;
+        }
 
         #endregion
 

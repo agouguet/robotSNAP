@@ -1,68 +1,34 @@
-using UnityEngine;
-using UnityEngine.UIElements;
-using RobotSNAP.Core.Scenario;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using RobotSNAP.Core.Scenario;
+using UnityEngine;
+using UnityEngine.UIElements;
 
+/// <summary>Drives the scenario browser and its guided creator.</summary>
 public class ScenariosTabController : MonoBehaviour
 {
-    [Header("References")]
     [SerializeField] private UIDocument uiDocument;
-    [SerializeField] private ScenarioDataService _dataService;
-    [SerializeField] private VisualTreeAsset _cardTemplate;
-    [SerializeField] private ScenarioLoader _scenarioLoader;
+    [SerializeField] private ScenarioDataService dataService;
+    [SerializeField] private VisualTreeAsset cardTemplate;
+    [SerializeField] private ScenarioLoader scenarioLoader;
+    [SerializeField] private int columns = 4;
+    [SerializeField] private float cardSpacingPercent = 0.2f;
 
-    [Header("Grid View settings")]
-    [SerializeField] private int _columns = 4;
-    [SerializeField] private float _cardSpacingPercent = 0.2f;
-
-    [Header("Debug")]
-    [SerializeField] private bool _logEvents = true;
-
-    // === Composants UI ===
     private ScenarioListView _listView;
     private ScenarioDetailsView _detailsView;
-    private Button _newButton;
-    private Button _useButton;
-    private Button _editButton;
-    private Button _cancelEditButton;
-    private Button _previousArrowButton;
-    private Button _saveEditButton;
-
-    // === Éléments du formulaire d'édition ===
-    private Label _editTitleLabel;
-    private TextField _editNameField;
-    private TextField _editTypeField;
-    private TextField _editLocationField;
-    private TextField _editDescriptionField;
-    private TextField _editTagsField;
-    private TextField _editRobotTypeField;
-    private FloatField _editDurationField;
-    private DropdownField _editMapDropdown;
-    private DropdownField _editPreviewDropdown;
-
-    // === Conteneurs ===
-    private VisualElement _listContainer;
-    private VisualElement _editorContainer;
-    private VisualElement _editorPanel;
-
-    // === État ===
-    private bool _isInitialized = false;
-    private bool _isEditing = false;
-    private ScenarioInfo _editingInfo = null;
-
-    // ==========================================
-    //          CYCLE DE VIE
-    // ==========================================
+    private VisualElement _browser, _creator;
+    private TextField _name, _description, _tags;
+    private DropdownField _map, _preview, _behavior;
+    private IntegerField _humans;
+    private FloatField _duration, _startX, _startZ, _startYaw, _goalX, _goalZ;
+    private Label _validation, _summary;
+    private bool _initialized;
 
     private void Awake()
     {
-        if (_dataService == null)
-            _dataService = FindObjectOfType<ScenarioDataService>();
-        if (_scenarioLoader == null)
-            _scenarioLoader = FindObjectOfType<ScenarioLoader>();
-
+        dataService ??= FindFirstObjectByType<ScenarioDataService>();
+        scenarioLoader ??= FindFirstObjectByType<ScenarioLoader>();
         MainViewController.OnViewLoaded += OnViewLoaded;
     }
 
@@ -70,398 +36,121 @@ public class ScenariosTabController : MonoBehaviour
     {
         MainViewController.OnViewLoaded -= OnViewLoaded;
         _listView?.Dispose();
-        if (_newButton != null) _newButton.clicked -= OnNewClicked;
-        if (_editButton != null) _editButton.clicked -= OnEditClicked;
-        if (_useButton != null) _useButton.clicked -= OnUseClicked;
-        if (_cancelEditButton != null) _cancelEditButton.clicked -= OnEditCancel;
-        if (_saveEditButton != null) _saveEditButton.clicked -= OnEditSave;
     }
 
-    private void OnViewLoaded(string viewName)
+    private void OnViewLoaded(string name)
     {
-        if (viewName == "Scenarios" && !_isInitialized)
-        {
-            InitializeUI();
-            _dataService?.EnsureLoaded();
-        }
+        if (name == "Scenarios") Initialize();
     }
 
-    private void OnEnable()
+    private void Initialize()
     {
-        if (_isInitialized && !_isEditing)
-        {
-            _listView?.Refresh();
-        }
-    }
-
-    // ==========================================
-    //          INITIALISATION DE L'UI
-    // ==========================================
-
-    private void InitializeUI()
-    {
-        if (_isInitialized) return;
-        if (uiDocument == null) uiDocument = GetComponent<UIDocument>();
+        if (_initialized) return;
+        uiDocument ??= GetComponent<UIDocument>();
+        if (uiDocument == null) return;
         var root = uiDocument.rootVisualElement;
-
-        // --- Récupérer les conteneurs ---
-        _listContainer = root.Q<VisualElement>("ScenarioListView");
-        _editorContainer = root.Q<VisualElement>("ScenarioEditorView");
-
-        // Si les conteneurs n'existent pas, on les crée ? (fallback)
-        _listContainer = root.Q<VisualElement>("ScenarioContent");
-        if (_listContainer == null)
-        {
-            // Fallback : essayer de trouver un parent commun
-            var browser = root.Q<VisualElement>("ScenarioBrowser");
-            var details = root.Q<VisualElement>("ScenarioDetails");
-            if (browser != null && details != null && browser.parent == details.parent)
-                _listContainer = browser.parent;
-        }
-
-        // --- Construire la vue liste ---
-        BuildListView(root);
-
-        // --- Construire la vue éditeur ---
-        BuildEditorView(root);
-
-        // --- Bouton Nouveau ---
-        _newButton = root.Q<Button>("NewScenarioButton");
-        if (_newButton != null)
-            _newButton.clicked += OnNewClicked;
-
-        // --- État initial ---
-        ShowListView();
-        _isInitialized = true;
-        Log("[ScenariosTabController] UI initialized");
+        _browser = root.Q<VisualElement>("ScenarioBrowserView");
+        _creator = root.Q<VisualElement>("ScenarioEditorView");
+        _name = root.Q<TextField>("NameField"); _description = root.Q<TextField>("DescriptionField"); _tags = root.Q<TextField>("TagsField");
+        _map = root.Q<DropdownField>("MapDropdown"); _preview = root.Q<DropdownField>("PreviewDropdown"); _behavior = root.Q<DropdownField>("BehaviorDropdown");
+        _humans = root.Q<IntegerField>("HumanCountField"); _duration = root.Q<FloatField>("DurationField");
+        _startX = root.Q<FloatField>("StartXField"); _startZ = root.Q<FloatField>("StartZField"); _startYaw = root.Q<FloatField>("StartYawField");
+        _goalX = root.Q<FloatField>("GoalXField"); _goalZ = root.Q<FloatField>("GoalZField");
+        _validation = root.Q<Label>("ValidationLabel"); _summary = root.Q<Label>("ScenarioSummaryLabel");
+        BuildBrowser(root);
+        ConfigureCreator(root);
+        var newButton = root.Q<Button>("NewScenarioButton");
+        var backButton = root.Q<Button>("BackToScenariosButton");
+        var saveButton = root.Q<Button>("SaveEditorButton");
+        if (newButton != null) newButton.clicked += ShowCreator;
+        if (backButton != null) backButton.clicked += ShowBrowser;
+        if (saveButton != null) saveButton.clicked += Save;
+        ShowBrowser();
+        dataService?.EnsureLoaded();
+        _initialized = true;
     }
 
-    private void BuildListView(VisualElement root)
+    private void BuildBrowser(VisualElement root)
     {
-        _listView = new ScenarioListView(_cardTemplate, _columns, _cardSpacingPercent);
-        _listView.Initialize(_dataService);
-        _listView.OnScenarioSelected += OnScenarioSelected;
-
-       
-
-        // Récupérer les conteneurs existants
-        var browserContainer = root.Q<VisualElement>("ScenarioBrowser");
-        if (browserContainer != null)
+        var browser = root.Q<VisualElement>("ScenarioBrowser");
+        if (browser != null)
         {
-            browserContainer.Clear();
-            browserContainer.Add(_listView);
+            browser.Clear();
+            _listView = new ScenarioListView(cardTemplate, columns, cardSpacingPercent);
+            _listView.Initialize(dataService);
+            browser.Add(_listView);
         }
-        else
-        {
-            // Fallback : ajouter directement
-            root.Q<VisualElement>("ScenarioContent")?.Insert(0, _listView);
-        }
-
-
-        _detailsView = new ScenarioDetailsView(_dataService);
-
-        var detailsContainer = root.Q<VisualElement>("ScenarioDetailsContainer");
-        if (detailsContainer != null)
-        {
-            detailsContainer.Clear();
-            detailsContainer.Add(_detailsView);
-
-            var actions = new VisualElement();
-            actions.AddToClassList("scenario-details-actions");
-            _useButton = new Button(OnUseClicked) { text = "Use Scenario" };
-            _useButton.AddToClassList("action-button");
-            _useButton.AddToClassList("primary");
-            _editButton = new Button(OnEditClicked) { text = "Edit Scenario" };
-            _editButton.AddToClassList("action-button");
-            _editButton.AddToClassList("secondary");
-            actions.Add(_editButton);
-            actions.Add(_useButton);
-            detailsContainer.Add(actions);
-        }
-
-        _isInitialized = true;
-        Log("[ScenariosTabController] UI initialized");
+        var details = root.Q<VisualElement>("ScenarioDetailsContainer");
+        if (details == null) return;
+        details.Clear();
+        _detailsView = new ScenarioDetailsView(dataService) { LogEvents = false };
+        details.Add(_detailsView);
+        var actions = new VisualElement(); actions.AddToClassList("scenario-details-actions");
+        var edit = new Button(ShowSelectedForEdit) { text = "Modifier" }; edit.AddToClassList("action-button"); edit.AddToClassList("secondary");
+        var use = new Button(UseSelected) { text = "Utiliser" }; use.AddToClassList("action-button"); use.AddToClassList("primary");
+        actions.Add(edit); actions.Add(use); details.Add(actions);
+        _listView.OnScenarioSelected += id => _detailsView.ShowScenario(dataService?.GetScenarioInfo(id));
     }
 
-    private void BuildEditorView(VisualElement root)
+    private void ConfigureCreator(VisualElement root)
     {
-        // Récupérer l'éditeur depuis l'UXML (si présent)
-        if (_editorContainer == null)
-        {
-            // Fallback : créer le formulaire depuis zéro (ou ignorer)
-            LogWarning("[ScenariosTabController] EditorContainer not found, editor will not work.");
-            return;
-        }
-
-        // Récupérer les éléments du formulaire
-        _editTitleLabel = _editorContainer.Q<Label>("EditorTitle");
-        _editNameField = _editorContainer.Q<TextField>("NameField");
-        _editTypeField = _editorContainer.Q<TextField>("TypeField");
-        _editLocationField = _editorContainer.Q<TextField>("LocationField");
-        _editDescriptionField = _editorContainer.Q<TextField>("DescriptionField");
-        _editTagsField = _editorContainer.Q<TextField>("TagsField");
-        _editRobotTypeField = _editorContainer.Q<TextField>("RobotTypeField");
-        _editDurationField = _editorContainer.Q<FloatField>("DurationField");
-        _editMapDropdown = _editorContainer.Q<DropdownField>("MapDropdown");
-        _editPreviewDropdown = _editorContainer.Q<DropdownField>("PreviewDropdown");
-        _cancelEditButton = _editorContainer.Q<Button>("CancelEditorButton");
-        _previousArrowButton = _editorContainer.Q<Button>("BackToScenariosButton");
-        _saveEditButton = _editorContainer.Q<Button>("SaveEditorButton");
-
-        // Remplir les dropdowns
-        RefreshMapOptions();
-        RefreshPreviewOptions();
-
-        // Abonnements
-        if (_cancelEditButton != null)
-            _cancelEditButton.clicked += OnEditCancel;
-        if (_saveEditButton != null)
-            _saveEditButton.clicked += OnEditSave;
-        if (_previousArrowButton != null)
-            _previousArrowButton.clicked += OnEditCancel;
-
-        // Cacher l'éditeur par défaut
-        _editorContainer.style.display = DisplayStyle.None;
+        _map.choices = new List<string> { string.Empty }.Concat(scenarioLoader?.GetAvailableMaps() ?? new List<string>()).ToList();
+        _preview.choices = new List<string> { string.Empty }.Concat(Resources.LoadAll<Texture2D>("ScenarioPreviews").Select(x => x.name)).ToList();
+        _behavior.choices = new List<string> { "normal", "cautious", "aggressive" };
+        foreach (var field in new BaseField<float>[] { _duration, _startX, _startZ, _startYaw, _goalX, _goalZ }) field?.RegisterValueChangedCallback(_ => UpdateSummary());
+        _humans.RegisterValueChangedCallback(_ => UpdateSummary());
     }
 
-    // ==========================================
-    //          BASCOULEMENT ENTRE VUES
-    // ==========================================
-
-    private void ShowListView()
+    private void ShowCreator()
     {
-        _isEditing = false;
-        if (_listContainer != null)
-            _listContainer.style.display = DisplayStyle.Flex;
-        if (_editorContainer != null)
-            _editorContainer.style.display = DisplayStyle.None;
-        // Mettre à jour le titre de la page
-        var title = uiDocument.rootVisualElement.Q<Label>("ScenarioPageTitle");
-        if (title != null) title.text = "Scénarios";
-        var subtitle = uiDocument.rootVisualElement.Q<Label>("ScenarioPageSubtitle");
-        if (subtitle != null) subtitle.text = "Manage and configure your simulation scenarios.";
-        // Réactiver le bouton "Nouveau"
-        if (_newButton != null) _newButton.text = "+  New Scenario";
-        _listView?.Refresh();
+        _browser.style.display = DisplayStyle.None; _creator.style.display = DisplayStyle.Flex;
+        _name.value = string.Empty; _description.value = string.Empty; _tags.value = string.Empty;
+        _map.value = _map.choices.FirstOrDefault(); _preview.value = _preview.choices.FirstOrDefault(); _behavior.value = "normal";
+        _humans.value = 0; _duration.value = 0; _startX.value = 0; _startZ.value = 0; _startYaw.value = 0; _goalX.value = 2; _goalZ.value = 0;
+        _validation.text = string.Empty; UpdateSummary();
     }
 
-    private void ShowEditor(ScenarioInfo info = null)
-    {
-        _isEditing = true;
-        _editingInfo = info;
-
-        if (_listContainer != null)
-            _listContainer.style.display = DisplayStyle.None;
-        if (_editorContainer != null)
-            _editorContainer.style.display = DisplayStyle.Flex;
-
-        // Mettre à jour le titre de la page
-        var title = uiDocument.rootVisualElement.Q<Label>("ScenarioPageTitle");
-        if (title != null) title.text = info == null ? "New Scenario" : "Edit Scenario";
-        var subtitle = uiDocument.rootVisualElement.Q<Label>("ScenarioPageSubtitle");
-        if (subtitle != null) subtitle.text = info == null ? "Fill in the details for the new scenario." : "Modify the details for the scenario.";
-
-        // Désactiver le bouton "Nouveau" (ou changer son texte)
-        if (_newButton != null) _newButton.text = "← Back";
-
-        // Remplir le formulaire
-        FillEditorForm(info);
-    }
-
-    // ==========================================
-    //          ÉDITEUR : FORMULAIRE
-    // ==========================================
-
-    private void FillEditorForm(ScenarioInfo info)
-    {
-        if (info == null)
-        {
-            _editTitleLabel.text = "New Scenario";
-            _editNameField.value = "";
-            _editTypeField.value = "";
-            _editLocationField.value = "";
-            _editDescriptionField.value = "";
-            _editTagsField.value = "";
-            _editRobotTypeField.value = "TurtleBot4";
-            _editDurationField.value = 0f;
-            _editMapDropdown.value = "None";
-            _editPreviewDropdown.value = "None";
-        }
-        else
-        {
-            _editTitleLabel.text = $"Edit : {info.Name}";
-            _editNameField.value = info.Name ?? "";
-            _editTypeField.value = info.Type ?? "";
-            _editLocationField.value = info.Location ?? "";
-            _editDescriptionField.value = info.Description ?? "";
-            _editTagsField.value = info.Tags != null ? string.Join(", ", info.Tags) : "";
-            _editRobotTypeField.value = info.RobotType ?? "TurtleBot4";
-            _editDurationField.value = info.Duration;
-
-            // Map
-            string mapName = info.MapImage ?? "";
-            if (!string.IsNullOrEmpty(mapName) && _editMapDropdown.choices.Contains(mapName))
-                _editMapDropdown.value = mapName;
-            else
-                _editMapDropdown.value = "None";
-
-            // Preview
-            string previewName = info.PreviewImage ?? "";
-            if (!string.IsNullOrEmpty(previewName) && _editPreviewDropdown.choices.Contains(previewName))
-                _editPreviewDropdown.value = previewName;
-            else
-                _editPreviewDropdown.value = "None";
-        }
-    }
-
-    private void RefreshMapOptions()
-    {
-        if (_editMapDropdown == null || _scenarioLoader == null) return;
-        var maps = _scenarioLoader.GetAvailableMaps();
-        var choices = new List<string> { "None" };
-        choices.AddRange(maps);
-        _editMapDropdown.choices = choices;
-        _editMapDropdown.value = "None";
-    }
-
-    private void RefreshPreviewOptions()
-    {
-        if (_editPreviewDropdown == null) return;
-        var previews = Resources.LoadAll<Texture2D>("ScenarioPreviews");
-        var choices = new List<string> { "None" };
-        foreach (var tex in previews)
-        {
-            choices.Add(tex.name);
-        }
-        _editPreviewDropdown.choices = choices;
-        _editPreviewDropdown.value = "None";
-    }
-
-    // ==========================================
-    //          ÉDITEUR : SAUVEGARDE / ANNULATION
-    // ==========================================
-
-    private void OnEditSave()
-    {
-        if (string.IsNullOrWhiteSpace(_editNameField.value))
-        {
-            Debug.LogWarning("[ScenariosTabController] The name is required.");
-            return;
-        }
-
-        var info = new ScenarioInfo
-        {
-            Name = _editNameField.value.Trim(),
-            Type = _editTypeField.value.Trim(),
-            Location = _editLocationField.value.Trim(),
-            Description = _editDescriptionField.value.Trim(),
-            Tags = _editTagsField.value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                        .Select(t => t.Trim()).ToArray(),
-            RobotType = _editRobotTypeField.value.Trim(),
-            Duration = _editDurationField.value,
-            MapImage = _editMapDropdown.value != "None" ? _editMapDropdown.value : "",
-            PreviewImage = _editPreviewDropdown.value != "None" ? _editPreviewDropdown.value : ""
-        };
-
-        // Créer un ScenarioData complet (minimal)
-        var scenarioData = new ScenarioData
-        {
-            Info = info,
-            Points = new Dictionary<string, RefPoint>(),
-            Robot = new RobotScenarioConfig { StartRef = "start", GoalRef = "goal", Speed = 1.2f, Behavior = "normal" },
-            Humans = new List<HumanScenarioConfig>()
-        };
-
-        if (_scenarioLoader != null)
-        {
-            string fileName = info.Name + ".yaml";
-            bool success = _scenarioLoader.ExportScenario(scenarioData, fileName);
-            if (success)
-            {
-                Debug.Log($"[ScenariosTabController] Scenario '{info.Name}' saved.");
-                // Recharger les données et revenir à la liste
-                _dataService?.EnsureLoaded();
-                ShowListView();
-                // Optionnel : sélectionner le nouveau scénario ?
-            }
-            else
-            {
-                Debug.LogError("[ScenariosTabController] Failed to save scenario.");
-            }
-        }
-        else
-        {
-            Debug.LogError("[ScenariosTabController] ScenarioLoader not available.");
-        }
-    }
-
-    private void OnEditCancel()
-    {
-        ShowListView();
-    }
-
-    // ==========================================
-    //          ÉVÉNEMENTS DE LA LISTE
-    // ==========================================
-
-    private void OnScenarioSelected(string scenarioId)
-    {
-        var info = _dataService?.GetScenarioInfo(scenarioId);
-        _detailsView?.ShowScenario(info);
-        Log($"[ScenariosTabController] Scenario selected: {scenarioId}");
-    }
-
-    // ==========================================
-    //          BOUTONS
-    // ==========================================
-
-    private void OnNewClicked()
-    {
-        if (_isEditing)
-        {
-            // Si on est en mode édition, "Retour" -> annuler
-            OnEditCancel();
-        }
-        else
-        {
-            // Sinon, ouvrir le formulaire pour un nouveau scénario
-            ShowEditor(null);
-        }
-    }
-
-    private void OnEditClicked()
-    {
-        if (_listView?.SelectedScenarioInfo == null)
-        {
-            LogWarning("[ScenariosTabController] No scenario selected to edit.");
-            return;
-        }
-        ShowEditor(_listView.SelectedScenarioInfo);
-    }
-
-    private void OnUseClicked()
+    private void ShowSelectedForEdit()
     {
         if (_listView?.SelectedScenarioInfo == null) return;
-        _dataService?.LoadScenario(_listView.SelectedScenarioId);
-        Log($"[ScenariosTabController] Using scenario: {_listView.SelectedScenarioId}");
+        ShowCreator();
+        var info = _listView.SelectedScenarioInfo;
+        _name.value = info.Name; _description.value = info.Description; _tags.value = info.Tags == null ? string.Empty : string.Join(", ", info.Tags);
+        _map.value = _map.choices.Contains(info.MapImage) ? info.MapImage : string.Empty;
+        _preview.value = _preview.choices.Contains(info.PreviewImage) ? info.PreviewImage : string.Empty;
+        _duration.value = info.Duration;
     }
 
-    // ==========================================
-    //          LOGS
-    // ==========================================
-
-    private void Log(string msg)
+    private void ShowBrowser()
     {
-        if (_logEvents) Debug.Log(msg);
+        _creator.style.display = DisplayStyle.None; _browser.style.display = DisplayStyle.Flex; _listView?.Refresh();
     }
 
-    private void LogWarning(string msg)
+    private void UpdateSummary() => _summary.text = $"{Mathf.Max(0, _humans.value)} piéton(s) · départ ({_startX.value:0.0}, {_startZ.value:0.0}) · objectif ({_goalX.value:0.0}, {_goalZ.value:0.0})";
+
+    private void Save()
     {
-        if (_logEvents) Debug.LogWarning(msg);
+        if (string.IsNullOrWhiteSpace(_name.value)) { _validation.text = "Le nom est obligatoire."; return; }
+        if (string.IsNullOrWhiteSpace(_map.value)) { _validation.text = "Choisissez une carte."; return; }
+        if (_humans.value < 0) { _validation.text = "Le nombre de piétons ne peut pas être négatif."; return; }
+        if (Mathf.Approximately(_startX.value, _goalX.value) && Mathf.Approximately(_startZ.value, _goalZ.value)) { _validation.text = "Le départ et l’objectif doivent être différents."; return; }
+        var scenario = BuildScenario();
+        if (!scenarioLoader.ExportScenario(scenario, ToFileId(_name.value) + ".yaml")) { _validation.text = "Échec de l’export YAML. Consultez la Console."; return; }
+        dataService.ReloadAllScenarioInfos();
+        ShowBrowser();
     }
 
-    private void LogError(string msg)
+    private ScenarioData BuildScenario()
     {
-        if (_logEvents) Debug.LogError(msg);
+        var points = new Dictionary<string, RefPoint> {
+            ["robot_start"] = new RefPoint { X = _startX.value, Y = 0, Z = _startZ.value, Yaw = _startYaw.value },
+            ["robot_goal"] = new RefPoint { X = _goalX.value, Y = 0, Z = _goalZ.value }
+        };
+        var humans = new List<HumanScenarioConfig>();
+        if (_humans.value > 0) humans.Add(new HumanScenarioConfig { Id = "pedestrians", Count = _humans.value, Spawn = new SpawnConfig { Type = "point", Reference = "robot_goal" }, Goal = new GoalConfig { Type = "point", Reference = "robot_start" }, Behavior = _behavior.value, Speed = 1, MovementController = new MovementControllerConfig { Type = "SFM" } });
+        return new ScenarioData { Info = new ScenarioInfo { Name = _name.value.Trim(), Description = _description.value.Trim(), Type = "Custom", Version = "1.0", Created = DateTime.Now.ToString("yyyy-MM-dd HH:mm"), Tags = _tags.value.Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToArray(), MapImage = _map.value, PreviewImage = _preview.value, Duration = Mathf.Max(0, _duration.value), RobotType = "TurtleBot4" }, Points = points, Robot = new RobotScenarioConfig { StartRef = "robot_start", GoalRef = "robot_goal", Behavior = _behavior.value, Speed = 1.2f }, Humans = humans };
     }
+
+    private void UseSelected() { if (!string.IsNullOrEmpty(_listView?.SelectedScenarioId)) dataService.LoadScenario(_listView.SelectedScenarioId); }
+    private static string ToFileId(string name) => new string(name.Trim().ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray()).Trim('_');
 }

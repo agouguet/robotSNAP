@@ -1,6 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <ui:Template name="ScenarioCreationTab" src="project://database/Assets/UI/Tabs/Scenarios/uxml/ScenarioCreationTab.uxml?fileID=9197481963319205126&amp;guid=156a6a07d94c3ab348ccfbad2e068c2f&amp;type=3#ScenarioCreationTab"/>
-    <ui:Template name="ScenarioListTab" src="project://database/Assets/UI/Tabs/Scenarios/uxml/ScenarioListTab.uxml?fileID=9197481963319205126&amp;guid=4dfeb9efbe4da683eaa96b4a620c756c&amp;type=3#ScenarioListTab"/>
+    <ui:Template name="ScenarioListTab" src="project://database/Assets/UI/Tabs/Scenarios/uxml/ScenarioBrowserTab.uxml?fileID=9197481963319205126&amp;guid=024ecdf814179a3239afec11b0fcd034&amp;type=3#ScenarioBrowserView"/>
     <Style src="project://database/Assets/UI/Tabs/Scenarios/uss/ScenariosTab.uss?fileID=7433441132597879392&amp;guid=2f590b4dd56d265e895157a48dd3f24b&amp;type=3#ScenariosTab"/>
     <Style src="project://database/Assets/UI/Tabs/Simulator/uss/Card.uss?fileID=7433441132597879392&amp;guid=a9a5bee9a32b7d59993bfb9607bf0c7e&amp;type=3#Card"/>
     <ui:VisualElement name="ScenarioPage" class="scenario-page">

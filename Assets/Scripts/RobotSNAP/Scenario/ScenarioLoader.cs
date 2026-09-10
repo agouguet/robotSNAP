@@ -34,8 +34,7 @@ namespace RobotSNAP.Core.Scenario
         [SerializeField] private string[] _validExtensions = { ".yaml", ".yml" };
         [SerializeField] private TextAsset _fallbackYamlAsset;
 
-        private Dictionary<string, ScenarioData> _loadedScenarios = new();
-        private Dictionary<string, ScenarioInfo> _scenarioInfoCache = new();
+        private readonly ScenarioRepository _scenarioRepository = new();
         private Dictionary<string, Texture2D> _loadedMaps = new();
         private string _scenariosPath;
         private string _mapsPath;
@@ -43,7 +42,7 @@ namespace RobotSNAP.Core.Scenario
 
         public string ScenariosPath => _scenariosPath;
         public string MapsPath => _mapsPath;
-        public int CacheSize => _loadedScenarios.Count;
+        public int CacheSize => _scenarioRepository.CacheSize;
 
         public event Action<ScenarioData> OnScenarioLoaded;
         public event Action<string> OnScenarioError;
@@ -165,46 +164,6 @@ namespace RobotSNAP.Core.Scenario
             #endif
         }
 
-        private ScenarioData ParseYaml(byte[] yamlBytes, string sourceName)
-        {
-            try
-            {
-                var scenario = YamlSerializer.Deserialize<ScenarioData>(yamlBytes);
-                
-                if (scenario == null)
-                {
-                    throw new Exception("Deserialization returned null");
-                }
-                
-                if (!scenario.IsValid(out string validationError))
-                {
-                    throw new Exception($"Validation failed: {validationError}");
-                }
-                
-                return scenario;
-            }
-            catch (Exception e)
-            {
-                throw new Exception($"Failed to parse YAML from {sourceName}: {e.Message}");
-            }
-        }
-
-        private ScenarioInfo ExtractScenarioInfo(byte[] yamlBytes)
-        {
-            try
-            {
-                // Pour l'extraction rapide des infos, on désérialise juste la partie scenario_info
-                // Note: VYaml ne supporte pas facilement la désérialisation partielle
-                // On désérialise donc complètement mais c'est acceptable pour l'info
-                var scenario = YamlSerializer.Deserialize<ScenarioData>(yamlBytes);
-                return scenario?.Info;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
         #endregion
 
         #region Public API - Loading
@@ -224,7 +183,7 @@ namespace RobotSNAP.Core.Scenario
             }
             
             // Vérifier le cache
-            if (_enableCaching && _loadedScenarios.TryGetValue(scenarioName, out var cached))
+            if (_enableCaching && _scenarioRepository.TryGetScenario(scenarioName, out var cached))
             {
                 if (_logEvents) Debug.Log($"[ScenarioLoader] Returning cached scenario: {scenarioName}");
                 return cached;
@@ -243,20 +202,7 @@ namespace RobotSNAP.Core.Scenario
             try
             {
                 // Lire et parser
-                byte[] yamlBytes = File.ReadAllBytes(filePath);
-                var scenario = ParseYaml(yamlBytes, filePath);
-                
-                // Mettre en cache
-                if (_enableCaching)
-                {
-                    _loadedScenarios[scenarioName] = scenario;
-                }
-                
-                // Mettre en cache les infos
-                if (scenario.Info != null)
-                {
-                    _scenarioInfoCache[scenarioName] = scenario.Info;
-                }
+                var scenario = _scenarioRepository.Load(scenarioName, filePath, _enableCaching);
                 
                 OnScenarioLoaded?.Invoke(scenario);
                 
@@ -292,20 +238,14 @@ namespace RobotSNAP.Core.Scenario
             string scenarioName = Path.GetFileNameWithoutExtension(filePath);
             
             // Vérifier le cache
-            if (_enableCaching && _loadedScenarios.TryGetValue(scenarioName, out var cached))
+            if (_enableCaching && _scenarioRepository.TryGetScenario(scenarioName, out var cached))
             {
                 return cached;
             }
             
             try
             {
-                byte[] yamlBytes = File.ReadAllBytes(filePath);
-                var scenario = ParseYaml(yamlBytes, filePath);
-                
-                if (_enableCaching)
-                {
-                    _loadedScenarios[scenarioName] = scenario;
-                }
+                var scenario = _scenarioRepository.Load(scenarioName, filePath, _enableCaching);
                 
                 OnScenarioLoaded?.Invoke(scenario);
                 
@@ -339,7 +279,7 @@ namespace RobotSNAP.Core.Scenario
             try
             {
                 byte[] yamlBytes = System.Text.Encoding.UTF8.GetBytes(asset.text);
-                var scenario = ParseYaml(yamlBytes, asset.name);
+                var scenario = _scenarioRepository.Parse(yamlBytes, asset.name);
                 
                 OnScenarioLoaded?.Invoke(scenario);
                 
@@ -378,11 +318,6 @@ namespace RobotSNAP.Core.Scenario
         public ScenarioInfo GetScenarioInfo(string scenarioName)
         {
             // Vérifier le cache d'infos
-            if (_scenarioInfoCache.TryGetValue(scenarioName, out var cachedInfo))
-            {
-                return cachedInfo;
-            }
-            
             // Trouver le fichier
             string filePath = FindScenarioFile(scenarioName);
             if (filePath == null)
@@ -390,22 +325,7 @@ namespace RobotSNAP.Core.Scenario
                 return null;
             }
             
-            try
-            {
-                byte[] yamlBytes = File.ReadAllBytes(filePath);
-                var info = ExtractScenarioInfo(yamlBytes);
-                
-                if (info != null)
-                {
-                    _scenarioInfoCache[scenarioName] = info;
-                }
-                
-                return info;
-            }
-            catch
-            {
-                return null;
-            }
+            return _scenarioRepository.GetInfo(scenarioName, filePath);
         }
 
         /// <summary>
@@ -717,8 +637,7 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         public void ClearScenarioCache()
         {
-            _loadedScenarios.Clear();
-            _scenarioInfoCache.Clear();
+            _scenarioRepository.Clear();
             
             if (_logEvents)
             {

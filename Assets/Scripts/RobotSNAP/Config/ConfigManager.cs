@@ -40,7 +40,7 @@ namespace RobotSNAP.Core
         private void InitializePaths()
         {
             // Les données utilisateur doivent rester inscriptibles dans un build.
-            _streamingAssetsConfigPath = Path.Combine(Application.persistentDataPath, "Configs");
+            _streamingAssetsConfigPath = ConfigPersistence.ConfigDirectoryPath;
         }
         
         private void EnsureConfigsFolderExists()
@@ -91,21 +91,13 @@ namespace RobotSNAP.Core
                 return;
             }
             
-            string fullPath = GetJsonPath(fileName);
-            string directory = Path.GetDirectoryName(fullPath);
-            
-            if (!Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-            
             try
             {
-                config.SaveToJson(fullPath);
+                ConfigPersistence.Save(config, fileName);
                 OnConfigSaved?.Invoke(config);
                 
-                if (_logEvents)
-                    Debug.Log($"[ConfigManager] Config saved to JSON: {fullPath}");
+                // if (_logEvents)
+                //     Debug.Log($"[ConfigManager] Config saved to JSON: {fullPath}");
             }
             catch (Exception e)
             {
@@ -121,16 +113,14 @@ namespace RobotSNAP.Core
         {
             string fullPath = GetJsonPath(fileName);
             
-            if (!File.Exists(fullPath))
-            {
-                OnConfigError?.Invoke($"Config not found: {fullPath}");
-                Debug.LogWarning($"[ConfigManager] Config not found: {fullPath}");
-                return null;
-            }
-            
             try
             {
-                var config = SimulationConfig.LoadFromJson(fullPath);
+                if (!ConfigPersistence.TryLoad(fileName, out var config))
+                {
+                    OnConfigError?.Invoke($"Config not found: {fullPath}");
+                    Debug.LogWarning($"[ConfigManager] Config not found: {fullPath}");
+                    return null;
+                }
                 if (config != null)
                 {
                     OnConfigLoaded?.Invoke(config);
@@ -230,11 +220,7 @@ namespace RobotSNAP.Core
                 return configs;
             }
             
-            string[] files = Directory.GetFiles(_streamingAssetsConfigPath, "*.json");
-            foreach (string file in files)
-            {
-                configs.Add(Path.GetFileNameWithoutExtension(file));
-            }
+            configs.AddRange(ConfigPersistence.GetAvailableNames());
             
             return configs;
         }
@@ -272,7 +258,7 @@ namespace RobotSNAP.Core
         /// </summary>
         public bool DeleteConfig(string fileName)
         {
-            string fullPath = GetJsonPath(fileName);
+            string fullPath = ConfigPersistence.GetPath(fileName);
             
             if (!File.Exists(fullPath))
             {

@@ -181,28 +181,17 @@ namespace RobotSNAP
             var source = Application.isPlaying ? _runtimeConfig : _defaultConfig;
             if (source == null) return;
 
-            string fullPath = Path.Combine(Application.persistentDataPath, "Configs", fileName);
-            if (!fullPath.EndsWith(".json")) fullPath += ".json";
-
-            string directory = Path.GetDirectoryName(fullPath);
-            if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-
-            source.SaveToJson(fullPath);
-            if (_logEvents) Debug.Log($"[Supervisor] Config saved to JSON: {fullPath}");
+            ConfigPersistence.Save(source, fileName);
+            if (_logEvents) Debug.Log($"[Supervisor] Config saved to JSON: {ConfigPersistence.GetPath(fileName)}");
         }
 
         public bool LoadConfigFromJson(string fileName)
         {
-            string fullPath = Path.Combine(Application.persistentDataPath, "Configs", fileName);
-            if (!fullPath.EndsWith(".json")) fullPath += ".json";
-
-            if (!File.Exists(fullPath))
+            if (!ConfigPersistence.TryLoad(fileName, out var loaded))
             {
-                Debug.LogError($"[Supervisor] Config file not found: {fullPath}");
+                Debug.LogError($"[Supervisor] Config file not found: {ConfigPersistence.GetPath(fileName)}");
                 return false;
             }
-
-            var loaded = SimulationConfig.LoadFromJson(fullPath);
             if (loaded != null)
             {
                 UpdateConfig(loaded);
@@ -213,14 +202,7 @@ namespace RobotSNAP
 
         public List<string> GetAvailableConfigs()
         {
-            List<string> configs = new List<string>();
-            string fullPath = Path.Combine(Application.persistentDataPath, "Configs");
-            if (Directory.Exists(fullPath))
-            {
-                foreach (var file in Directory.GetFiles(fullPath, "*.json"))
-                    configs.Add(Path.GetFileNameWithoutExtension(file));
-            }
-            return configs;
+            return new List<string>(ConfigPersistence.GetAvailableNames());
         }
 
         public void ResetConfigToDefault()

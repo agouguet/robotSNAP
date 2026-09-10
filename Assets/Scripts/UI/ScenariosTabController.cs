@@ -103,6 +103,7 @@ public class ScenariosTabController : MonoBehaviour
 
     private void ShowCreator()
     {
+        if (_browser == null || _creator == null) return;
         _browser.style.display = DisplayStyle.None; _creator.style.display = DisplayStyle.Flex;
         _name.value = string.Empty; _description.value = string.Empty; _tags.value = string.Empty;
         _map.value = _map.choices.FirstOrDefault(); _preview.value = _preview.choices.FirstOrDefault(); _behavior.value = "normal";
@@ -123,7 +124,9 @@ public class ScenariosTabController : MonoBehaviour
 
     private void ShowBrowser()
     {
-        _creator.style.display = DisplayStyle.None; _browser.style.display = DisplayStyle.Flex; _listView?.Refresh();
+        if (_creator != null) _creator.style.display = DisplayStyle.None;
+        if (_browser != null) _browser.style.display = DisplayStyle.Flex;
+        _listView?.Refresh();
     }
 
     private void UpdateSummary() => _summary.text = $"{Mathf.Max(0, _humans.value)} piéton(s) · départ ({_startX.value:0.0}, {_startZ.value:0.0}) · objectif ({_goalX.value:0.0}, {_goalZ.value:0.0})";

@@ -135,7 +135,6 @@ GameObject:
   - component: {fileID: 4147492}
   - component: {fileID: 4147494}
   - component: {fileID: 4147493}
-  - component: {fileID: 4147495}
   m_Layer: 0
   m_Name: Supervisor
   m_TagString: Untagged
@@ -285,18 +284,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioDataService
   _scenarioManager: {fileID: 4147489}
   _useDebugData: 0
---- !u!114 &4147495
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4147485}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cda6e7ed4d2377113bf5d6d80b60c01f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TcpServer
 --- !u!1 &316566385
 GameObject:
   m_ObjectHideFlags: 0
@@ -742,6 +729,7 @@ MonoBehaviour:
   uiDocument: {fileID: 1187733928}
   scenarioManager: {fileID: 4147489}
   scenarioSelectionController: {fileID: 732435986}
+  cameraController: {fileID: 0}
   minimapCamera: {fileID: 1361882084}
   minimapRenderTexture: {fileID: 8400000, guid: ff878838384c9316da30127bffde9d9f, type: 2}
 --- !u!114 &732435988
@@ -1947,7 +1935,7 @@ MonoBehaviour:
   simulationStartHour: 12
   _timeZoneId: Europe/Paris
   logTimeChanges: 0
-  editorTimeDisplay: 15:01:47
+  editorTimeDisplay: 15:42:53
 --- !u!4 &2049586426
 Transform:
   m_ObjectHideFlags: 0

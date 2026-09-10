@@ -27,8 +27,12 @@ namespace RobotSNAP.Core
             string path = GetPath(fileName);
             if (!File.Exists(path))
             {
-                config = null;
-                return false;
+                path = Path.Combine(Application.streamingAssetsPath, ConfigDirectoryName, Path.GetFileName(path));
+                if (!File.Exists(path))
+                {
+                    config = null;
+                    return false;
+                }
             }
 
             config = SimulationConfig.LoadFromJson(path);
@@ -37,12 +41,17 @@ namespace RobotSNAP.Core
 
         public static IReadOnlyList<string> GetAvailableNames()
         {
-            if (!Directory.Exists(ConfigDirectoryPath)) return Array.Empty<string>();
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AddNamesFromDirectory(ConfigDirectoryPath, names);
+            AddNamesFromDirectory(Path.Combine(Application.streamingAssetsPath, ConfigDirectoryName), names);
+            return new List<string>(names);
+        }
 
-            var names = new List<string>();
-            foreach (string file in Directory.GetFiles(ConfigDirectoryPath, "*.json"))
+        private static void AddNamesFromDirectory(string directory, ISet<string> names)
+        {
+            if (!Directory.Exists(directory)) return;
+            foreach (string file in Directory.GetFiles(directory, "*.json"))
                 names.Add(Path.GetFileNameWithoutExtension(file));
-            return names;
         }
 
         public static string GetPath(string fileName)

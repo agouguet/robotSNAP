@@ -10,6 +10,7 @@ public class SimulationTabController : MonoBehaviour
     [SerializeField] private UIDocument uiDocument;
     [SerializeField] private ScenarioManager scenarioManager;
     [SerializeField] private ScenarioSelectionController scenarioSelectionController;
+    [SerializeField] private CameraController cameraController;
 
     [Header("Minimap")]
     [SerializeField] private Camera minimapCamera;
@@ -29,7 +30,6 @@ public class SimulationTabController : MonoBehaviour
 
     private MinimapRenderer _minimapRenderer;
     private Transform _minimapTarget;
-    private CameraController _cameraController;
 
     private SimulationState _currentState = SimulationState.Idle;
 
@@ -47,8 +47,8 @@ public class SimulationTabController : MonoBehaviour
 
         if (_loadScenarioButton != null)
             _loadScenarioButton.clicked -= OnLoadScenarioClicked;
-        if (_cameraController != null)
-            _cameraController.OnFollowTargetChanged -= OnFollowTargetChanged;
+        if (cameraController != null)
+            cameraController.OnFollowTargetChanged -= OnFollowTargetChanged;
     }
 
     private void OnViewLoaded(string viewName)
@@ -102,8 +102,9 @@ public class SimulationTabController : MonoBehaviour
         if (scenarioSelectionController == null)
             scenarioSelectionController = FindObjectOfType<ScenarioSelectionController>();
         
-        _cameraController = FindObjectOfType<CameraController>();
-        if (_cameraController == null)
+        if (cameraController == null)
+            cameraController = FindObjectOfType<CameraController>();
+        if (cameraController == null)
             Debug.LogWarning("CameraController non trouvé dans la scène.");
 
         _isInitialized = true;
@@ -156,12 +157,12 @@ public class SimulationTabController : MonoBehaviour
         SetupMinimap();
 
         // === Abonnement aux événements de changement de cible ===
-        if (_cameraController != null)
+        if (cameraController != null)
         {
-            _cameraController.OnFollowTargetChanged += OnFollowTargetChanged;
+            cameraController.OnFollowTargetChanged += OnFollowTargetChanged;
             // Initialiser la cible avec la valeur actuelle
-            if (_cameraController.CurrentFollowTarget != null)
-                _minimapTarget = _cameraController.CurrentFollowTarget;
+            if (cameraController.CurrentFollowTarget != null)
+                _minimapTarget = cameraController.CurrentFollowTarget;
         }
 
         // === Abonnement aux événements d'état ===

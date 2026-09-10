@@ -57,8 +57,9 @@ public class ScenariosTabController : MonoBehaviour
         _startX = root.Q<FloatField>("StartXField"); _startZ = root.Q<FloatField>("StartZField"); _startYaw = root.Q<FloatField>("StartYawField");
         _goalX = root.Q<FloatField>("GoalXField"); _goalZ = root.Q<FloatField>("GoalZField");
         _validation = root.Q<Label>("ValidationLabel"); _summary = root.Q<Label>("ScenarioSummaryLabel");
+        if (!ValidateUiReferences()) return;
         BuildBrowser(root);
-        ConfigureCreator(root);
+        ConfigureCreator();
         var newButton = root.Q<Button>("NewScenarioButton");
         var backButton = root.Q<Button>("BackToScenariosButton");
         var saveButton = root.Q<Button>("SaveEditorButton");
@@ -92,7 +93,17 @@ public class ScenariosTabController : MonoBehaviour
         _listView.OnScenarioSelected += id => _detailsView.ShowScenario(dataService?.GetScenarioInfo(id));
     }
 
-    private void ConfigureCreator(VisualElement root)
+    private bool ValidateUiReferences()
+    {
+        bool valid = _browser != null && _creator != null && _name != null && _description != null && _tags != null &&
+                     _map != null && _preview != null && _behavior != null && _humans != null && _duration != null &&
+                     _startX != null && _startZ != null && _startYaw != null && _goalX != null && _goalZ != null &&
+                     _validation != null && _summary != null;
+        if (!valid) Debug.LogError("[ScenariosTabController] ScenariosTab.uxml is missing one or more required elements.");
+        return valid;
+    }
+
+    private void ConfigureCreator()
     {
         _map.choices = new List<string> { string.Empty }.Concat(scenarioLoader?.GetAvailableMaps() ?? new List<string>()).ToList();
         _preview.choices = new List<string> { string.Empty }.Concat(Resources.LoadAll<Texture2D>("ScenarioPreviews").Select(x => x.name)).ToList();
@@ -103,8 +114,8 @@ public class ScenariosTabController : MonoBehaviour
 
     private void ShowCreator()
     {
-        if (_browser == null || _creator == null) return;
-        _browser.style.display = DisplayStyle.None; _creator.style.display = DisplayStyle.Flex;
+        _browser.AddToClassList("scenario-view-hidden");
+        _creator.RemoveFromClassList("scenario-view-hidden");
         _name.value = string.Empty; _description.value = string.Empty; _tags.value = string.Empty;
         _map.value = _map.choices.FirstOrDefault(); _preview.value = _preview.choices.FirstOrDefault(); _behavior.value = "normal";
         _humans.value = 0; _duration.value = 0; _startX.value = 0; _startZ.value = 0; _startYaw.value = 0; _goalX.value = 2; _goalZ.value = 0;
@@ -124,8 +135,8 @@ public class ScenariosTabController : MonoBehaviour
 
     private void ShowBrowser()
     {
-        if (_creator != null) _creator.style.display = DisplayStyle.None;
-        if (_browser != null) _browser.style.display = DisplayStyle.Flex;
+        _creator.AddToClassList("scenario-view-hidden");
+        _browser.RemoveFromClassList("scenario-view-hidden");
         _listView?.Refresh();
     }
 

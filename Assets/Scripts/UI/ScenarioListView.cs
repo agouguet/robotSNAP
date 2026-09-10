@@ -71,7 +71,7 @@ public class ScenarioListView : VisualElement
         filters.AddToClassList("scenario-filters");
         _filterDropdown = new DropdownField { choices = new List<string> { "All" }, value = "All" };
         _filterDropdown.AddToClassList("scenario-filter-dropdown");
-        _sortDropdown = new DropdownField { choices = new List<string> { "Name (A-Z)", "Name (Z-A)", "Recent Date", "Old Date" }, value = "Name (A-Z)" };
+        _sortDropdown = new DropdownField { choices = new List<string> { "Name (A-Z)", "Name (Z-A)", "Date recent", "Date old" }, value = "Name (A-Z)" };
         _sortDropdown.AddToClassList("scenario-sort-dropdown");
         filters.Add(_filterDropdown);
         filters.Add(_sortDropdown);
@@ -136,11 +136,7 @@ public class ScenarioListView : VisualElement
         if (scenarios.Count == 0)
         {
             var empty = new Label("No matching scenarios.");
-            empty.style.color = Color.gray;
-            empty.style.paddingTop = 40;
-            empty.style.paddingBottom = 40;
-            empty.style.unityTextAlign = TextAnchor.MiddleCenter;
-            empty.style.width = Length.Percent(100);
+            empty.AddToClassList("scenario-empty-message");
             _gridContainer.Add(empty);
             return;
         }
@@ -214,6 +210,8 @@ public class ScenarioListView : VisualElement
                 child.RemoveFromClassList("selected");
             card.AddToClassList("selected");
             _selectedScenarioId = fileId;
+            SelectedScenarioId = fileId;
+            SelectedScenarioInfo = info;
             OnScenarioSelected?.Invoke(fileId);
         });
 

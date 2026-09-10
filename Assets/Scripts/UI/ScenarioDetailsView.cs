@@ -56,7 +56,7 @@ public class ScenarioDetailsView : VisualElement
         // Preview
         var previewContainer = new VisualElement();
         previewContainer.AddToClassList("scenario-details-preview");
-        _previewImage = new Image();
+        _previewImage = new Image { scaleMode = ScaleMode.ScaleAndCrop };
         _previewImage.AddToClassList("scenario-details-preview-image");
         previewContainer.Add(_previewImage);
         Add(previewContainer);

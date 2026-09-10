@@ -1,0 +1,347 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/UI/Tabs/Scenarios/uss/ScenarioCreationTab.uss?fileID=7433441132597879392&amp;guid=75c4c03faf2f9d48f9a09a9a9d02951e&amp;type=3"/>
+    <ui:VisualElement name="CreationRoot" class="creation-root">
+        <ui:VisualElement name="CreationHeader" class="creation-header">
+            <ui:VisualElement class="creation-header-left">
+                <ui:Button name="BackToScenariosButton" text="‹" class="creation-back-button"/>
+                <ui:VisualElement class="scenario-header-content">
+                    <ui:Label name="EditorTitle" text="Nouveau scénario" class="scenario-page-title"/>
+                    <ui:Label name="EditorSubtitle" text="Créez et configurez un nouveau scénario de simulation." class="scenario-page-subtitle"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="CreationStepper" class="creation-stepper">
+            <ui:VisualElement name="Step1" class="creation-step active">
+                <ui:VisualElement class="step-number">
+                    <ui:Label text="1"/>
+                </ui:VisualElement>
+                <ui:Label text="Informations &amp; Environnement" class="step-label"/>
+            </ui:VisualElement>
+            <ui:VisualElement name="StepLine1" class="step-line"/>
+            <ui:VisualElement name="Step2" class="creation-step">
+                <ui:VisualElement class="step-number">
+                    <ui:Label text="2"/>
+                </ui:VisualElement>
+                <ui:Label text="Agents &amp; comportements" class="step-label"/>
+            </ui:VisualElement>
+            <ui:VisualElement name="StepLine2" class="step-line"/>
+            <ui:VisualElement name="Step3" class="creation-step">
+                <ui:VisualElement class="step-number">
+                    <ui:Label text="3"/>
+                </ui:VisualElement>
+                <ui:Label text="Validation" class="step-label"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="Step1Content" class="creation-body creation-step-content">
+            <ui:VisualElement name="GeneralInformationPanel" class="creation-panel general-information-panel">
+                <ui:Label text="Informations générales" class="creation-panel-title"/>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Nom du scénario *" class="creation-field-label"/>
+                    <ui:TextField name="NameField" placeholder="Ex. : Hall d'entrée - Heure de pointe" max-length="60" class="creation-text-field"/>
+                    <ui:Label name="NameCounter" text="0/60" class="field-counter"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field map-image-field">
+                    <ui:Label text="Environnement du scénario *" class="creation-field-label"/>
+                    <ui:VisualElement name="MapImageDropZone" class="map-image-drop-zone">
+                        <ui:Label text="CARTE DE SIMULATION" class="upload-title"/>
+                        <ui:DropdownField name="MapDropdown" class="creation-dropdown drop-zone-dropdown"/>
+                        <ui:Label text="Choisissez une carte disponible" class="upload-hint"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Description" class="creation-field-label"/>
+                    <ui:TextField name="DescriptionField" multiline="true" placeholder="Décrivez le contexte, le but et les particularités de ce scénario..." max-length="300" class="creation-textarea"/>
+                    <ui:Label name="DescriptionCounter" text="0/300" class="field-counter"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Tags" class="creation-field-label"/>
+                    <ui:DropdownField name="TagsDropdown" class="creation-dropdown"/>
+                    <ui:VisualElement class="tag-entry-row">
+                        <ui:TextField name="TagInputField" placeholder="Nouveau tag" class="creation-text-field tag-input"/>
+                        <ui:Button name="AddTagButton" text="+" class="tag-add-button"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="SelectedTags" class="selected-tags"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field cover-image-field">
+                    <ui:Label text="Image de couverture" class="creation-field-label"/>
+                    <ui:VisualElement name="CoverImageDropZone" class="cover-image-drop-zone">
+                        <ui:VisualElement class="upload-icon">
+                            <ui:Label text="▧"/>
+                        </ui:VisualElement>
+                        <ui:DropdownField name="PreviewDropdown" class="creation-dropdown drop-zone-dropdown"/>
+                        <ui:Label text="Ressource de prévisualisation 16:9" class="upload-hint"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="EnvironmentColumn" class="creation-center-column">
+                <ui:VisualElement name="EnvironmentPreviewPanel" class="creation-panel environment-preview-panel">
+                    <ui:Label text="Aperçu de l'environnement" class="creation-panel-title"/>
+                    <ui:VisualElement name="EnvironmentToolbar" class="environment-toolbar">
+                        <ui:VisualElement name="EnvironmentTools" class="environment-tools">
+                            <ui:Button name="SelectToolButton" text="↖" class="environment-tool selected"/>
+                            <ui:Button name="PointToolButton" text="○" class="environment-tool"/>
+                            <ui:Button name="CircleToolButton" text="◌" class="environment-tool"/>
+                            <ui:Button name="AreaToolButton" text="□" class="environment-tool"/>
+                            <ui:Button name="DeleteToolButton" text="◇" class="environment-tool"/>
+                            <ui:VisualElement class="toolbar-separator"/>
+                            <ui:Button name="UndoButton" text="↶" class="environment-tool"/>
+                            <ui:Button name="RedoButton" text="↷" class="environment-tool"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="EnvironmentViewMode" class="environment-view-mode">
+                            <ui:Button name="View2DButton" text="2D" class="view-mode-button selected"/>
+                            <ui:Button name="View3DButton" text="3D" class="view-mode-button"/>
+                            <ui:Button name="GridButton" text="▦" class="view-mode-button"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="EnvironmentCanvas" class="environment-canvas">
+                        <ui:Image name="EnvironmentImage" class="environment-image"/>
+                        <ui:VisualElement name="EnvironmentOverlay" class="environment-overlay"/>
+                        <ui:VisualElement name="RobotMarker" class="robot-marker creation-step-hidden"/>
+                        <ui:VisualElement name="GoalMarker" class="goal-marker creation-step-hidden"/>
+                        <ui:Label name="EnvironmentPlaceholder" text="Sélectionnez une carte ou une image de couverture pour afficher un aperçu." class="environment-placeholder"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="EnvironmentFooter" class="environment-footer">
+                        <ui:VisualElement class="environment-metadata">
+                            <ui:VisualElement class="environment-metadata-item">
+                                <ui:Label text="Carte" class="metadata-label"/>
+                                <ui:Label name="MapName" text="—" class="metadata-value"/>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="environment-metadata-item">
+                                <ui:Label text="Points" class="metadata-label"/>
+                                <ui:Label name="MapPointCount" text="2 requis" class="metadata-value"/>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="environment-metadata-item">
+                                <ui:Label text="Mode" class="metadata-label"/>
+                                <ui:Label name="MapMode" text="2D" class="metadata-value"/>
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:Label text="Les positions précises sont configurées à l'étape 2." class="environment-footer-hint"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="Step2Content" class="creation-body creation-step-content creation-step-hidden">
+            <ui:VisualElement class="creation-panel agent-config-panel">
+                <ui:VisualElement class="config-panel-heading">
+                    <ui:VisualElement class="agent-status-dot robot-dot"/>
+                    <ui:VisualElement>
+                        <ui:Label text="Robot" class="creation-panel-title compact-title"/>
+                        <ui:Label text="Modèle et comportement de navigation" class="config-panel-subtitle"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Type de robot" class="creation-field-label"/>
+                    <ui:DropdownField name="RobotTypeDropdown" class="creation-dropdown"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Comportement" class="creation-field-label"/>
+                    <ui:DropdownField name="RobotBehaviorDropdown" class="creation-dropdown"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Vitesse maximale (m/s) *" class="creation-field-label"/>
+                    <ui:FloatField name="RobotSpeedField" class="creation-text-field"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Durée maximale (secondes)" class="creation-field-label"/>
+                    <ui:FloatField name="DurationField" class="creation-text-field"/>
+                    <ui:Label text="0 = durée illimitée" class="field-help"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="creation-panel route-config-panel">
+                <ui:Label text="Trajectoire de référence" class="creation-panel-title"/>
+                <ui:Label text="Ces points initialisent la position du robot et son objectif dans l'environnement." class="config-panel-subtitle route-subtitle"/>
+                <ui:VisualElement class="point-card">
+                    <ui:VisualElement class="point-card-header">
+                        <ui:VisualElement class="agent-status-dot robot-dot"/>
+                        <ui:Label text="Départ du robot" class="point-card-title"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="coordinate-row">
+                        <ui:VisualElement class="coordinate-field">
+                            <ui:Label text="X" class="coordinate-label"/>
+                            <ui:FloatField name="StartXField" class="creation-text-field"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="coordinate-field coordinate-middle">
+                            <ui:Label text="Z" class="coordinate-label"/>
+                            <ui:FloatField name="StartZField" class="creation-text-field"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="coordinate-field">
+                            <ui:Label text="Orientation Y" class="coordinate-label"/>
+                            <ui:FloatField name="StartYawField" class="creation-text-field"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="route-arrow">
+                    <ui:Label text="↓"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="point-card">
+                    <ui:VisualElement class="point-card-header">
+                        <ui:VisualElement class="agent-status-dot goal-dot"/>
+                        <ui:Label text="Objectif du robot" class="point-card-title"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="coordinate-row">
+                        <ui:VisualElement class="coordinate-field">
+                            <ui:Label text="X" class="coordinate-label"/>
+                            <ui:FloatField name="GoalXField" class="creation-text-field"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="coordinate-field coordinate-middle">
+                            <ui:Label text="Z" class="coordinate-label"/>
+                            <ui:FloatField name="GoalZField" class="creation-text-field"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="coordinate-field coordinate-placeholder"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="creation-panel agent-config-panel human-config-panel">
+                <ui:VisualElement class="config-panel-heading">
+                    <ui:VisualElement class="agent-status-dot pedestrian-dot"/>
+                    <ui:VisualElement>
+                        <ui:Label text="Piétons" class="creation-panel-title compact-title"/>
+                        <ui:Label text="Groupe humain optionnel" class="config-panel-subtitle"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="coordinate-row">
+                    <ui:VisualElement class="creation-field half-field">
+                        <ui:Label text="Nombre dans ce groupe" class="creation-field-label"/>
+                        <ui:IntegerField name="HumanCountField" class="creation-text-field"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="creation-field half-field field-row-right">
+                        <ui:Label text="Vitesse (m/s)" class="creation-field-label"/>
+                        <ui:FloatField name="HumanSpeedField" class="creation-text-field"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Comportement" class="creation-field-label"/>
+                    <ui:DropdownField name="HumanBehaviorDropdown" class="creation-dropdown"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Contrôleur de mouvement" class="creation-field-label"/>
+                    <ui:DropdownField name="MovementControllerDropdown" class="creation-dropdown"/>
+                </ui:VisualElement>
+                <ui:Label text="Départ des piétons" class="point-section-label"/>
+                <ui:VisualElement class="coordinate-row">
+                    <ui:VisualElement class="coordinate-field">
+                        <ui:Label text="X" class="coordinate-label"/>
+                        <ui:FloatField name="HumanSpawnXField" class="creation-text-field"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="coordinate-field field-row-right">
+                        <ui:Label text="Z" class="coordinate-label"/>
+                        <ui:FloatField name="HumanSpawnZField" class="creation-text-field"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:Label text="Objectif des piétons" class="point-section-label"/>
+                <ui:VisualElement class="coordinate-row">
+                    <ui:VisualElement class="coordinate-field">
+                        <ui:Label text="X" class="coordinate-label"/>
+                        <ui:FloatField name="HumanGoalXField" class="creation-text-field"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="coordinate-field field-row-right">
+                        <ui:Label text="Z" class="coordinate-label"/>
+                        <ui:FloatField name="HumanGoalZField" class="creation-text-field"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="Step3Content" class="creation-body creation-step-content validation-layout creation-step-hidden">
+            <ui:VisualElement name="CreationSummaryColumn" class="creation-summary-column">
+                <ui:VisualElement name="ScenarioSummaryPanel" class="creation-panel summary-panel">
+                    <ui:Label text="Résumé du scénario" class="creation-panel-title"/>
+                    <ui:VisualElement class="summary-row">
+                        <ui:Label text="Nom" class="summary-label"/>
+                        <ui:Label name="SummaryName" text="Non défini" class="summary-value"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="summary-row">
+                        <ui:Label text="Type" class="summary-label"/>
+                        <ui:Label name="SummaryType" text="Personnalisé" class="summary-value"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="summary-row">
+                        <ui:Label text="Environnement" class="summary-label"/>
+                        <ui:Label name="SummaryEnvironment" text="Non défini" class="summary-value"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="summary-row">
+                        <ui:Label text="Agents" class="summary-label"/>
+                        <ui:Label name="SummaryAgents" text="1" class="summary-value"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="summary-row">
+                        <ui:Label text="Objectifs" class="summary-label"/>
+                        <ui:Label name="SummaryObjectives" text="1" class="summary-value"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="summary-row last">
+                        <ui:Label text="Durée estimée" class="summary-label"/>
+                        <ui:Label name="SummaryDuration" text="Illimitée" class="summary-value"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="AgentsSummaryPanel" class="creation-panel summary-panel">
+                    <ui:Label text="Agents prévus" class="creation-panel-title"/>
+                    <ui:VisualElement class="agent-summary-row">
+                        <ui:VisualElement class="agent-summary-name">
+                            <ui:VisualElement class="agent-status-dot robot-dot"/>
+                            <ui:Label text="Robot" class="summary-label"/>
+                        </ui:VisualElement>
+                        <ui:Label name="RobotCount" text="1" class="summary-value"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="agent-summary-row">
+                        <ui:VisualElement class="agent-summary-name">
+                            <ui:VisualElement class="agent-status-dot pedestrian-dot"/>
+                            <ui:Label text="Piétons" class="summary-label"/>
+                        </ui:VisualElement>
+                        <ui:Label name="PedestrianCount" text="0" class="summary-value"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="summary-total-row">
+                        <ui:Label text="Total" class="summary-label"/>
+                        <ui:Label name="TotalAgentCount" text="1" class="summary-value"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="creation-panel validation-panel">
+                <ui:VisualElement class="validation-heading">
+                    <ui:VisualElement name="ValidationStatusIcon" class="validation-status-icon"/>
+                    <ui:VisualElement>
+                        <ui:Label text="Vérification finale" class="validation-title"/>
+                        <ui:Label text="Relisez les paramètres avant d'enregistrer le fichier YAML." class="config-panel-subtitle"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:Label name="ValidationLabel" text="" class="validation-message"/>
+                <ui:VisualElement class="review-grid">
+                    <ui:VisualElement class="review-card">
+                        <ui:Label text="ROBOT" class="review-eyebrow"/>
+                        <ui:Label name="SummaryRobotConfig" text="—" class="review-main-value"/>
+                        <ui:Label name="SummaryRobotRoute" text="—" class="review-secondary-value"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="review-card review-card-right">
+                        <ui:Label text="PIÉTONS" class="review-eyebrow"/>
+                        <ui:Label name="SummaryHumanConfig" text="Aucun piéton" class="review-main-value"/>
+                        <ui:Label name="SummaryHumanRoute" text="—" class="review-secondary-value"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="review-description-card">
+                    <ui:Label text="DESCRIPTION" class="review-eyebrow"/>
+                    <ui:Label name="SummaryDescription" text="Aucune description." class="review-description"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="validation-check-list">
+                    <ui:Label name="CheckInformation" text="✓ Informations générales complètes" class="validation-check"/>
+                    <ui:Label name="CheckEnvironment" text="✓ Environnement sélectionné" class="validation-check"/>
+                    <ui:Label name="CheckRoute" text="✓ Trajectoire du robot valide" class="validation-check"/>
+                    <ui:Label name="CheckHumans" text="✓ Configuration des piétons valide" class="validation-check"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="CreationFooter" class="creation-footer">
+            <ui:Button name="CancelEditorButton" text="Annuler" class="action-button secondary creation-cancel-button"/>
+            <ui:Label name="EditorFeedbackLabel" text="" class="editor-feedback"/>
+            <ui:VisualElement class="creation-footer-actions">
+                <ui:Button name="PreviousStepButton" text="←   Précédent" class="action-button secondary creation-previous-button creation-step-hidden"/>
+                <ui:Button name="NextStepButton" text="Suivant   →" class="action-button primary creation-save-button"/>
+                <ui:Button name="SaveEditorButton" text="Enregistrer le scénario" class="action-button primary creation-save-button creation-step-hidden"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

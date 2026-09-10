@@ -1,283 +1,57 @@
+/* ================================================================
+   SCENARIO PAGE
+   ================================================================ */
+
 .scenario-page {
     flex-grow: 1;
-    min-height: 0;
+    flex-direction: column;
     background-color: var(--bg-primary);
+    padding: 28px 32px 24px 32px;
 }
 
-.scenario-view {
-    flex-grow: 1;
-    min-height: 0;
-    padding: 24px;
-}
 
-.scenario-view-hidden {
-    display: none;
-}
+/* ================================================================
+   HEADER
+   ================================================================ */
 
-.scenario-header {
+.scenario-page-header {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
     flex-shrink: 0;
 }
 
-.scenario-header-left {
-    flex-direction: row;
-    align-items: center;
+
+.scenario-header-content {
+    flex-direction: column;
 }
 
-.scenario-title {
+
+.scenario-page-title {
     font-size: 26px;
-    -unity-font-style: bold;
+    font-weight: bold;
     color: var(--text-primary);
     margin-bottom: 4px;
 }
 
-.scenario-subtitle {
+
+.scenario-page-subtitle {
     font-size: 14px;
     color: var(--text-secondary);
 }
 
-.scenario-back-button {
-    width: 38px;
-    height: 38px;
-    margin-right: 12px;
-    padding: 0;
-    border-width: 0;
-    border-radius: 8px;
-    background-color: var(--button-bg);
-    color: var(--text-primary);
-    font-size: 24px;
-}
 
-.scenario-content {
-    flex-direction: row;
+/* ================================================================
+   MAIN CONTENT
+   ================================================================ */
+
+.scenario-page-content {
     flex-grow: 1;
+    flex-direction: row;
     min-height: 0;
 }
 
-.scenario-browser {
-    flex-grow: 1;
-    min-width: 0;
-    margin-right: 18px;
-}
-
-.scenario-details-container {
-    width: 330px;
-    flex-shrink: 0;
-    padding: 16px;
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 10px;
-    background-color: var(--bg-secondary);
-}
-
-.scenario-toolbar {
-    flex-direction: row;
-    align-items: center;
-    margin-bottom: 12px;
-}
-
-.scenario-search-container {
-    flex-grow: 1;
-    min-width: 180px;
-    margin-right: 10px;
-}
-
-.scenario-search-field {
-    flex-grow: 1;
-    min-height: 38px;
-}
-
-.scenario-filters {
-    flex-direction: row;
-}
-
-.scenario-filter-dropdown,
-.scenario-sort-dropdown {
-    width: 145px;
-    margin-left: 8px;
-}
-
-.scenario-count-label {
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-}
-
-.scenario-list-view {
-    flex-grow: 1;
-    min-height: 0;
-    padding: 10px;
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 8px;
-    background-color: var(--bg-primary);
-}
-
-.scenario-grid {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-content: flex-start;
-}
-
-.scenario-empty-message {
-    width: 100%;
-    padding-top: 40px;
-    padding-bottom: 40px;
-    color: var(--text-secondary);
-    -unity-text-align: middle-center;
-}
-
-.scenario-details {
-    flex-grow: 1;
-}
-
-.scenario-details-title {
-    font-size: 18px;
-    -unity-font-style: bold;
-    color: var(--text-primary);
-}
-
-.scenario-details-category,
-.scenario-description,
-.scenario-info-label {
-    color: var(--text-secondary);
-}
-
-.scenario-details-preview {
-    height: 150px;
-    margin-top: 14px;
-    margin-bottom: 14px;
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.scenario-details-preview-image {
-    width: 100%;
-    height: 100%;
-}
-
-.scenario-details-section {
-    margin-bottom: 14px;
-}
-
-.scenario-section-title {
-    -unity-font-style: bold;
-    color: var(--text-primary);
-    margin-bottom: 6px;
-}
-
-.scenario-info-grid,
-.scenario-tags {
-    flex-direction: row;
-    flex-wrap: wrap;
-}
-
-.scenario-info-item {
-    width: 50%;
-    margin-bottom: 8px;
-}
-
-.scenario-info-value {
-    color: var(--text-primary);
-}
-
-.scenario-details-actions {
-    flex-direction: row;
-    justify-content: flex-end;
-    margin-top: 12px;
-}
-
-.scenario-details-actions > .unity-button {
-    margin-left: 8px;
-}
-
-.scenario-creator-scroll {
-    flex-grow: 1;
-    min-height: 0;
-}
-
-.scenario-form-row {
-    flex-direction: row;
-    align-items: flex-start;
-}
-
-.scenario-form-column {
-    flex-grow: 1;
-    min-width: 280px;
-}
-
-.scenario-form-column-left {
-    margin-right: 16px;
-}
-
-.scenario-form-card {
-    padding: 18px;
-    margin-bottom: 16px;
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 10px;
-    background-color: var(--bg-secondary);
-}
-
-.scenario-form-title {
-    margin-bottom: 12px;
-    color: var(--text-primary);
-    font-size: 16px;
-    -unity-font-style: bold;
-}
-
-.scenario-form-field {
-    margin-bottom: 12px;
-}
-
-.scenario-description-field {
-    min-height: 88px;
-}
-
-.scenario-coordinate-row {
-    flex-direction: row;
-}
-
-.scenario-coordinate-row > .scenario-form-field {
-    flex-grow: 1;
-    margin-right: 10px;
-}
-
-.scenario-summary {
-    padding: 12px;
-    margin-top: 4px;
-    border-radius: 6px;
-    background-color: var(--bg-primary);
-    color: var(--text-secondary);
-    white-space: normal;
-}
-
-.scenario-validation-error {
-    min-height: 20px;
-    margin-top: 8px;
-    color: rgb(220, 60, 60);
-    white-space: normal;
-}
-
-.scenario-footer {
-    flex-direction: row;
-    justify-content: flex-end;
-    padding-top: 14px;
-    border-top-width: 1px;
-    border-top-color: var(--border-color);
-}
-
-.scenario-primary-button {
-    min-width: 170px;
-    min-height: 40px;
-    background-color: var(--accent);
-    color: rgb(255, 255, 255);
-    border-width: 0;
-    border-radius: 7px;
-}
-
-.scenario-primary-button:hover {
-    background-color: var(--accent-soft);
+.scenario-view-hidden {
+    display: none;
 }

@@ -18,7 +18,7 @@ namespace RobotSNAP
         [Header("Debug")]
         [SerializeField] private bool logPublishEvents = false;
         
-        private EnvROS _envROS;
+        [SerializeField] private EnvROS _envROS;
         private LaserScanner _laserScanner;
         private string _fullTopicName;
         private float _publishInterval;
@@ -36,7 +36,7 @@ namespace RobotSNAP
         public void Initialize()
         {
             // Find EnvROS
-            _envROS = FindObjectOfType<EnvROS>();
+            _envROS ??= FindFirstObjectByType<EnvROS>();
             
             if (_envROS == null)
             {

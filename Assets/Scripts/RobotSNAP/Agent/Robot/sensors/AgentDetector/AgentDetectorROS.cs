@@ -33,7 +33,7 @@ namespace RobotSNAP
         [Header("Debug")]
         [SerializeField] private bool logPublishEvents = false;
         
-        private EnvROS _envROS;
+        [SerializeField] private EnvROS _envROS;
         private AgentDetector _detector;
         private string _fullLocalTopic;
         private string _fullGlobalTopic;
@@ -69,7 +69,7 @@ namespace RobotSNAP
                 return;
             }
             
-            _envROS = FindObjectOfType<EnvROS>();
+            _envROS ??= FindFirstObjectByType<EnvROS>();
             if (_envROS == null)
             {
                 Debug.LogWarning($"[{name}] EnvROS not found, will not publish");

@@ -25,7 +25,7 @@ namespace RobotSNAP.ROS
         [Header("Debug")]
         [SerializeField] private bool logPublishEvents = false;
         
-        private EnvROS _envROS;
+        [SerializeField] private EnvROS _envROS;
         private Clock _clock;
         private string _fullTopicName;
         private double _lastPublishedTime;
@@ -72,7 +72,7 @@ namespace RobotSNAP.ROS
         public void Initialize()
         {
             // Find EnvROS
-            _envROS = FindObjectOfType<EnvROS>();
+            _envROS ??= FindFirstObjectByType<EnvROS>();
             
             if (_envROS == null)
             {

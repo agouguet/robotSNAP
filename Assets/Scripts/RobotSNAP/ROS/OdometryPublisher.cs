@@ -30,7 +30,7 @@ namespace RobotSNAP.ROS
         [SerializeField] private float linearVelocityCovariance = 0.01f;
         [SerializeField] private float angularVelocityCovariance = 0.01f;
         
-        private EnvROS _envROS;
+        [SerializeField] private EnvROS _envROS;
         private string _fullTopicName;
         private float _publishInterval;
         private RosMessageTypes.Nav.OdometryMsg _message;
@@ -40,7 +40,7 @@ namespace RobotSNAP.ROS
         private void Start()
         {
             // Find EnvROS
-            _envROS = FindObjectOfType<EnvROS>();
+            _envROS ??= FindFirstObjectByType<EnvROS>();
             
             if (_envROS == null)
             {

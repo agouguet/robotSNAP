@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using RobotSNAP.Core;
 
 namespace RobotSNAP.Agents
 {
@@ -16,6 +17,7 @@ namespace RobotSNAP.Agents
         private float _targetLinearSpeed;
         private float _targetAngularSpeed;
         private ArticulationBody _baseLinkArticulation;
+        private Supervisor _supervisor;
 
         public event Action<float, float> OnVelocityCommandReceived;
         public event Action<Vector3, Quaternion> OnMovementUpdated;
@@ -32,6 +34,7 @@ namespace RobotSNAP.Agents
         // ==================== Unity Lifecycle ====================
         private void Awake()
         {
+            _supervisor = Supervisor.Instance;
             EnsureComponents();
             EnforceParentOrigin();
         }
@@ -40,7 +43,7 @@ namespace RobotSNAP.Agents
 
         private void FixedUpdate()
         {
-            if (wheelController != null && Supervisor.Instance != null && !Supervisor.Instance.IsPaused)
+            if (wheelController != null && (_supervisor ??= Supervisor.Instance) != null && !_supervisor.IsPaused)
                 wheelController.SetRobotVelocity(_targetLinearSpeed, _targetAngularSpeed);
 
             if (_hasGoal)

@@ -25,6 +25,7 @@ public class DayNightCycle : MonoBehaviour
     public Vector3 sunRotationOffset = Vector3.zero;
 
     private float _previousAppliedHours = -1f;
+    private Clock _clock;
 
     void Update()
     {
@@ -32,10 +33,10 @@ public class DayNightCycle : MonoBehaviour
 
         if (Application.isPlaying)
         {
-            if (Clock.Instance != null)
+            if ((_clock ??= Clock.Instance) != null)
             {
                 // ⬇️ DÉTERMINER L'HEURE SELON LE MODE DE LA CLOCK
-                if (Clock.Instance.UseRealTime)
+                if (_clock.UseRealTime)
                 {
                     // Mode Real Time : on prend l'heure UTC réelle
                     DateTime now = DateTime.UtcNow;
@@ -44,7 +45,7 @@ public class DayNightCycle : MonoBehaviour
                 else
                 {
                     // Mode Simulation : on utilise le temps simulé (incluant l'offset)
-                    double totalSeconds = Clock.Instance.CurrentTimeSeconds;
+                    double totalSeconds = _clock.CurrentTimeSeconds;
                     double secondsInDay = totalSeconds % 86400.0;
                     hoursToApply = (float)(secondsInDay / 3600.0);
                 }

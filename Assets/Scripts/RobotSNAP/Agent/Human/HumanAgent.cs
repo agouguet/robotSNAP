@@ -26,6 +26,7 @@ namespace RobotSNAP.Agents
         public HumanManager humanManager;
         private HumanMovement _movement;
         private Animator _animator;
+        private Supervisor _supervisor;
         private bool _wasPlaying = true;
         private bool _wasPaused;
 
@@ -44,6 +45,7 @@ namespace RobotSNAP.Agents
         // ==================== Unity Lifecycle ====================
         private void Awake()
         {
+            _supervisor = Supervisor.Instance;
             InitializeComponents();
             InitializeAvatar();
             InitializeAnimator();
@@ -56,7 +58,7 @@ namespace RobotSNAP.Agents
 
         private void Update()
         {
-            bool isPaused = Supervisor.Instance != null && Supervisor.Instance.IsPaused;
+            bool isPaused = (_supervisor ??= Supervisor.Instance) != null && _supervisor.IsPaused;
 
             // Déléguer la pause au mouvement
             if (_movement != null)

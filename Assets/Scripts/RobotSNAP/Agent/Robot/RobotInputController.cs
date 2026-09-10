@@ -28,9 +28,10 @@ namespace RobotSNAP
 
         [Header("Debug")]
         [SerializeField] private bool showDebugInfo = false;
+        [SerializeField] private EnvROS _envROS;
+        [SerializeField] private Supervisor _supervisor;
 
         private Robot _robot;
-        private EnvROS _envROS;
         private bool _isRosSubscribed;
         private string _fullCmdVelTopic;
         private float _lastRosCommandTime;
@@ -47,7 +48,8 @@ namespace RobotSNAP
         {
             _robot = GetComponent<Robot>();
             if (_robot == null) { Debug.LogError("Robot component missing"); enabled = false; return; }
-            _envROS = FindObjectOfType<EnvROS>();
+            _supervisor ??= Supervisor.Instance;
+            _envROS ??= FindFirstObjectByType<EnvROS>();
             if (_envROS != null && (controlMode == ControlMode.ROS || controlMode == ControlMode.Hybrid))
                 SubscribeToROS();
         }
@@ -57,7 +59,7 @@ namespace RobotSNAP
             if (Input.GetKeyDown(toggleModeKey)) ToggleControlMode();
 
             // --- Gestion de la pause ---
-            bool isPaused = Supervisor.Instance != null && Supervisor.Instance.IsPaused;
+            bool isPaused = (_supervisor ??= Supervisor.Instance) != null && _supervisor.IsPaused;
 
             if (isPaused && !_wasPaused)
             {
@@ -83,7 +85,7 @@ namespace RobotSNAP
         private void FixedUpdate()
         {
             // Si en pause, on n'envoie aucune commande (les roues sont déjà à l'arrêt)
-            if (Supervisor.Instance != null && Supervisor.Instance.IsPaused)
+            if ((_supervisor ??= Supervisor.Instance) != null && _supervisor.IsPaused)
                 return;
 
             if (controlMode == ControlMode.Scenario) return;

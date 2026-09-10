@@ -34,7 +34,7 @@ namespace RobotSNAP.ROS
             PoseWithCovarianceStamped
         }
         
-        private EnvROS _envROS;
+        [SerializeField] private EnvROS _envROS;
         private string _fullTopicName;
         private float _publishInterval;
         private float _timeElapsed;
@@ -52,7 +52,7 @@ namespace RobotSNAP.ROS
         private void Start()
         {
             // Find EnvROS
-            _envROS = FindObjectOfType<EnvROS>();
+            _envROS ??= FindFirstObjectByType<EnvROS>();
             
             if (_envROS == null)
             {

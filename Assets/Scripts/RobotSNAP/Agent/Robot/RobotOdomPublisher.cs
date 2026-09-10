@@ -25,7 +25,7 @@ namespace RobotSNAP
         [Header("Covariance")]
         [SerializeField] private bool publishCovariance = true;
         
-        private EnvROS _envROS;
+        [SerializeField] private EnvROS _envROS;
         private Robot _robot;
         private string _fullTopicName;
         private float _publishInterval;
@@ -47,7 +47,7 @@ namespace RobotSNAP
                 return;
             }
             
-            _envROS = FindObjectOfType<EnvROS>();
+            _envROS ??= FindFirstObjectByType<EnvROS>();
             if (_envROS == null)
             {
                 Debug.LogWarning($"[{name}] EnvROS not found, odometry will not be published");

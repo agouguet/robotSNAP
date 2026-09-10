@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
+using RobotSNAP.CameraControl;
 using RobotSNAP.Agents;
 
 namespace RobotSNAP.UI

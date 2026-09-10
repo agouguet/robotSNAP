@@ -1066,6 +1066,10 @@ GameObject:
   - component: {fileID: 8878364609966836849}
   - component: {fileID: 2571505666387711928}
   - component: {fileID: 4594298536105583392}
+  - component: {fileID: 375755689732168270}
+  - component: {fileID: 6025281825966062069}
+  - component: {fileID: 415146196078287761}
+  - component: {fileID: 6813415910682507110}
   m_Layer: 8
   m_Name: base_scan
   m_TagString: Untagged
@@ -1081,8 +1085,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3179440118466587603}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -1, w: -0.00000004371139}
-  m_LocalPosition: {x: 0, y: 0.2878, z: 0}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0.29, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1113,8 +1117,8 @@ ArticulationBody:
   m_Enabled: 1
   serializedVersion: 6
   m_Mass: 0.008336346
-  m_ParentAnchorPosition: {x: 0, y: 0.2878, z: 0}
-  m_ParentAnchorRotation: {x: 0, y: 0, z: -0.7071069, w: 0.70710677}
+  m_ParentAnchorPosition: {x: 0, y: 0.29, z: 0}
+  m_ParentAnchorRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
   m_AnchorPosition: {x: 0, y: 0, z: 0}
   m_AnchorRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
   m_MatchAnchors: 1
@@ -1203,6 +1207,100 @@ MonoBehaviour:
   jointName: freight/laser_joint
   EffortLimit: 1000
   VelocityLimit: 1000
+--- !u!114 &375755689732168270
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3179440118466587603}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aef7096f694188b87861622fbc27a932, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.AgentDetector
+  radius: 10
+  angle: 360
+  targetTag: Agent
+  targetTags:
+  - Agent
+  targetMask:
+    serializedVersion: 2
+    m_Bits: 256
+  obstructionMask:
+    serializedVersion: 2
+    m_Bits: 4736
+  updateInterval: 0.2
+  autoStart: 1
+  showGizmos: 1
+  logDetections: 1
+--- !u!114 &6025281825966062069
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3179440118466587603}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 101c3755bb9e6eb8bb1c10434a9adbd7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.AgentDetectorROS
+  autoDetectPrefix: 1
+  customPrefix: 
+  localAgentsTopic: /agents
+  globalAgentsTopic: /agents/global
+  poseArrayTopic: /agents/pose
+  publishFrequencyHz: 10
+  numberOfClosestAgents: 5
+  frameId: base_link
+  logPublishEvents: 1
+--- !u!114 &415146196078287761
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3179440118466587603}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ad5ad5899685b02e8b50a79e102f3cd9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.RaycastLaserScanner
+  detectableLayers:
+    serializedVersion: 2
+    m_Bits: 896
+  samples: 180
+  update_rate: 1800
+  angle_min: 0
+  angle_max: 6.28
+  angle_increment: 0.0349066
+  time_increment: 0
+  scan_time: 0
+  range_min: 0.12
+  range_max: 3.5
+  default_value: 0
+  laserHeight: 0.5
+  gizmo: 1
+  visualizerEnabled: 0
+--- !u!114 &6813415910682507110
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3179440118466587603}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc8f24e7a721fb28ba3676031bfa0b1f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.LaserScanPublisher
+  autoDetectPrefix: 1
+  customPrefix: 
+  laserTopic: /scan
+  publishFrequencyHz: 20
+  frameId: laser
+  logPublishEvents: 0
 --- !u!1 &3239410436682377487
 GameObject:
   m_ObjectHideFlags: 0
@@ -2551,7 +2649,7 @@ MonoBehaviour:
   autoDetectPrefix: 1
   customPrefix: 
   topicName: /robot_pose
-  publishFrequencyHz: 5
+  publishFrequencyHz: 20
   messageType: 2
   sourceTransform: {fileID: 2134897379475526177}
   useLocalPosition: 0

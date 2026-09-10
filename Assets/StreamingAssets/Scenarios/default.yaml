@@ -14,7 +14,7 @@ simulation:
   max_humans: 50
 
 points:
-  start_robot: {x: 9, y: 0, z: 0, yaw: -90}
+  start_robot: {x: 0, y: 0, z: 0, yaw: -90}
   end_robot: {x: 0, y: 0, z: -9}
   spawn_zone:
     center: {x: 0, y: 0, z: -9}
@@ -34,11 +34,11 @@ humans:
   - id: "pedestrians"
     count: 1
     spawn:
-      type: "random"
-      ref: "spawn_zone"
+      type: "point"
+      position: {x: 9, y: 0, z: 0}
     goal:
       type: "point"
-      ref: "end_zone"
+      position: {x: 9, y: 0, z: 0}
     behavior: "normal"
     speed: 1.0
     movement_controller:
@@ -48,7 +48,7 @@ humans:
     count: 1
     spawn:
       type: "point"
-      position: {x: 0, y: 0, z: 0}
+      position: {x: 0, y: 0, z: -9}
     goal:
       type: "point"
       position: {x: 0, y: 0, z: -9}

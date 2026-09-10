@@ -38,6 +38,16 @@ namespace RobotSNAP.ROS
         private string _fullTopicName;
         private float _publishInterval;
         private float _timeElapsed;
+
+        public GenericPosePublisher(MessageType messageType, string topicName, float publishFrequencyHz, Transform sourceTransform, bool useLocalPosition, string frameId)
+        {
+            this.messageType = messageType;
+            this.topicName = topicName;
+            this.publishFrequencyHz = publishFrequencyHz;
+            this.sourceTransform = sourceTransform;
+            this.useLocalPosition = useLocalPosition;
+            this.frameId = frameId;
+        }
         
         private void Start()
         {

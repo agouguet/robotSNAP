@@ -97,7 +97,6 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2 desiredDir = toGoal / distToGoal;
 
             float desiredSpeed = _desiredSpeed;
-            Debug.Log($"[SFMController] Desired speed before slowdown: {desiredSpeed}, distance to goal: {distToGoal}");
             if (distToGoal < _slowDownDistance)
             {
                 float t = distToGoal / _slowDownDistance;
@@ -224,8 +223,6 @@ namespace RobotSNAP.Agents.Movement.Controllers
 
             if (newVelocity.sqrMagnitude < 0.0001f)
                 newVelocity = Vector2.zero;
-
-            Debug.Log($"Attraction: {attractionAccel}, Social: {socialAccel}, Contact: {contactAccel}, Obstacle: {obstacleAccel}, Damp: {dampAccel}");
 
             return newVelocity;
         }

@@ -1,16 +1,17 @@
 using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
 using Unity.Robotics.ROSTCPConnector.ROSGeometry;
+using RosMessageTypes.Std;
 using RosMessageTypes.Geometry;
-using RosMessageTypes.Agents;
 using RobotSNAP.ROS;
+using Newtonsoft.Json;
 
 namespace RobotSNAP
 {
     /// <summary>
-    /// ROS bridge for AgentDetector - publishes detection results to ROS topics.
-    /// This is the only ROS-dependent component for agent detection.
+    /// ROS bridge for AgentDetector - publishes detection results as JSON strings
+    /// on std_msgs/String topics, and PoseArray for poses.
+    /// No custom ROS messages are used.
     /// </summary>
     [RequireComponent(typeof(AgentDetector))]
     public class AgentDetectorROS : MonoBehaviour
@@ -42,25 +43,16 @@ namespace RobotSNAP
         
         #region Unity Lifecycle
         
-        private void Start()
-        {
-            Initialize();
-        }
+        private void Start() => Initialize();
         
         private void Update()
         {
             if (_envROS == null || !_envROS.IsInitialized) return;
-            
             if (Time.time >= _lastPublishTime + _publishInterval)
             {
                 PublishAll();
                 _lastPublishTime = Time.time;
             }
-        }
-        
-        private void OnDestroy()
-        {
-            // Cleanup
         }
         
         #endregion
@@ -69,7 +61,6 @@ namespace RobotSNAP
         
         public void Initialize()
         {
-            // Get detector reference
             _detector = GetComponent<AgentDetector>();
             if (_detector == null)
             {
@@ -78,9 +69,7 @@ namespace RobotSNAP
                 return;
             }
             
-            // Find EnvROS
             _envROS = FindObjectOfType<EnvROS>();
-            
             if (_envROS == null)
             {
                 Debug.LogWarning($"[{name}] EnvROS not found, will not publish");
@@ -88,32 +77,20 @@ namespace RobotSNAP
                 return;
             }
             
-            // Get prefix
-            string prefix = "";
-            if (autoDetectPrefix && _envROS != null)
-            {
-                prefix = _envROS.Prefix;
-            }
-            else if (!string.IsNullOrEmpty(customPrefix))
-            {
-                prefix = customPrefix;
-            }
-            
-            // Build topic names
+            string prefix = autoDetectPrefix ? _envROS.Prefix : customPrefix;
             _fullLocalTopic = string.IsNullOrEmpty(prefix) ? localAgentsTopic : $"/{prefix}{localAgentsTopic}";
             _fullGlobalTopic = string.IsNullOrEmpty(prefix) ? globalAgentsTopic : $"/{prefix}{globalAgentsTopic}";
             _fullPoseArrayTopic = string.IsNullOrEmpty(prefix) ? poseArrayTopic : $"/{prefix}{poseArrayTopic}";
             
-            // Register publishers
-            _envROS.RegisterPublisher<AgentArrayMsg>(_fullLocalTopic);
-            _envROS.RegisterPublisher<AgentArrayMsg>(_fullGlobalTopic);
+            _envROS.RegisterPublisher<StringMsg>(_fullLocalTopic);
+            _envROS.RegisterPublisher<StringMsg>(_fullGlobalTopic);
             _envROS.RegisterPublisher<PoseArrayMsg>(_fullPoseArrayTopic);
             
             _publishInterval = 1f / publishFrequencyHz;
             
             if (logPublishEvents)
             {
-                Debug.Log($"[{name}] Publishing to:\n" +
+                Debug.Log($"[{name}] Publishing JSON strings to:\n" +
                           $"  Local: {_fullLocalTopic}\n" +
                           $"  Global: {_fullGlobalTopic}\n" +
                           $"  PoseArray: {_fullPoseArrayTopic}\n" +
@@ -130,59 +107,81 @@ namespace RobotSNAP
             if (_detector == null) return;
             
             var closestAgents = _detector.GetClosestAgents(numberOfClosestAgents);
+            Debug.Log($"[{name}] Publishing {closestAgents.Count} closest agents and {_detector.AgentsView.Count} total agents");
             var allAgents = GetVisibleAgentsWithStatus();
             
-            PublishLocalAgents(closestAgents);
-            PublishGlobalAgents(allAgents);
+            PublishLocalAgentsAsJson(closestAgents);
+            PublishGlobalAgentsAsJson(allAgents);
             PublishPoseArray(closestAgents);
         }
         
-        private void PublishLocalAgents(List<GameObject> agents)
+        private void PublishLocalAgentsAsJson(List<GameObject> agents)
         {
-            var message = new AgentArrayMsg();
-            message.header.frame_id = GetFullFrameId();
-            ROSTimeUtils.UpdateHeader(message.header);
-            
-            message.agents = new AgentMsg[agents.Count];
-            
-            for (int i = 0; i < agents.Count; i++)
+            var jsonArray = new List<string>();
+            foreach (var agent in agents)
             {
-                var agent = agents[i];
                 if (agent == null) continue;
-                
-                message.agents[i] = CreateAgentMessage(agent, i, true);
+                jsonArray.Add(SerializeAgentToJson(agent, visible: true));
             }
-            
-            _envROS.Publish(_fullLocalTopic, message);
-            
-            if (logPublishEvents)
-            {
-                Debug.Log($"[{name}] Published {agents.Count} local agents");
-            }
+            PublishJsonArray(_fullLocalTopic, jsonArray);
         }
         
-        private void PublishGlobalAgents(List<(GameObject agent, bool visible)> agents)
+        private void PublishGlobalAgentsAsJson(List<(GameObject agent, bool visible)> agentsWithStatus)
         {
-            var message = new AgentArrayMsg();
-            message.header.frame_id = GetFullFrameId();
-            // Supervisor.Instance.clock.UpdateMHeader(message.header);
-            ROSTimeUtils.UpdateHeader(message.header);
-            
-            message.agents = new AgentMsg[agents.Count];
-            
-            for (int i = 0; i < agents.Count; i++)
+            var jsonArray = new List<string>();
+            foreach (var (agent, visible) in agentsWithStatus)
             {
-                var (agent, visible) = agents[i];
                 if (agent == null) continue;
-                
-                message.agents[i] = CreateAgentMessage(agent, i, visible);
+                jsonArray.Add(SerializeAgentToJson(agent, visible));
             }
+            PublishJsonArray(_fullGlobalTopic, jsonArray);
+        }
+        
+        private string SerializeAgentToJson(GameObject agent, bool visible)
+        {
+            // Position relative
+            Vector3 relPos = transform.InverseTransformPoint(agent.transform.position);
+            var fluPos = relPos.To<FLU>();     // type: Vector3<FLU>
             
-            _envROS.Publish(_fullGlobalTopic, message);
+            // Vélocité relative
+            Vector3 relVel = Vector3.zero;
+            var rb = agent.GetComponent<Rigidbody>();
+            if (rb != null)
+                relVel = transform.InverseTransformDirection(rb.linearVelocity);
+            var fluVel = relVel.To<FLU>();     // type: Vector3<FLU>
+            
+            string id = agent.GetInstanceID().ToString();
+            
+            var jsonObj = new Dictionary<string, object>
+            {
+                ["id"] = id,
+                ["visible"] = visible,
+                ["position"] = new Dictionary<string, float>
+                {
+                    ["x"] = fluPos.x,
+                    ["y"] = fluPos.y,
+                    ["z"] = fluPos.z
+                },
+                ["velocity"] = new Dictionary<string, float>
+                {
+                    ["x"] = fluVel.x,
+                    ["y"] = fluVel.y,
+                    ["z"] = fluVel.z
+                }
+            };
+            
+            return JsonConvert.SerializeObject(jsonObj);
+        }
+        
+        private void PublishJsonArray(string topic, List<string> jsonObjects)
+        {
+            string jsonString = "[" + string.Join(",", jsonObjects) + "]";
+            var msg = new StringMsg { data = jsonString };
+            _envROS.Publish(topic, msg);
             
             if (logPublishEvents)
             {
-                Debug.Log($"[{name}] Published {agents.Count} global agents");
+                Debug.Log($"[{name}] Published {jsonObjects.Count} agents as JSON on {topic}");
             }
         }
         
@@ -199,71 +198,35 @@ namespace RobotSNAP
                 var agent = agents[i];
                 if (agent == null) continue;
                 
-                // Relative position and rotation
-                Vector3 relativePosition = transform.InverseTransformPoint(agent.transform.position);
-                Quaternion relativeRotation = Quaternion.Inverse(transform.rotation) * agent.transform.rotation;
+                Vector3 relPos = transform.InverseTransformPoint(agent.transform.position);
+                Quaternion relRot = Quaternion.Inverse(transform.rotation) * agent.transform.rotation;
                 
                 poseArray.poses[i] = new PoseMsg
                 {
-                    position = relativePosition.To<FLU>(),
-                    orientation = relativeRotation.To<FLU>()
+                    position = relPos.To<FLU>(),
+                    orientation = relRot.To<FLU>()
                 };
             }
             
             _envROS.Publish(_fullPoseArrayTopic, poseArray);
         }
         
-        private AgentMsg CreateAgentMessage(GameObject agent, int id, bool isVisible)
-        {
-            var msg = new AgentMsg
-            {
-                id = (ulong)id,
-                visible_by_robot = isVisible
-            };
-            
-            // Relative position
-            Vector3 relativePosition = transform.InverseTransformPoint(agent.transform.position);
-            Quaternion relativeRotation = Quaternion.Inverse(transform.rotation) * agent.transform.rotation;
-            
-            msg.pose = new PoseMsg
-            {
-                position = relativePosition.To<FLU>(),
-                orientation = relativeRotation.To<FLU>()
-            };
-            
-            // Velocity
-            var rb = agent.GetComponent<Rigidbody>();
-            if (rb != null)
-            {
-                Vector3 relativeVelocity = transform.InverseTransformDirection(rb.linearVelocity);
-                msg.velocity = new TwistMsg
-                {
-                    linear = relativeVelocity.To<FLU>(),
-                    angular = new Vector3Msg { x = 0, y = 0, z = 0 }
-                };
-            }
-            
-            return msg;
-        }
-        
         private List<(GameObject agent, bool visible)> GetVisibleAgentsWithStatus()
         {
             var result = new List<(GameObject, bool)>();
+            if (_detector.AgentsView == null) return result;
             
             foreach (var kvp in _detector.AgentsView)
             {
                 if (kvp.Key != null && kvp.Key.activeSelf)
-                {
                     result.Add((kvp.Key, kvp.Value));
-                }
             }
-            
             return result;
         }
         
         private string GetFullFrameId()
         {
-            string prefix = autoDetectPrefix && _envROS != null ? _envROS.Prefix : customPrefix;
+            string prefix = autoDetectPrefix ? _envROS.Prefix : customPrefix;
             return string.IsNullOrEmpty(prefix) ? frameId : $"/{prefix}{frameId}";
         }
         
@@ -272,11 +235,7 @@ namespace RobotSNAP
         #region Editor Utilities
         
         [ContextMenu("Force Publish")]
-        private void EditorForcePublish()
-        {
-            PublishAll();
-            Debug.Log($"[{name}] Force published all topics");
-        }
+        private void EditorForcePublish() => PublishAll();
         
         [ContextMenu("Log Configuration")]
         private void EditorLogConfiguration()

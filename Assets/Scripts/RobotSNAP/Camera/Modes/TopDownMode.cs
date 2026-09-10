@@ -36,7 +36,7 @@ namespace RobotSNAP.CameraControl
             }
 
             controller.mainCamera.transform.position = _targetPosition;
-            controller.mainCamera.transform.rotation = Quaternion.Euler(90, 0, 0);
+            controller.mainCamera.transform.rotation = Quaternion.Euler(90, 180, 0);
         }
 
         public void Update(CameraController controller, float deltaTime)
@@ -120,7 +120,7 @@ namespace RobotSNAP.CameraControl
                 Vector3 delta = Input.mousePosition - _lastMousePosition;
                 _lastMousePosition = Input.mousePosition;
                 float speedFactor = _currentZoom * 0.01f;
-                Vector3 move = new Vector3(-delta.x * speedFactor, 0, -delta.y * speedFactor);
+                Vector3 move = new Vector3(delta.x * speedFactor, 0, delta.y * speedFactor);
                 _targetPosition += move;
             }
 

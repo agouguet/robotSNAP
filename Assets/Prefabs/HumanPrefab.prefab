@@ -12,7 +12,8 @@ GameObject:
   - component: {fileID: -8855907026714174209}
   - component: {fileID: 5597565183493263474}
   - component: {fileID: 4064441718572326281}
-  m_Layer: 0
+  - component: {fileID: 627370981214018775}
+  m_Layer: 8
   m_Name: HumanPrefab
   m_TagString: Agent
   m_Icon: {fileID: 0}
@@ -111,3 +112,23 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &627370981214018775
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1779652455186312154}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9979b5fcbd7bf415e869fca0c59e8836, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.ROS.GenericPosePublisher
+  autoDetectPrefix: 1
+  customPrefix: 
+  topicName: /human_pose
+  publishFrequencyHz: 20
+  messageType: 1
+  sourceTransform: {fileID: 7702875534212402611}
+  useLocalPosition: 0
+  frameId: 

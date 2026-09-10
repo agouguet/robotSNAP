@@ -79,7 +79,7 @@
 /* ===== STATUS BAR ===== */
 .status-bar {
     background-color: var(--bg-secondary);
-    border-top: 1px solid var(--border-color);
+    /* border-top: 1px solid var(--border-color); */
     height: 28px;
     flex-shrink: 0;
     flex-direction: row;

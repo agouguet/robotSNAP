@@ -290,7 +290,8 @@ namespace RobotSNAP.Core.Scenario
         {
             var robotComp = _gameManager.GetComponentInChildren<Robot>();
             if (robotComp != null) return robotComp.gameObject;
-            return GameObject.FindGameObjectWithTag("Robot");
+            return null;
+            // return GameObject.FindGameObjectWithTag("Robot");
         }
 
         private void SetRobotGoal(GameObject robot, Vector3 goal)
@@ -317,6 +318,7 @@ namespace RobotSNAP.Core.Scenario
 
         private IEnumerator SetupHumans()
         {
+            Debug.Log($"[ScenarioApplier] Setting up humans for scenario: {_currentScenario.Name}");
             if (_currentScenario.Humans == null || _currentScenario.Humans.Count == 0)
             {
                 if (_logEvents) Debug.Log("[ScenarioApplier] No humans to spawn");
@@ -367,6 +369,16 @@ namespace RobotSNAP.Core.Scenario
                     }
                     humanIndex++;
                 }
+            }
+
+            var robot = FindRobot();
+            if (robot != null)
+            {
+                var robotComp = robot.GetComponent<Robot>();
+                if (robotComp != null){
+                    robotComp.GetAgentDetector().SetAgentPool(poolManager.GetPoolParent().gameObject);
+                }
+
             }
 
             if (_logEvents) Debug.Log($"[ScenarioApplier] Configured {humanIndex} humans");

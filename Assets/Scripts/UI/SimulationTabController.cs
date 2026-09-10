@@ -75,7 +75,7 @@ public class SimulationTabController : MonoBehaviour
         _pauseResumeButton = _root.Q<Button>("PauseResumeButton");
         _cameraOverlay = _root.Q<VisualElement>("CameraOverlay");
 
-        if (_viewButton == null || _viewMenu == null || _fullscreenButton == null ||
+        if (_viewButton == null || _viewMenu == null ||
             _startStopButton == null || _pauseResumeButton == null)
         {
             Debug.LogWarning("SimulationTabController: certains éléments UI sont manquants.");
@@ -141,7 +141,8 @@ public class SimulationTabController : MonoBehaviour
         });
 
         // === Plein écran ===
-        _fullscreenButton.clicked += ToggleFullscreen;
+        if (_fullscreenButton != null)
+            _fullscreenButton.clicked += ToggleFullscreen;
 
         // === Load Scenario ===
         _loadScenarioButton.clicked += OnLoadScenarioClicked;
@@ -197,8 +198,8 @@ public class SimulationTabController : MonoBehaviour
                 bottom = 8
             }
         };
-        _minimapRenderer.AddToClassList("minimap-image");
-        minimapContainer.Add(_minimapRenderer);
+        // _minimapRenderer.AddToClassList("minimap-image");
+        // minimapContainer.Add(_minimapRenderer);
 
         // Configurer la caméra de minicarte
         if (minimapCamera != null)
@@ -206,7 +207,7 @@ public class SimulationTabController : MonoBehaviour
             minimapCamera.targetTexture = minimapRenderTexture;
             minimapCamera.orthographic = true;
             minimapCamera.orthographicSize = 15f; // Ajustez
-            minimapCamera.transform.rotation = Quaternion.Euler(90, 0, 0);
+            minimapCamera.transform.rotation = Quaternion.Euler(90, 180, 0);
         }
     }
 

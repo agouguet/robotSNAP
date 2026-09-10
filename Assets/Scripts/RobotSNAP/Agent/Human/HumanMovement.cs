@@ -35,7 +35,7 @@ namespace RobotSNAP.Agents
         private Vector2 _currentGoalPoint;
 
         // State
-        private Vector2 _currentVelocity;   // Vitesse actuelle (stockée)
+        private Vector2 _currentVelocity;
         private Vector2 _currentPosition;
         private bool _isPlaying = true;
         private MovementControllerType _currentControllerType;
@@ -47,9 +47,6 @@ namespace RobotSNAP.Agents
         // Obstacles
         private readonly List<Vector2> _tempObstacles = new List<Vector2>();
 
-        // Caches
-        private Collider[] _overlapCache = new Collider[50];
-
         // Public properties
         public bool IsPlaying => _isPlaying;
         public Vector2 CurrentVelocity => _currentVelocity;
@@ -60,7 +57,6 @@ namespace RobotSNAP.Agents
         private void Awake()
         {
             InitializeComponents();
-            _currentVelocity = Vector2.zero; // Initialisation
         }
 
         private void FixedUpdate()
@@ -78,16 +74,18 @@ namespace RobotSNAP.Agents
             _rb = GetComponent<Rigidbody>();
             if (_rb == null) _rb = gameObject.AddComponent<Rigidbody>();
             _rb.useGravity = false;
+            _rb.isKinematic = false;                 // Pour utiliser linearVelocity
             _rb.constraints = RigidbodyConstraints.FreezeRotationX |
                               RigidbodyConstraints.FreezeRotationZ |
                               RigidbodyConstraints.FreezePositionY;
             _rb.linearDamping = 0f;
             _rb.angularDamping = 0f;
-            _rb.isKinematic = true; // On utilise MovePosition, donc cinématique
+            _rb.interpolation = RigidbodyInterpolation.None;
 
             _navMeshPath = new NavMeshPath();
             _pathCorners = new Vector3[0];
             SetupCollider();
+            _currentVelocity = Vector2.zero;
         }
 
         private void SetupCollider()
@@ -172,13 +170,9 @@ namespace RobotSNAP.Agents
         {
             _currentPosition = new Vector2(transform.position.x, transform.position.z);
 
-            // 1. Update HumanManager (position et vitesse stockée)
-            _humanManager?.UpdateAgent(_agentId, _currentPosition, _currentVelocity);
-
-            // 2. NavMesh path
             UpdateNavMeshPath();
 
-            // 3. Get neighbors
+            // Récupération des voisins
             _neighborPositions.Clear();
             _neighborVelocities.Clear();
             if (_humanManager != null)
@@ -192,7 +186,7 @@ namespace RobotSNAP.Agents
                 );
             }
 
-            // 4. Detect static obstacles (SphereCast)
+            // Détection des obstacles statiques (SphereCast)
             _tempObstacles.Clear();
             int layerMask = 1 << LayerMask.NameToLayer("Obstacle");
             float sphereRadius = _config.agentRadius * _sphereCastRadiusScale;
@@ -220,10 +214,10 @@ namespace RobotSNAP.Agents
                 CastAndAdd(Quaternion.AngleAxis(-angle, Vector3.up) * forward);
             }
 
-            // 5. Compute desired velocity via controller
+            // Calcul de la nouvelle vitesse via le contrôleur
             Vector2 desiredVelocity = _controller.ComputeVelocity(
                 _currentPosition,
-                _currentVelocity,          // On passe la vitesse stockée
+                _currentVelocity,
                 _currentGoalPoint,
                 _neighborPositions.ToArray(),
                 _neighborVelocities.ToArray(),
@@ -231,26 +225,25 @@ namespace RobotSNAP.Agents
                 Time.fixedDeltaTime
             );
 
-            // 6. Apply movement using MovePosition
+            // Application de la vélocité via le Rigidbody
             Vector3 finalVelocity3D = new Vector3(desiredVelocity.x, 0, desiredVelocity.y);
             float maxSpeed = _config != null ? _config.maxSpeed : _maxSpeed;
             if (finalVelocity3D.sqrMagnitude > maxSpeed * maxSpeed)
                 finalVelocity3D = finalVelocity3D.normalized * maxSpeed;
 
-            Vector3 newPosition = _rb.position + finalVelocity3D * Time.fixedDeltaTime;
-            _rb.MovePosition(newPosition);
+            _rb.linearVelocity = finalVelocity3D;
 
-            // 7. Update stored velocity with the actually applied velocity
+            // Mise à jour de notre vélocité stockée (pour l'animation, etc.)
             _currentVelocity = new Vector2(finalVelocity3D.x, finalVelocity3D.z);
 
-            // 8. Rotation
+            // Rotation via MoveRotation (pour éviter les conflits)
             UpdateRotation(desiredVelocity);
 
-            // 9. Transmit velocity to the agent for animation and external use
-            _avatar?.SetVelocity(finalVelocity3D);
-
-            // 10. Update HumanManager again (with new velocity)
+            // Mise à jour du HumanManager
             _humanManager?.UpdateAgent(_agentId, _currentPosition, _currentVelocity);
+
+            // Transmission de la vélocité réelle à l'agent (pour l'animation)
+            _avatar?.SetVelocity(finalVelocity3D);
         }
 
         #endregion
@@ -315,11 +308,13 @@ namespace RobotSNAP.Agents
             float angle = Mathf.Atan2(movementDirection.x, movementDirection.y) * Mathf.Rad2Deg;
             Quaternion targetRotation = Quaternion.Euler(0, angle, 0);
             float angularSpeed = _config != null ? _config.angularSpeed : _angularSpeed;
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation,
+
+            // Utiliser MoveRotation pour être cohérent avec la physique
+            _rb.MoveRotation(Quaternion.RotateTowards(
+                _rb.rotation,
                 targetRotation,
                 angularSpeed * Time.fixedDeltaTime
-            );
+            ));
         }
 
         #endregion
@@ -331,7 +326,7 @@ namespace RobotSNAP.Agents
             _isPlaying = playing;
             if (!_isPlaying)
             {
-                // On arrête le mouvement, mais on ne touche pas au Rigidbody (cinématique)
+                _rb.linearVelocity = Vector3.zero;
                 _currentVelocity = Vector2.zero;
                 _avatar?.SetVelocity(Vector3.zero);
             }
@@ -339,6 +334,7 @@ namespace RobotSNAP.Agents
 
         public void Stop()
         {
+            _rb.linearVelocity = Vector3.zero;
             _currentVelocity = Vector2.zero;
             _avatar?.SetVelocity(Vector3.zero);
         }
@@ -356,6 +352,7 @@ namespace RobotSNAP.Agents
         public void Reset()
         {
             _controller?.Reset();
+            _rb.linearVelocity = Vector3.zero;
             _currentVelocity = Vector2.zero;
             _avatar?.SetVelocity(Vector3.zero);
             _pathCorners = new Vector3[0];

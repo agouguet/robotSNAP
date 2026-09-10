@@ -61,8 +61,8 @@ MonoBehaviour:
   nextNavMinDistance: 0.3
   closeEnoughMinDistance: 0.2
   animationController: {fileID: 9100000, guid: d3b7ebf8605e64140b49960db196f694, type: 2}
-  animationSmoothing: 0.6
-  idleSpeedThreshold: 0.15
+  animationSmoothing: 0.1
+  idleSpeedThreshold: 0.05
   angularSpeed: 360
   showPredictionGizmos: 1
   predictionColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}

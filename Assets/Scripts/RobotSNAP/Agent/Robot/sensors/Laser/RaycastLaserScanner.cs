@@ -34,6 +34,10 @@ namespace RobotSNAP
         private float[] ranges;
         private float[] intensities;
 
+        public float[] Ranges => ranges;
+        public Vector3[] Directions => directions;
+        public Vector3 LaserOrigin => transform.position + Vector3.up * laserHeight;
+
         public void Start()
         {
             Init();
@@ -125,29 +129,40 @@ namespace RobotSNAP
         }
 
 #if UNITY_EDITOR
-        private void OnDrawGizmos()
+    private void OnDrawGizmos()
+    {
+        if (!gizmo || rays == null || ranges == null || directions == null)
+            return;
+
+        for (int i = 0; i < samples; i++)
         {
-            if (!gizmo || rays == null || ranges == null)
-                return;
+            Vector3 origin = transform.position + Vector3.up * laserHeight;
+            Vector3 direction = directions[i];
 
-            for (int i = 0; i < samples; i++)
+            // t va de 0 (premier laser) à 1 (dernier laser)
+            float t = (samples > 1) ? (float)i / (samples - 1) : 0f;
+
+            // Option 1 : dégradé Bleu -> Rouge
+            Color rayColor = Color.Lerp(Color.blue, Color.red, t);
+
+            // Option 2 : dégradé HSV (arc-en-ciel) - plus visuel
+            // Color rayColor = Color.HSVToRGB(t, 1f, 1f);
+
+            if (ranges[i] > 0f && ranges[i] <= range_max)
             {
-                Vector3 origin = transform.position + Vector3.up * laserHeight;
-                Vector3 direction = directions[i];
-
-                if (ranges[i] > 0f && ranges[i] <= range_max)
-                {
-                    Gizmos.color = Color.red;
-                    Gizmos.DrawLine(origin, origin + direction.normalized * ranges[i]);
-                    Gizmos.DrawSphere(origin + direction.normalized * ranges[i], 0.02f);
-                }
-                else
-                {
-                    Gizmos.color = new Color(1f, 1f, 1f, 0.2f);
-                    Gizmos.DrawLine(origin, origin + direction.normalized * range_max);
-                }
+                // Rayon qui touche : couleur pleine
+                Gizmos.color = rayColor;
+                Gizmos.DrawLine(origin, origin + direction.normalized * ranges[i]);
+                Gizmos.DrawSphere(origin + direction.normalized * ranges[i], 0.02f);
+            }
+            else
+            {
+                // Rayon qui ne touche rien : même couleur mais transparente
+                Gizmos.color = new Color(rayColor.r, rayColor.g, rayColor.b, 0.2f);
+                Gizmos.DrawLine(origin, origin + direction.normalized * range_max);
             }
         }
+    }
 #endif
     }
 }

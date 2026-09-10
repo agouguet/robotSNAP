@@ -25,6 +25,7 @@ namespace RobotSNAP.UI
         public Color robotPathColor = Color.green;
         public Color robotGoalColor = Color.yellow;
         public Color robotVelocityColor = Color.red;
+        public Color robotSensorRayColor = Color.magenta;
         
         [Header("Human Visualization")]
         public bool showHumanTrajectories = true;
@@ -198,9 +199,22 @@ namespace RobotSNAP.UI
             _laserScanRenderer.startWidth = 0.03f;
             _laserScanRenderer.endWidth = 0.03f;
             _laserScanRenderer.material = new Material(Shader.Find("Sprites/Default"));
-            _laserScanRenderer.startColor = Color.red;
-            _laserScanRenderer.endColor = Color.red;
-            _laserScanRenderer.loop = false;
+            Gradient gradient = new Gradient();
+            gradient.SetKeys(
+                new GradientColorKey[]
+                {
+                    new GradientColorKey(Color.blue,   0f),   // premier rayon
+                    new GradientColorKey(Color.green,  0.5f), // milieu
+                    new GradientColorKey(Color.red,    1f)    // dernier rayon
+                },
+                new GradientAlphaKey[]
+                {
+                    new GradientAlphaKey(1f, 0f),
+                    new GradientAlphaKey(1f, 1f)
+                }
+            );
+            _laserScanRenderer.colorGradient = gradient;
+            _laserScanRenderer.loop = true;
             _laserScanRenderer.useWorldSpace = true;
         }
         
@@ -641,7 +655,8 @@ namespace RobotSNAP.UI
         {
             if (_robotLaserScanner == null)
                 _robotLaserScanner = robot.GetComponentInChildren<RaycastLaserScanner>();
-            if (_robotLaserScanner == null || !_robotLaserScanner.isActiveAndEnabled)
+            if (_robotLaserScanner == null || !_robotLaserScanner.isActiveAndEnabled
+                || _robotLaserScanner.Ranges == null)
             {
                 _laserScanRenderer.enabled = false;
                 return;
@@ -651,20 +666,19 @@ namespace RobotSNAP.UI
             {
                 _lastLaserUpdateTime = Time.time;
                 _laserScanPoints.Clear();
-                Vector3 origin = robot.Position + Vector3.up * 0.2f;
-                _laserScanPoints.Add(origin);
 
-                int count = _robotLaserScanner.samples;
-                float angleStep = 360f / count;
-                for (int i = 0; i < count; i++)
+                Vector3 origin = _robotLaserScanner.LaserOrigin;
+                float[] ranges = _robotLaserScanner.Ranges;
+                Vector3[] dirs = _robotLaserScanner.Directions;
+
+                for (int i = 0; i < ranges.Length; i++)
                 {
-                    float angle = i * angleStep * Mathf.Deg2Rad;
-                    Vector3 dir = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle));
-                    if (Physics.Raycast(origin, dir, out RaycastHit hit, _robotLaserScanner.range_max))
-                        _laserScanPoints.Add(hit.point);
-                    else
-                        _laserScanPoints.Add(origin + dir * _robotLaserScanner.range_max);
+                    float r = ranges[i];
+                    if (float.IsInfinity(r) || r <= 0f)
+                        r = _robotLaserScanner.range_max; // pas de hit
+                    _laserScanPoints.Add(origin + dirs[i].normalized * r);
                 }
+
                 _laserScanRenderer.positionCount = _laserScanPoints.Count;
                 _laserScanRenderer.SetPositions(_laserScanPoints.ToArray());
             }

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: SimulationConfig
   m_EditorClassIdentifier: 
   _environmentCount: 1
-  _environmentSpacing: 100
+  _environmentSpacing: 1000
   _defaultScenario: default
   _scenariosFolder: Scenarios
   _startPaused: 1

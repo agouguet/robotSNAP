@@ -86,13 +86,6 @@ namespace RobotSNAP
                     EditorGUILayout.LabelField("Clock", "Not found");
                 }
                 
-                // Environment info
-                var spawnCoordinator = gameManager.GetComponent<SpawnCoordinator>();
-                if (spawnCoordinator != null)
-                {
-                    EditorGUILayout.LabelField("Environment", "Ready");
-                }
-                
                 EditorGUI.EndDisabledGroup();
             }
         }

@@ -12,6 +12,8 @@ namespace RobotSNAP.Core.Scenario
     /// </summary>
     public sealed class ScenarioManager : MonoBehaviour
     {
+        private Supervisor _supervisor;
+
         [Header("References")]
         [Tooltip("Prefab de l’environnement (contenant GameManager, etc.)")]
         [SerializeField] private GameObject _environmentPrefab;
@@ -206,6 +208,7 @@ namespace RobotSNAP.Core.Scenario
 
         private void EnsureDependencies()
         {
+            _supervisor = Supervisor.Instance;
             if (_scenarioLoader == null)
             {
                 _scenarioLoader = GetComponent<ScenarioLoader>();
@@ -325,7 +328,7 @@ namespace RobotSNAP.Core.Scenario
         private GameManager CreateEnvironment(int index)
         {
             if (_environmentPrefab == null) return null;
-            Vector3 position = new Vector3(index * 20f, 0, 0);
+            Vector3 position = new Vector3(index * _supervisor.ActiveConfig.EnvironmentSpacing, 0, 0);
             GameObject instance = Instantiate(_environmentPrefab, position, Quaternion.identity, transform);
             instance.name = $"Environment_{index}";
             var gm = instance.GetComponent<GameManager>();

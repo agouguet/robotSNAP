@@ -34,8 +34,10 @@
 }
 
 .view-dropdown-container {
-    top: 30px;
-    right: 30px;
+    top: 32px;
+    left: 32px;
+    position: absolute; 
+    pointer-events: auto;
 }
 
 .view-button {
@@ -65,6 +67,7 @@
     border-style: solid;
     border-color: var(--border-color);
     min-width: 64px;
+    max-width: 64px;
     z-index: 10;
     flex-direction: column;
 }
@@ -89,13 +92,15 @@
 }
 
 .minimap-container {
-    left: 30px;
-    bottom: 30px;
+    top: 32px;
+    right: 32px;
+    position: absolute; 
+    pointer-events: auto;
     width: 256px;
     height: 256px;
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: var(--panel-bg);
     border-radius: 12px;
-    border-width: 1px;
+    border-width: 4px;
     border-style: solid;
     border-color: var(--border-color);
     overflow: hidden;
@@ -107,13 +112,6 @@
     left: 8px;
     font-size: 10px;
     color: var(--text-secondary);
-}
-
-.minimap-image {
-    width: 240px;
-    height: 240px;
-    background-color: rgb(26, 42, 58);
-    border-radius: 8px;
 }
 
 .agent-focus-bar {

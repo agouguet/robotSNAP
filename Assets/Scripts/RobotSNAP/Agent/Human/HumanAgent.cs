@@ -28,15 +28,14 @@ namespace RobotSNAP.Agents
         private Animator _animator;
         private bool _wasPlaying = true;
         private bool _wasPaused;
-        private Rigidbody _rb;
 
-        // Propriétés héritées de BaseAgent (implémentation)
+        // Propriétés héritées de BaseAgent
         public override Vector3 Position => transform.position;
         public override Quaternion Rotation => transform.rotation;
         public override Vector3 Forward => transform.forward;
         public override Vector3 Velocity => currentVelocity3D;
 
-        // Propriétés supplémentaires pour IHumanController
+        // Propriétés pour IHumanController
         public bool HasDestination => hasDestination;
         public Vector3 CurrentGoal => _currentGoal;
         public float CurrentSpeed => _currentSpeed;
@@ -58,15 +57,14 @@ namespace RobotSNAP.Agents
         private void Update()
         {
             bool isPaused = Supervisor.Instance != null && Supervisor.Instance.IsPaused;
-            
+
             // Déléguer la pause au mouvement
             if (_movement != null)
                 _movement.SetPlaying(!isPaused);
 
             if (isPaused)
             {
-                if (_animator != null && _animator.speed != 0f)
-                    _animator.speed = 0f;
+                if (_animator != null) _animator.speed = 0f;
                 return;
             }
             else
@@ -75,14 +73,14 @@ namespace RobotSNAP.Agents
                     _animator.speed = 1f;
             }
 
-            // Mise à jour de l'animation (utilise currentVelocity3D)
+            // Mise à jour de l'animation
             UpdateAnimation();
         }
 
-        // FixedUpdate est vide, car le mouvement est géré par HumanMovement
+        // FixedUpdate est vide car tout le mouvement est géré par HumanMovement
         private void FixedUpdate()
         {
-            // Rien
+            // Ne rien faire ici
         }
 
         #region Initialization
@@ -93,19 +91,7 @@ namespace RobotSNAP.Agents
             if (_movement == null)
                 _movement = gameObject.AddComponent<HumanMovement>();
 
-            _rb = GetComponent<Rigidbody>();
-            if (_rb == null)
-            {
-                _rb = gameObject.AddComponent<Rigidbody>();
-                _rb.useGravity = false;
-                _rb.mass = 1f;
-                _rb.linearDamping = 0.5f;
-                _rb.isKinematic = true; // On laisse le mouvement gérer
-            }
-            else
-            {
-                _rb.isKinematic = true;
-            }
+            // Le Rigidbody est géré par HumanMovement, on ne le touche pas ici
         }
 
         private void InitializeAvatar()
@@ -183,7 +169,6 @@ namespace RobotSNAP.Agents
             hasDestination = false;
             currentVelocity3D = Vector3.zero;
             _movement?.Reset();
-            if (_rb != null) _rb.linearVelocity = Vector3.zero;
             if (_animator != null) _animator.Rebind();
         }
 
@@ -203,12 +188,7 @@ namespace RobotSNAP.Agents
         public Vector3 GetVelocity() => currentVelocity3D;
         public Vector3 GetCurrentPosition3D() => Position;
         public Vector2 GetCurrentPosition2D() => Position2D;
-        
-        // Cette méthode est appelée par HumanMovement pour transmettre la vitesse réelle
-        public void SetVelocity(Vector3 velocity)
-        {
-            currentVelocity3D = velocity;
-        }
+        public void SetVelocity(Vector3 velocity) => currentVelocity3D = velocity;
 
         #endregion
 
@@ -278,7 +258,7 @@ namespace RobotSNAP.Agents
         public void SetAgentName(string name) => agentName = name;
         public HumanMovement GetMovement() => _movement;
         public Animator GetAnimator() => _animator;
-        public Rigidbody GetRigidbody() => _rb;
+        public Rigidbody GetRigidbody() => null; // Plus utilisé, on retourne null
 
         #endregion
 

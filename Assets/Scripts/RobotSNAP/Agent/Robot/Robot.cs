@@ -27,10 +27,6 @@ namespace RobotSNAP.Agents
         public override Vector3 Velocity => _baseLinkArticulation != null ? _baseLinkArticulation.linearVelocity : Vector3.zero;
         public override float AngularSpeed => _baseLinkArticulation != null ? _baseLinkArticulation.angularVelocity.y : 0f;
 
-        // Propriétés de compatibilité
-        // public float CurrentLinearSpeed => wheelController != null ? wheelController.CurrentLinearSpeed : 0f;
-        // public float CurrentAngularSpeed => wheelController != null ? wheelController.CurrentAngularSpeed : 0f;
-        // public Vector3 CurrentGoal => Goal;
         public Transform RobotTransform => baseLink != null ? baseLink.transform : transform;
 
         // ==================== Unity Lifecycle ====================
@@ -79,6 +75,13 @@ namespace RobotSNAP.Agents
                     wheelController = GetComponentInChildren<ArticulationWheelController>();
                 if (wheelController == null)
                     Debug.LogWarning($"[Robot] No ArticulationWheelController found on {name}");
+            }
+
+            if (detector == null)
+            {
+                detector = GetComponentInChildren<AgentDetector>();
+                if (detector == null)
+                    Debug.LogWarning($"[Robot] No AgentDetector found on {name}");
             }
         }
 

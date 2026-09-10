@@ -112,6 +112,7 @@ namespace RobotSNAP
         {
             _agentPool = agentPool;
             RefreshAgentList();
+            Debug.Log($"[{name}] Agent pool set to: {_agentPool?.name ?? "null"}");
         }
         
         /// <summary>
@@ -120,7 +121,7 @@ namespace RobotSNAP
         public void RefreshAgentList()
         {
             ClearAllAgents();
-            
+            Debug.Log($"[{name}] Refreshing agent list from pool: {_agentPool?.name ?? "null"}");
             if (_agentPool == null) return;
             
             // Find all children with matching tags
@@ -251,6 +252,8 @@ namespace RobotSNAP
                     obstructionMask
                 );
                 
+                Debug.Log($"[{name}] Checking {target.name}: Distance={distanceToTarget:F2}, LOS={hasLineOfSight}");
+
                 if (hasLineOfSight && distanceToTarget <= radius)
                 {
                     _agentsView[target] = true;

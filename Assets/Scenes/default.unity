@@ -1457,7 +1457,7 @@ Camera:
   m_ShutterSpeed: 0.005
   m_Aperture: 16
   m_FocusDistance: 10
-  m_FocalLength: 50
+  m_FocalLength: 20.784609
   m_BladeCount: 5
   m_Curvature: {x: 2, y: 11}
   m_BarrelClipping: 0.25
@@ -1472,7 +1472,7 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 1000
-  field of view: 60
+  field of view: 60.000004
   orthographic: 1
   orthographic size: 15
   m_Depth: 0
@@ -1550,7 +1550,7 @@ MonoBehaviour:
       enableBigTilePrepass: 0
       isFptlEnabled: 0
   clearColorMode: 0
-  backgroundColorHDR: {r: 0.025, g: 0.07, b: 0.19, a: 0}
+  backgroundColorHDR: {r: 0.10906978, g: 0.11765849, b: 0.13913023, a: 1}
   clearDepth: 1
   volumeLayerMask:
     serializedVersion: 2
@@ -1637,13 +1637,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1361882083}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
+  m_LocalRotation: {x: 0, y: 0.7071068, z: -0.7071068, w: 0}
   m_LocalPosition: {x: 0, y: 5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1469723305}
-  m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 90, y: 180, z: 0}
 --- !u!1 &1469723304
 GameObject:
   m_ObjectHideFlags: 0
@@ -1706,6 +1706,7 @@ MonoBehaviour:
   robotPathColor: {r: 0, g: 1, b: 0, a: 1}
   robotGoalColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   robotVelocityColor: {r: 1, g: 0, b: 0, a: 1}
+  robotSensorRayColor: {r: 1, g: 0, b: 1, a: 1}
   showHumanTrajectories: 0
   showHumanGoals: 1
   showHumanVelocityVectors: 0
@@ -1946,7 +1947,7 @@ MonoBehaviour:
   simulationStartHour: 12
   _timeZoneId: Europe/Paris
   logTimeChanges: 0
-  editorTimeDisplay: 11:20:38
+  editorTimeDisplay: 15:01:47
 --- !u!4 &2049586426
 Transform:
   m_ObjectHideFlags: 0

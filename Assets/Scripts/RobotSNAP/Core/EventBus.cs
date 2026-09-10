@@ -5,7 +5,8 @@ using UnityEngine;
 namespace RobotSNAP.Core
 {
     /// <summary>
-    /// Bus d'événements global - Singleton thread-safe
+    /// Bus d'événements global. Les abonnements et publications sont sérialisés,
+    /// mais les handlers restent exécutés sur le thread appelant.
     /// </summary>
     public class EventBus : IEventBus
     {
@@ -24,47 +25,63 @@ namespace RobotSNAP.Core
         }
         
         private readonly Dictionary<Type, Delegate> _subscribers = new Dictionary<Type, Delegate>();
+        private readonly object _subscribersLock = new object();
         
         private EventBus() { }
         
         public void Publish<T>(T evt)
         {
             Type type = typeof(T);
-            if (_subscribers.TryGetValue(type, out Delegate handler))
+            Delegate handler;
+            lock (_subscribersLock)
             {
-                (handler as Action<T>)?.Invoke(evt);
+                _subscribers.TryGetValue(type, out handler);
             }
+
+            // Invoke outside the lock: handlers can safely subscribe/unsubscribe themselves.
+            (handler as Action<T>)?.Invoke(evt);
         }
         
         public void Subscribe<T>(Action<T> handler)
         {
+            if (handler == null) return;
             Type type = typeof(T);
-            if (_subscribers.ContainsKey(type))
+            lock (_subscribersLock)
             {
-                _subscribers[type] = Delegate.Combine(_subscribers[type], handler);
-            }
-            else
-            {
-                _subscribers[type] = handler;
+                if (_subscribers.ContainsKey(type))
+                {
+                    _subscribers[type] = Delegate.Combine(_subscribers[type], handler);
+                }
+                else
+                {
+                    _subscribers[type] = handler;
+                }
             }
         }
         
         public void Unsubscribe<T>(Action<T> handler)
         {
+            if (handler == null) return;
             Type type = typeof(T);
-            if (_subscribers.ContainsKey(type))
+            lock (_subscribersLock)
             {
-                _subscribers[type] = Delegate.Remove(_subscribers[type], handler);
-                if (_subscribers[type] == null)
+                if (_subscribers.ContainsKey(type))
                 {
-                    _subscribers.Remove(type);
+                    _subscribers[type] = Delegate.Remove(_subscribers[type], handler);
+                    if (_subscribers[type] == null)
+                    {
+                        _subscribers.Remove(type);
+                    }
                 }
             }
         }
         
         public void Clear()
         {
-            _subscribers.Clear();
+            lock (_subscribersLock)
+            {
+                _subscribers.Clear();
+            }
         }
     }
 }

@@ -39,8 +39,8 @@ namespace RobotSNAP.Core
         
         private void InitializePaths()
         {
-            // Chemin dans StreamingAssets pour les configs JSON
-            _streamingAssetsConfigPath = Path.Combine(Application.streamingAssetsPath, "Configs");
+            // Les données utilisateur doivent rester inscriptibles dans un build.
+            _streamingAssetsConfigPath = Path.Combine(Application.persistentDataPath, "Configs");
         }
         
         private void EnsureConfigsFolderExists()

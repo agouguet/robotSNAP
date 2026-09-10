@@ -181,7 +181,7 @@ namespace RobotSNAP
             var source = Application.isPlaying ? _runtimeConfig : _defaultConfig;
             if (source == null) return;
 
-            string fullPath = Path.Combine(Application.streamingAssetsPath, "Configs", fileName);
+            string fullPath = Path.Combine(Application.persistentDataPath, "Configs", fileName);
             if (!fullPath.EndsWith(".json")) fullPath += ".json";
 
             string directory = Path.GetDirectoryName(fullPath);
@@ -193,7 +193,7 @@ namespace RobotSNAP
 
         public bool LoadConfigFromJson(string fileName)
         {
-            string fullPath = Path.Combine(Application.streamingAssetsPath, "Configs", fileName);
+            string fullPath = Path.Combine(Application.persistentDataPath, "Configs", fileName);
             if (!fullPath.EndsWith(".json")) fullPath += ".json";
 
             if (!File.Exists(fullPath))
@@ -214,7 +214,7 @@ namespace RobotSNAP
         public List<string> GetAvailableConfigs()
         {
             List<string> configs = new List<string>();
-            string fullPath = Path.Combine(Application.streamingAssetsPath, "Configs");
+            string fullPath = Path.Combine(Application.persistentDataPath, "Configs");
             if (Directory.Exists(fullPath))
             {
                 foreach (var file in Directory.GetFiles(fullPath, "*.json"))

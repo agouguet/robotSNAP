@@ -14,7 +14,7 @@ public class ScenarioDataService : MonoBehaviour
     [SerializeField] private ScenarioManager _scenarioManager;
 
     [Header("Debug")]
-    [SerializeField] private bool _useDebugData = true;
+    [SerializeField] private bool _useDebugData = false;
 
     // Cache
     private Dictionary<string, ScenarioInfo> _scenarioDictionary = new();

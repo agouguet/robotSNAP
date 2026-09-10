@@ -205,9 +205,7 @@ namespace RobotSNAP.Core.Scenario
             var globalConfig = Supervisor.Instance?.ActiveConfig;
             if (globalConfig == null) return;
 
-            int seed = globalConfig.RandomSeed == -1 ? System.Environment.TickCount : globalConfig.RandomSeed;
-            UnityEngine.Random.InitState(seed);
-            Time.timeScale = globalConfig.TimeScale;
+            int seed = SimulationRuntimeSettings.Apply(globalConfig, System.Environment.TickCount);
 
             float duration = _currentScenario.Duration;
             if (duration > 0)

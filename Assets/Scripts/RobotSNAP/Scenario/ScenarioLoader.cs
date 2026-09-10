@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using VYaml.Serialization;
@@ -89,11 +91,10 @@ namespace RobotSNAP.Core.Scenario
                 return;
             }
 
-            string scenariosFolder = !string.IsNullOrEmpty(config.ScenariosFolder) ? config.ScenariosFolder : "Scenarios";
-            string mapsFolder = !string.IsNullOrEmpty(config.DatasetPath) ? config.DatasetPath : "Dataset";
-
-            _scenariosPath = Path.Combine(Application.streamingAssetsPath, scenariosFolder);
-            _mapsPath = Path.Combine(Application.streamingAssetsPath, mapsFolder);
+            (_scenariosPath, _mapsPath) = ScenarioPathResolver.ResolvePaths(
+                Application.streamingAssetsPath,
+                config.ScenariosFolder,
+                config.DatasetPath);
             Debug.Log($"[ScenarioLoader] Scenarios path set to: {_scenariosPath}");
 
             EnsureDirectoriesExist();
@@ -118,15 +119,7 @@ namespace RobotSNAP.Core.Scenario
 
         private string FindScenarioFile(string scenarioName)
         {
-            foreach (var ext in _validExtensions)
-            {
-                string path = Path.Combine(_scenariosPath, scenarioName + ext);
-                if (File.Exists(path))
-                {
-                    return path;
-                }
-            }
-            return null;
+            return ScenarioPathResolver.FindScenarioFile(_scenariosPath, scenarioName, _validExtensions);
         }
 
         private string FindMapFile(string mapName)

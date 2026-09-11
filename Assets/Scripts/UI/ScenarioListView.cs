@@ -61,7 +61,7 @@ public class ScenarioListView : VisualElement
         searchIcon.style.backgroundImage = new StyleBackground(Resources.Load<Texture2D>("Icons/search"));
         _searchField = new TextField();
         _searchField.AddToClassList("scenario-search-field");
-        _searchField.textEdition.placeholder = "Search a scenario...";
+        _searchField.textEdition.placeholder = "Search scenarios...";
         searchContainer.Add(searchIcon);
         searchContainer.Add(_searchField);
         toolbar.Add(searchContainer);
@@ -71,7 +71,7 @@ public class ScenarioListView : VisualElement
         filters.AddToClassList("scenario-filters");
         _filterDropdown = new DropdownField { choices = new List<string> { "All" }, value = "All" };
         _filterDropdown.AddToClassList("scenario-filter-dropdown");
-        _sortDropdown = new DropdownField { choices = new List<string> { "Name (A-Z)", "Name (Z-A)", "Date recent", "Date old" }, value = "Name (A-Z)" };
+        _sortDropdown = new DropdownField { choices = new List<string> { "Name (A-Z)", "Name (Z-A)", "Newest", "Oldest" }, value = "Name (A-Z)" };
         _sortDropdown.AddToClassList("scenario-sort-dropdown");
         filters.Add(_filterDropdown);
         filters.Add(_sortDropdown);
@@ -141,7 +141,7 @@ public class ScenarioListView : VisualElement
         }
 
         var scenarios = _dataService.GetFilteredAndSortedScenarios(filter, search, sort);
-        _countLabel.text = $"{scenarios.Count} scenario{(scenarios.Count > 1 ? "s" : "")}";
+        _countLabel.text = $"{scenarios.Count} scenario{(scenarios.Count == 1 ? "" : "s")}";
 
         if (scenarios.Count == 0)
         {
@@ -212,7 +212,11 @@ public class ScenarioListView : VisualElement
         if (dateLabel != null) dateLabel.text = info.Created ?? "";
 
         var previewImage = card.Q<Image>("CardPreviewImage");
-        if (previewImage != null) LoadPreviewImage(previewImage, info);
+        if (previewImage != null)
+        {
+            previewImage.scaleMode = ScaleMode.ScaleAndCrop;
+            LoadPreviewImage(previewImage, info);
+        }
 
         card.RegisterCallback<ClickEvent>(_ =>
         {

@@ -347,40 +347,58 @@ namespace RobotSNAP.Core.Scenario
 
             string imagePath, jsonPath;
 
-            if (mapName.Contains("/"))
+            int collectionSeparator = mapName.LastIndexOf('/');
+            if (collectionSeparator > 0)
             {
-                // Format "dataset/mapname"
-                string dataset = mapName.Substring(0, mapName.IndexOf('/'));
-                string map = mapName.Substring(mapName.IndexOf('/') + 1);
-                string imageBasePath = Path.Combine(basePath, dataset, "png", map);
+                // Format "collection/mapname". The collection may itself contain folders,
+                // for example "human_test/crowd/lobby".
+                string collection = mapName.Substring(0, collectionSeparator);
+                string map = mapName.Substring(collectionSeparator + 1);
+                string collectionPath = Path.Combine(basePath,
+                    collection.Replace('/', Path.DirectorySeparatorChar));
+                string imageBasePath = Path.Combine(collectionPath, "png", map);
                 imagePath = new[] { ".png", ".jpg", ".jpeg" }
                     .Select(extension => imageBasePath + extension)
                     .FirstOrDefault(File.Exists);
-                jsonPath = Path.Combine(basePath, dataset, "json", map + ".json");
+                jsonPath = Path.Combine(collectionPath, "json", map + ".json");
             }
             else
             {
-                // Choisir une map aléatoire dans le dataset
-                string dataset = mapName;
-                string pngFolder = Path.Combine(basePath, dataset, "png");
-                if (!Directory.Exists(pngFolder))
+                // A root-level image is an exact legacy map. Otherwise the identifier names
+                // a collection and keeps the previous random-map behavior.
+                string directImageBasePath = Path.Combine(basePath, mapName);
+                string directImagePath = new[] { ".png", ".jpg", ".jpeg" }
+                    .Select(extension => directImageBasePath + extension)
+                    .FirstOrDefault(File.Exists);
+                string directJsonPath = Path.Combine(basePath, mapName + ".json");
+                if (!string.IsNullOrWhiteSpace(directImagePath) && File.Exists(directJsonPath))
                 {
-                    Debug.LogError($"[ScenarioLoader] Dataset folder not found: {pngFolder}");
-                    return false;
+                    imagePath = directImagePath;
+                    jsonPath = directJsonPath;
                 }
-                string[] imageFiles = new[] { "*.png", "*.jpg", "*.jpeg" }
-                    .SelectMany(pattern => Directory.GetFiles(pngFolder, pattern, SearchOption.TopDirectoryOnly))
-                    .ToArray();
-                if (imageFiles.Length == 0)
+                else
                 {
-                    Debug.LogError($"[ScenarioLoader] No occupancy-grid images in {pngFolder}");
-                    return false;
+                    // Choose a random map from the requested collection.
+                    string dataset = mapName;
+                    string pngFolder = Path.Combine(basePath, dataset, "png");
+                    if (!Directory.Exists(pngFolder))
+                    {
+                        Debug.LogError($"[ScenarioLoader] Dataset folder not found: {pngFolder}");
+                        return false;
+                    }
+                    string[] imageFiles = new[] { "*.png", "*.jpg", "*.jpeg" }
+                        .SelectMany(pattern => Directory.GetFiles(pngFolder, pattern, SearchOption.TopDirectoryOnly))
+                        .ToArray();
+                    if (imageFiles.Length == 0)
+                    {
+                        Debug.LogError($"[ScenarioLoader] No occupancy-grid images in {pngFolder}");
+                        return false;
+                    }
+                    int index = UnityEngine.Random.Range(0, imageFiles.Length);
+                    string selected = Path.GetFileNameWithoutExtension(imageFiles[index]);
+                    imagePath = imageFiles[index];
+                    jsonPath = Path.Combine(basePath, dataset, "json", selected + ".json");
                 }
-                // Sélection aléatoire
-                int index = UnityEngine.Random.Range(0, imageFiles.Length);
-                string selected = Path.GetFileNameWithoutExtension(imageFiles[index]);
-                imagePath = imageFiles[index];
-                jsonPath = Path.Combine(basePath, dataset, "json", selected + ".json");
             }
 
             if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath) || !File.Exists(jsonPath))
@@ -566,18 +584,19 @@ namespace RobotSNAP.Core.Scenario
                     maps.Add(Path.GetFileNameWithoutExtension(file));
             }
 
-            // Current layout: Dataset/<dataset>/png/<map>.<extension>.
-            foreach (string datasetDirectory in Directory.GetDirectories(_mapsPath))
+            // Current layout: any nested collection can own png/ and json/ folders.
+            foreach (string pngDirectory in Directory.GetDirectories(_mapsPath, "png", SearchOption.AllDirectories))
             {
-                string pngDirectory = Path.Combine(datasetDirectory, "png");
-                if (!Directory.Exists(pngDirectory))
+                DirectoryInfo collectionDirectory = Directory.GetParent(pngDirectory);
+                if (collectionDirectory == null)
                     continue;
 
-                string dataset = Path.GetFileName(datasetDirectory);
+                string collection = Path.GetRelativePath(_mapsPath, collectionDirectory.FullName)
+                    .Replace(Path.DirectorySeparatorChar, '/');
                 foreach (string pattern in imageExtensions)
                 {
                     foreach (string file in Directory.GetFiles(pngDirectory, pattern, SearchOption.TopDirectoryOnly))
-                        maps.Add($"{dataset}/{Path.GetFileNameWithoutExtension(file)}");
+                        maps.Add($"{collection}/{Path.GetFileNameWithoutExtension(file)}");
                 }
             }
 
@@ -603,7 +622,7 @@ namespace RobotSNAP.Core.Scenario
             string sourcePath = FindScenarioFile(scenarioName);
             if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
             {
-                error = "Le fichier du scénario est introuvable.";
+                error = "The scenario file could not be found.";
                 return false;
             }
 
@@ -642,7 +661,7 @@ namespace RobotSNAP.Core.Scenario
             }
             catch (Exception exception)
             {
-                error = $"Suppression impossible : {exception.Message}";
+                error = $"Delete failed: {exception.Message}";
                 return false;
             }
         }

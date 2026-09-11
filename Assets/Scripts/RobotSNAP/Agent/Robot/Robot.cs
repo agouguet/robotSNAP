@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 using RobotSNAP.Core;
 
 namespace RobotSNAP.Agents
@@ -18,6 +19,8 @@ namespace RobotSNAP.Agents
         private float _targetAngularSpeed;
         private ArticulationBody _baseLinkArticulation;
         private Supervisor _supervisor;
+        private readonly Queue<Vector3> _routeGoals = new();
+        private bool _followingRoute;
 
         public event Action<float, float> OnVelocityCommandReceived;
         public event Action<Vector3, Quaternion> OnMovementUpdated;
@@ -115,9 +118,54 @@ namespace RobotSNAP.Agents
 
             if (distance < 0.2f)
             {
-                _hasGoal = false;
-                Stop();
+                if (_followingRoute && _routeGoals.Count > 0)
+                {
+                    SetNextRouteGoal();
+                }
+                else
+                {
+                    _followingRoute = false;
+                    _hasGoal = false;
+                    Stop();
+                }
             }
+        }
+
+        public override void SetGoal(Vector3 goal)
+        {
+            _routeGoals.Clear();
+            _followingRoute = false;
+            base.SetGoal(goal);
+        }
+
+        public void SetGoals(IEnumerable<Vector3> goals)
+        {
+            _routeGoals.Clear();
+            if (goals != null)
+            {
+                foreach (Vector3 goal in goals)
+                    _routeGoals.Enqueue(goal);
+            }
+
+            _followingRoute = _routeGoals.Count > 0;
+            if (_followingRoute)
+                SetNextRouteGoal();
+            else
+                ClearGoal();
+        }
+
+        public override void ClearGoal()
+        {
+            _routeGoals.Clear();
+            _followingRoute = false;
+            base.ClearGoal();
+        }
+
+        private void SetNextRouteGoal()
+        {
+            if (_routeGoals.Count == 0)
+                return;
+            base.SetGoal(_routeGoals.Dequeue());
         }
 
         // ==================== Public API - Movement Control ====================
@@ -139,6 +187,8 @@ namespace RobotSNAP.Agents
         public override void Reset()
         {
             Stop();
+            _routeGoals.Clear();
+            _followingRoute = false;
             ClearGoal();
             EnforceParentOrigin();
             if (wheelController != null)

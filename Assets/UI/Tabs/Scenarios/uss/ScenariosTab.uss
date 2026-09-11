@@ -30,7 +30,7 @@
 
 .scenario-page-title {
     font-size: 26px;
-    font-weight: bold;
+    -unity-font-style: bold;
     color: var(--text-primary);
     margin-bottom: 4px;
 }

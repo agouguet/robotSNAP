@@ -29,6 +29,8 @@ namespace RobotSNAP.Agents
         private Supervisor _supervisor;
         private bool _wasPlaying = true;
         private bool _wasPaused;
+        private readonly Queue<Vector3> _routeGoals = new();
+        private bool _followingRoute;
 
         // Propriétés héritées de BaseAgent
         public override Vector3 Position => transform.position;
@@ -74,6 +76,8 @@ namespace RobotSNAP.Agents
                 if (_animator != null && _animator.speed == 0f)
                     _animator.speed = 1f;
             }
+
+            AdvanceRouteIfReached();
 
             // Mise à jour de l'animation
             UpdateAnimation();
@@ -148,9 +152,17 @@ namespace RobotSNAP.Agents
 
         public void Initialize() { }
 
-        public void SetGoal(Vector3 goal)
+        public override void SetGoal(Vector3 goal)
+        {
+            _routeGoals.Clear();
+            _followingRoute = false;
+            SetRouteGoal(goal);
+        }
+
+        private void SetRouteGoal(Vector3 goal)
         {
             _currentGoal = goal;
+            _hasGoal = true;
             currentDestination = new Vector2(goal.x, goal.z);
             hasDestination = true;
             _movement?.SetGoal(currentDestination);
@@ -158,17 +170,60 @@ namespace RobotSNAP.Agents
 
         public void SetGoal(Vector2 goal)
         {
+            _routeGoals.Clear();
+            _followingRoute = false;
             currentDestination = goal;
             _currentGoal = new Vector3(goal.x, 0, goal.y);
+            _hasGoal = true;
             hasDestination = true;
             _movement?.SetGoal(goal);
+        }
+
+        public void SetGoals(IEnumerable<Vector3> goals)
+        {
+            _routeGoals.Clear();
+            if (goals != null)
+            {
+                foreach (Vector3 goal in goals)
+                    _routeGoals.Enqueue(goal);
+            }
+
+            _followingRoute = _routeGoals.Count > 0;
+            if (_followingRoute)
+                SetRouteGoal(_routeGoals.Dequeue());
+            else
+                ClearGoal();
+        }
+
+        private void AdvanceRouteIfReached()
+        {
+            if (!_followingRoute || !hasDestination)
+                return;
+
+            float threshold = humanConfig != null ? humanConfig.goalReachedDistance : 0.2f;
+            if (Vector2.Distance(Position2D, currentDestination) > threshold)
+                return;
+
+            if (_routeGoals.Count > 0)
+            {
+                SetRouteGoal(_routeGoals.Dequeue());
+                return;
+            }
+
+            _followingRoute = false;
+            hasDestination = false;
+            _hasGoal = false;
+            Stop();
         }
 
         public void SetPlay(bool isPlaying) => _movement?.SetPlaying(isPlaying);
 
         public override void Reset()
         {
+            _routeGoals.Clear();
+            _followingRoute = false;
             hasDestination = false;
+            _hasGoal = false;
             currentVelocity3D = Vector3.zero;
             _movement?.Reset();
             if (_animator != null) _animator.Rebind();
@@ -232,9 +287,12 @@ namespace RobotSNAP.Agents
             _movement?.Stop();
         }
 
-        public void ClearGoal()
+        public override void ClearGoal()
         {
+            _routeGoals.Clear();
+            _followingRoute = false;
             hasDestination = false;
+            _hasGoal = false;
             _currentGoal = Vector3.zero;
             _movement?.SetGoal(Vector2.zero);
         }

@@ -237,8 +237,8 @@ public class ScenarioDataService : MonoBehaviour
         {
             case "Name (A-Z)": return list.OrderBy(x => x.Info.Name).ToList();
             case "Name (Z-A)": return list.OrderByDescending(x => x.Info.Name).ToList();
-            case "Date recent": return list.OrderByDescending(x => x.Info.Created).ToList();
-            case "Date old": return list.OrderBy(x => x.Info.Created).ToList();
+            case "Newest": return list.OrderByDescending(x => x.Info.Created).ToList();
+            case "Oldest": return list.OrderBy(x => x.Info.Created).ToList();
             default: return list;
         }
     }

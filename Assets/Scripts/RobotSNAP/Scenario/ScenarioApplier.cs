@@ -2,6 +2,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using RobotSNAP.Core;
 using RobotSNAP.Environment;
@@ -275,9 +276,18 @@ namespace RobotSNAP.Core.Scenario
                     Debug.Log($"[ScenarioApplier] Robot position set to {startPos}, rotation yaw: {startRot.eulerAngles.y}");
             }
 
-            // Set goal (position only), behavior, and speed
-            Vector3 goalPos = ResolvePosition(robotConfig.GoalRef);
-            SetRobotGoal(robot, goalPos);
+            // Set the ordered route while keeping legacy single-goal scenarios valid.
+            var robotRoute = new List<Vector3>();
+            if (robotConfig.WaypointRefs != null)
+            {
+                foreach (string waypointRef in robotConfig.WaypointRefs)
+                {
+                    if (!string.IsNullOrWhiteSpace(waypointRef))
+                        robotRoute.Add(ResolvePosition(waypointRef));
+                }
+            }
+            robotRoute.Add(ResolvePosition(robotConfig.GoalRef));
+            SetRobotGoals(robot, robotRoute);
             SetRobotBehavior(robot, robotConfig.Behavior);
             SetRobotSpeed(robot, robotConfig.Speed);
 
@@ -292,10 +302,10 @@ namespace RobotSNAP.Core.Scenario
             // return GameObject.FindGameObjectWithTag("Robot");
         }
 
-        private void SetRobotGoal(GameObject robot, Vector3 goal)
+        private void SetRobotGoals(GameObject robot, IEnumerable<Vector3> goals)
         {
             var comp = robot.GetComponent<Robot>();
-            comp?.SetGoal(goal);
+            comp?.SetGoals(goals);
         }
 
         private void SetRobotBehavior(GameObject robot, string behavior)
@@ -392,13 +402,20 @@ namespace RobotSNAP.Core.Scenario
             if (config.Spawn != null)
             {
                 Vector3 spawnPos = ResolveSpawnPosition(config.Spawn, index, total);
-                if (spawnPos != Vector3.zero)
-                    human.transform.position = spawnPos;
+                human.transform.position = spawnPos;
             }
 
-            // --- Goal ---
-            if (config.Goal != null)
+            // --- Ordered goals ---
+            if (config.Goals != null && config.Goals.Count > 0 && IsPointGoal(config.Goal))
+            {
+                var goals = new List<Vector3> { ResolveGoalPosition(config.Goal) };
+                goals.AddRange(config.Goals.Where(IsPointGoal).Select(ResolveGoalPosition));
+                human.SetGoals(goals);
+            }
+            else if (config.Goal != null)
+            {
                 ResolveAndSetGoal(human, config.Goal);
+            }
 
             // --- Basic Parameters ---
             human.SetSpeed(config.Speed);
@@ -513,6 +530,12 @@ namespace RobotSNAP.Core.Scenario
                 return goal.Zone.Center.ToVector3();
 
             return Vector3.zero;
+        }
+
+        private static bool IsPointGoal(GoalConfig goal)
+        {
+            return goal != null && (string.IsNullOrWhiteSpace(goal.Type) ||
+                                    string.Equals(goal.Type, "point", StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>

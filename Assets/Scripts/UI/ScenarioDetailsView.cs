@@ -44,7 +44,7 @@ public class ScenarioDetailsView : VisualElement
         header.AddToClassList("scenario-details-header");
         var titleContainer = new VisualElement();
         titleContainer.AddToClassList("scenario-details-title-container");
-        _titleLabel = new Label("Aucun scénario sélectionné");
+        _titleLabel = new Label("No scenario selected");
         _titleLabel.AddToClassList("scenario-details-title");
         _categoryLabel = new Label("");
         _categoryLabel.AddToClassList("scenario-details-category");
@@ -66,7 +66,7 @@ public class ScenarioDetailsView : VisualElement
         descSection.AddToClassList("scenario-details-section");
         var descTitle = new Label("Description");
         descTitle.AddToClassList("scenario-section-title");
-        _descriptionLabel = new Label("Sélectionnez un scénario pour afficher sa description.");
+        _descriptionLabel = new Label("Select a scenario to view its description.");
         _descriptionLabel.AddToClassList("scenario-description");
         descSection.Add(descTitle);
         descSection.Add(_descriptionLabel);
@@ -75,15 +75,15 @@ public class ScenarioDetailsView : VisualElement
         // Informations
         var infoSection = new VisualElement();
         infoSection.AddToClassList("scenario-details-section");
-        var infoTitle = new Label("Informations");
+        var infoTitle = new Label("Information");
         infoTitle.AddToClassList("scenario-section-title");
         var infoGrid = new VisualElement();
         infoGrid.AddToClassList("scenario-info-grid");
 
-        _environmentLabel = AddInfoItem(infoGrid, "Environnement", "—");
+        _environmentLabel = AddInfoItem(infoGrid, "Environment", "—");
         _robotLabel = AddInfoItem(infoGrid, "Robot", "—");
         _agentsLabel = AddInfoItem(infoGrid, "Agents", "—");
-        _durationLabel = AddInfoItem(infoGrid, "Durée", "—");
+        _durationLabel = AddInfoItem(infoGrid, "Duration", "—");
 
         infoSection.Add(infoTitle);
         infoSection.Add(infoGrid);
@@ -132,11 +132,13 @@ public class ScenarioDetailsView : VisualElement
 
         _titleLabel.text = info.Name;
         _categoryLabel.text = info.Type ?? "";
-        _descriptionLabel.text = info.Description ?? "Aucune description disponible.";
-        _environmentLabel.text = info.Location ?? "Lieu inconnu";
-        _robotLabel.text = info.RobotType ?? "Robot inconnu";
-        _agentsLabel.text = "À définir";
-        _durationLabel.text = info.Duration > 0 ? $"{info.Duration} s" : "Illimitée";
+        _descriptionLabel.text = info.Description ?? "No description available.";
+        _environmentLabel.text = !string.IsNullOrWhiteSpace(info.MapImage)
+            ? info.MapImage
+            : !string.IsNullOrWhiteSpace(info.Location) ? info.Location : "Unknown environment";
+        _robotLabel.text = info.RobotType ?? "Unknown robot";
+        _agentsLabel.text = "Configured in YAML";
+        _durationLabel.text = info.Duration > 0 ? $"{info.Duration} s" : "Unlimited";
 
         // Tags
         _tagsContainer.Clear();
@@ -178,9 +180,9 @@ public class ScenarioDetailsView : VisualElement
     {
         Log("[ScenarioDetailsView] ShowEmpty called.");
         _currentInfo = null;
-        _titleLabel.text = "Aucun scénario sélectionné";
+        _titleLabel.text = "No scenario selected";
         _categoryLabel.text = "";
-        _descriptionLabel.text = "Sélectionnez un scénario pour afficher sa description.";
+        _descriptionLabel.text = "Select a scenario to view its description.";
         _environmentLabel.text = "—";
         _robotLabel.text = "—";
         _agentsLabel.text = "—";

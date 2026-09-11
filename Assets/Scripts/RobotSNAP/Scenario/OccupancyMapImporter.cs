@@ -29,26 +29,26 @@ namespace RobotSNAP.Core.Scenario
 
             if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
             {
-                error = "Le fichier image est introuvable.";
+                error = "The image file could not be found.";
                 return false;
             }
 
             string extension = Path.GetExtension(sourcePath).ToLowerInvariant();
             if (!SupportedExtensions.Contains(extension))
             {
-                error = "Format non pris en charge. Utilisez PNG, JPG ou JPEG.";
+                error = "Unsupported format. Use PNG, JPG or JPEG.";
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(mapsRoot))
             {
-                error = "Le dossier des cartes n'est pas configuré.";
+                error = "The environment folder is not configured.";
                 return false;
             }
 
             if (!float.IsFinite(resolution) || resolution <= 0f)
             {
-                error = "La résolution doit être supérieure à zéro.";
+                error = "Resolution must be greater than zero.";
                 return false;
             }
 
@@ -72,14 +72,14 @@ namespace RobotSNAP.Core.Scenario
             {
                 if (!texture.LoadImage(File.ReadAllBytes(sourcePath)))
                 {
-                    error = "L'image n'a pas pu être décodée.";
+                    error = "The image could not be decoded.";
                     return false;
                 }
 
                 byte[] pngBytes = texture.EncodeToPNG();
                 if (pngBytes == null || pngBytes.Length == 0)
                 {
-                    error = "La conversion de l'image en PNG a échoué.";
+                    error = "Image conversion to PNG failed.";
                     return false;
                 }
 
@@ -115,7 +115,7 @@ namespace RobotSNAP.Core.Scenario
                 TryDelete(jsonPath);
                 TryDelete(pngPath + ".tmp");
                 TryDelete(jsonPath + ".tmp");
-                error = $"Import impossible : {exception.Message}";
+                error = $"Import failed: {exception.Message}";
                 return false;
             }
             finally

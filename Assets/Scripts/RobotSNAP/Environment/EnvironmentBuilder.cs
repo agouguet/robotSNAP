@@ -348,7 +348,6 @@ namespace RobotSNAP.Environment
             int height = occupancyTexture.height;
             float resolutionX = worldBounds.size.x / width;
             float resolutionZ = worldBounds.size.z / height;
-            float resolution = (resolutionX + resolutionZ) / 2f;
 
             // Convertir la texture en grille (true = mur)
             bool[,] grid = new bool[width, height];
@@ -362,17 +361,16 @@ namespace RobotSNAP.Environment
             }
 
             // Générer sol et murs
-            GenerateFloor(width, height, resolution, worldBounds, occupancyTexture);
-            GenerateWallsOptimized(grid, width, height, resolution, worldBounds);
+            GenerateFloor(worldBounds, occupancyTexture);
+            GenerateWallsOptimized(grid, width, height, resolutionX, resolutionZ, worldBounds);
         }
 
-        private void GenerateFloor(int width, int height, float resolution, Bounds worldBounds, Texture2D texture)
+        private void GenerateFloor(Bounds worldBounds, Texture2D texture)
         {
             _floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             _floor.name = "Floor";
-            _floor.transform.parent = transform;
-            // _floor.transform.position = new Vector3(worldBounds.center.x, -0.05f, worldBounds.center.z);
-            _floor.transform.position = new Vector3(_floor.transform.parent.position.x, -0.05f, _floor.transform.parent.position.z);
+            _floor.transform.SetParent(transform, false);
+            _floor.transform.localPosition = new Vector3(worldBounds.center.x, -0.05f, worldBounds.center.z);
             _floor.transform.localScale = new Vector3(worldBounds.size.x, 0.1f, worldBounds.size.z);
             _floor.layer = LayerMask.NameToLayer("Floor");
             _floor.tag = "Floor";
@@ -382,11 +380,16 @@ namespace RobotSNAP.Environment
             renderer.material.mainTexture = texture;
         }
 
-        private void GenerateWallsOptimized(bool[,] grid, int width, int height, float resolution, Bounds worldBounds)
+        private void GenerateWallsOptimized(
+            bool[,] grid,
+            int width,
+            int height,
+            float resolutionX,
+            float resolutionZ,
+            Bounds worldBounds)
         {
             var combineInstances = new List<CombineInstance>();
             bool[,] visited = new bool[width, height];
-            Vector3 offset = worldBounds.min;
 
             for (int y = 0; y < height; y++)
             {
@@ -403,22 +406,24 @@ namespace RobotSNAP.Environment
                             for (int j = y; j < maxY; j++)
                                 visited[i, j] = true;
 
-                        float centerX = offset.x + (x + maxX) * resolution / 2f;
-                        float centerZ = offset.z + (y + maxY) * resolution / 2f;
-                        float widthM = (maxX - x) * resolution;
-                        float depthM = (maxY - y) * resolution;
+                        // Texture pixels use a bottom-left origin. Convert their center to the
+                        // top-left image convention shared with the scenario route editor.
+                        var imageCenter = new Vector2(
+                            (x + maxX) / (2f * width),
+                            1f - (y + maxY) / (2f * height));
+                        Vector2 worldCenter = OccupancyMapCoordinates.ImageNormalizedToWorld(imageCenter, worldBounds);
+                        float widthM = (maxX - x) * resolutionX;
+                        float depthM = (maxY - y) * resolutionZ;
 
-                        // GameObject tempWall = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                        // tempWall.transform.position = new Vector3(centerX, wallHeight / 2f, centerZ);
-                        // tempWall.transform.localScale = new Vector3(widthM, wallHeight, depthM);
                         GameObject tempWall = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                        tempWall.transform.position = new Vector3(-(x + maxX) * resolution / 2, wallHeight / 2, -(y + maxY) * resolution / 2);
-                        tempWall.transform.localScale = new Vector3((maxX - x) * resolution, wallHeight, (maxY - y) * resolution);
+                        tempWall.transform.SetParent(transform, false);
+                        tempWall.transform.localPosition = new Vector3(worldCenter.x, wallHeight / 2f, worldCenter.y);
+                        tempWall.transform.localScale = new Vector3(widthM, wallHeight, depthM);
 
                         combineInstances.Add(new CombineInstance
                         {
                             mesh = tempWall.GetComponent<MeshFilter>().mesh,
-                            transform = tempWall.transform.localToWorldMatrix
+                            transform = transform.worldToLocalMatrix * tempWall.transform.localToWorldMatrix
                         });
                         Destroy(tempWall);
                     }
@@ -426,8 +431,7 @@ namespace RobotSNAP.Environment
             }
 
             _walls = new GameObject("Walls");
-            _walls.transform.parent = transform;
-            _walls.transform.position = new Vector3(_walls.transform.parent.position.x + width * resolution / 2, 0, _walls.transform.parent.position.z + height * resolution / 2);
+            _walls.transform.SetParent(transform, false);
             _walls.layer = LayerMask.NameToLayer("Obstacle");
             _walls.tag = "Wall";
 

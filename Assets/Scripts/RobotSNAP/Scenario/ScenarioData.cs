@@ -188,6 +188,13 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("goal")]
         public string GoalRef { get; set; }
+
+        /// <summary>
+        /// Optional ordered points visited between start and the final goal.
+        /// Kept separate from goal for backward compatibility with existing scenarios.
+        /// </summary>
+        [YamlMember("waypoints")]
+        public List<string> WaypointRefs { get; set; }
         
         [YamlMember("behavior")]
         public string Behavior { get; set; } = "normal";
@@ -213,6 +220,12 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("goal")]
         public GoalConfig Goal { get; set; }
+
+        /// <summary>
+        /// Optional ordered goals visited after the legacy primary goal.
+        /// </summary>
+        [YamlMember("goals")]
+        public List<GoalConfig> Goals { get; set; }
 
         [YamlMember("movement_controller")]
         public MovementControllerConfig MovementController { get; set; } 

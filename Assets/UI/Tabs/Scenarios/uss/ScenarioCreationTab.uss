@@ -46,7 +46,6 @@
     padding-bottom: 16px;
 
     border-bottom-width: 1px;
-    border-bottom-style: solid;
     border-bottom-color: var(--border-color);
 
     flex-shrink: 0;
@@ -166,7 +165,6 @@
     border-radius: 14px;
 
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
 
     background-color: transparent;
@@ -261,7 +259,6 @@
     background-color: var(--bg-secondary);
 
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
 
     border-radius: 8px;
@@ -324,12 +321,13 @@
 
 .creation-text-field,
 .creation-dropdown {
+    width: 100%;
+    min-width: 0;
     min-height: 36px;
 
     background-color: var(--bg-primary);
 
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
 
     border-radius: 6px;
@@ -337,6 +335,22 @@
     color: var(--text-primary);
 
     font-size: 12px;
+}
+
+.creation-dropdown > .unity-base-field__input {
+    flex-grow: 1;
+    min-width: 0;
+    min-height: 34px;
+    background-color: transparent;
+    border-width: 0;
+    color: var(--text-primary);
+}
+
+.creation-dropdown .unity-popup-field__text {
+    min-width: 0;
+    color: var(--text-primary);
+    font-size: 12px;
+    -unity-text-overflow-position: end;
 }
 
 
@@ -369,7 +383,6 @@
     background-color: var(--bg-primary);
 
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
 
     border-radius: 6px;
@@ -441,7 +454,6 @@
     min-height: 105px;
 
     border-width: 1px;
-    border-style: dashed;
     border-color: var(--border-color);
 
     border-radius: 6px;
@@ -460,11 +472,11 @@
 }
 
 .map-image-field {
-    flex-grow: 1;
+    flex-grow: 0;
 
     min-height: 120px;
 
-    margin-bottom: 0;
+    margin-bottom: 12px;
 }
 
 
@@ -474,7 +486,6 @@
     min-height: 105px;
 
     border-width: 1px;
-    border-style: dashed;
     border-color: var(--border-color);
 
     border-radius: 6px;
@@ -595,8 +606,6 @@
     border-top-width: 1px;
     border-bottom-width: 1px;
 
-    border-top-style: solid;
-    border-bottom-style: solid;
 
     border-top-color: var(--border-color);
     border-bottom-color: var(--border-color);
@@ -663,7 +672,6 @@
     align-items: center;
 
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
 
     border-radius: 5px;
@@ -755,7 +763,6 @@
     background-color: rgb(55, 220, 125);
 
     border-width: 2px;
-    border-style: solid;
     border-color: rgb(10, 30, 20);
 }
 
@@ -771,7 +778,6 @@
     background-color: var(--accent);
 
     border-width: 2px;
-    border-style: solid;
     border-color: rgb(10, 30, 50);
 }
 
@@ -792,7 +798,6 @@
     padding-right: 16px;
 
     border-top-width: 1px;
-    border-top-style: solid;
     border-top-color: var(--border-color);
 
     background-color: var(--bg-secondary);
@@ -871,7 +876,6 @@
     align-items: center;
 
     border-bottom-width: 1px;
-    border-bottom-style: solid;
     border-bottom-color: rgba(255, 255, 255, 0.05);
 }
 
@@ -931,7 +935,6 @@
     align-items: center;
 
     border-bottom-width: 1px;
-    border-bottom-style: solid;
     border-bottom-color: rgba(255, 255, 255, 0.05);
 }
 
@@ -1057,7 +1060,6 @@
     padding-top: 10px;
 
     border-top-width: 1px;
-    border-top-style: solid;
     border-top-color: var(--border-color);
 
     flex-shrink: 0;
@@ -1702,4 +1704,399 @@
 .yaw-field {
     margin-top: 8px;
     margin-bottom: 0;
+}
+
+/* ================================================================
+   SCENARIO LIBRARY, COVER AND MULTI-ROUTE EDITOR
+   ================================================================ */
+
+.route-editor-hidden {
+    display: none;
+}
+
+.selected-map-label {
+    max-width: 250px;
+    margin-top: 5px;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.selected-map-label.has-selection {
+    color: var(--text-primary);
+    -unity-font-style: bold;
+}
+
+.environment-choice-actions,
+.cover-preview-controls,
+.route-management-actions,
+.modal-heading-row,
+.import-modal-content,
+.route-point-row-header,
+.route-point-coordinates,
+.route-point-actions {
+    flex-direction: row;
+    align-items: center;
+}
+
+.environment-choice-actions {
+    width: 94%;
+    justify-content: center;
+}
+
+.environment-choice-button,
+.cover-choice-button,
+.route-management-button {
+    min-width: 0;
+    height: 30px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: transparent;
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 5px;
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.environment-choice-button {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin-left: 3px;
+    margin-right: 3px;
+}
+
+.environment-choice-button:hover,
+.cover-choice-button:hover,
+.route-management-button:hover {
+    background-color: var(--button-hover);
+    color: var(--text-primary);
+}
+
+.primary-choice,
+.cover-choice-button.active {
+    background-color: rgba(0, 110, 255, 0.16);
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+
+.cover-image-drop-zone {
+    padding: 7px;
+}
+
+.cover-preview-image {
+    width: 100%;
+    height: 64px;
+    margin-bottom: 6px;
+    border-radius: 5px;
+    background-color: #101820;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.cover-preview-controls {
+    width: 100%;
+}
+
+.cover-choice-button {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin-left: 3px;
+    margin-right: 3px;
+}
+
+.route-management-actions {
+    margin-bottom: 12px;
+}
+
+.route-management-button {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin-right: 5px;
+}
+
+.danger-subtle {
+    color: rgb(240, 135, 135);
+}
+
+.route-overlay-host,
+.route-map-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.map-legend {
+    justify-content: space-between;
+}
+
+.active-route-label {
+    flex-grow: 1;
+    color: var(--text-primary);
+    -unity-text-align: middle-center;
+}
+
+.grid-scale-label {
+    color: var(--text-secondary);
+    -unity-text-align: middle-right;
+}
+
+.manual-coordinates-panel {
+    width: 290px;
+    min-width: 260px;
+}
+
+.route-points-container {
+    flex-direction: column;
+}
+
+.route-point-row {
+    margin-bottom: 9px;
+    padding: 9px;
+    background-color: var(--bg-primary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 6px;
+}
+
+.route-point-row.selected {
+    border-color: var(--accent);
+    background-color: rgba(0, 110, 255, 0.09);
+}
+
+.route-point-row-header {
+    justify-content: space-between;
+    margin-bottom: 7px;
+}
+
+.route-point-name {
+    color: var(--text-primary);
+    font-size: 11px;
+    -unity-font-style: bold;
+}
+
+.route-point-place-button {
+    height: 24px;
+    min-width: 52px;
+    padding-left: 7px;
+    padding-right: 7px;
+    background-color: transparent;
+    border-width: 1px;
+    border-color: var(--accent);
+    border-radius: 4px;
+    color: var(--accent);
+    font-size: 9px;
+}
+
+.route-point-coordinates {
+    width: 100%;
+}
+
+.route-coordinate-field {
+    flex-grow: 1;
+    flex-basis: 0;
+    width: auto;
+    margin-right: 5px;
+}
+
+.route-coordinate-field > .unity-base-field__label {
+    min-width: 14px;
+    width: 14px;
+    margin-right: 2px;
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.route-coordinate-field > .unity-base-field__input {
+    min-width: 0;
+}
+
+.route-point-actions {
+    justify-content: flex-end;
+    margin-top: 6px;
+}
+
+.route-point-small-button {
+    width: 27px;
+    height: 24px;
+    margin-left: 4px;
+    padding: 0;
+    background-color: transparent;
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.modal-heading-row {
+    justify-content: space-between;
+}
+
+.modal-close-button {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background-color: transparent;
+    border-width: 0;
+    color: var(--text-secondary);
+    font-size: 20px;
+}
+
+.map-browser-modal {
+    width: 900px;
+    max-width: 92%;
+}
+
+.map-browser-search {
+    margin-bottom: 12px;
+}
+
+.map-browser-content {
+    height: 430px;
+    min-height: 320px;
+    flex-direction: row;
+}
+
+.map-browser-datasets-panel {
+    width: 190px;
+    min-width: 150px;
+    margin-right: 10px;
+    padding: 10px;
+    background-color: var(--bg-primary);
+    border-radius: 6px;
+}
+
+.map-browser-files-panel {
+    width: 250px;
+    min-width: 190px;
+    margin-right: 10px;
+    padding: 10px;
+    background-color: var(--bg-primary);
+    border-radius: 6px;
+}
+
+.map-browser-preview-panel {
+    flex-grow: 1;
+    min-width: 260px;
+    padding: 10px;
+    background-color: #101820;
+    border-radius: 6px;
+}
+
+.browser-section-title {
+    min-height: 24px;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    -unity-font-style: bold;
+}
+
+.map-dataset-button,
+.map-file-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 30px;
+    margin-bottom: 4px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: transparent;
+    border-width: 0;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    -unity-text-align: middle-left;
+}
+
+.map-dataset-button:hover,
+.map-file-button:hover {
+    background-color: var(--button-hover);
+    color: var(--text-primary);
+}
+
+.map-dataset-button.selected,
+.map-file-button.selected {
+    background-color: rgba(0, 110, 255, 0.18);
+    color: var(--text-primary);
+}
+
+.map-browser-preview-image {
+    flex-grow: 1;
+    min-height: 220px;
+    background-color: #0b1117;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.map-browser-selection-label {
+    margin-top: 10px;
+    color: var(--text-primary);
+    font-size: 12px;
+    -unity-font-style: bold;
+    white-space: normal;
+}
+
+.map-browser-metadata-label,
+.map-browser-empty {
+    margin-top: 5px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    white-space: normal;
+}
+
+.map-browser-confirm {
+    min-height: 36px;
+    margin-top: 10px;
+}
+
+.import-environment-modal {
+    width: 780px;
+    max-width: 90%;
+}
+
+.import-modal-content {
+    align-items: stretch;
+}
+
+.import-preview-panel {
+    position: relative;
+    width: 310px;
+    min-width: 240px;
+    min-height: 250px;
+    margin-right: 16px;
+    padding: 8px;
+    background-color: #101820;
+    border-radius: 6px;
+}
+
+.import-form-panel {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.import-preview-image {
+    flex-grow: 1;
+    min-height: 210px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.import-preview-placeholder {
+    position: absolute;
+    left: 24px;
+    right: 24px;
+    top: 95px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.import-preview-dimensions {
+    min-height: 26px;
+    padding-top: 7px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    -unity-text-align: middle-center;
 }

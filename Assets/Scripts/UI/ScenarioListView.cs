@@ -113,6 +113,16 @@ public class ScenarioListView : VisualElement
             _dataService.OnScenarioListChanged -= Refresh;
     }
 
+    public void ClearSelection()
+    {
+        _selectedScenarioId = null;
+        SelectedScenarioId = null;
+        SelectedScenarioInfo = null;
+
+        foreach (VisualElement child in _gridContainer.Children())
+            child.RemoveFromClassList("selected");
+    }
+
     public void Refresh()
     {
         if (_dataService == null) return;

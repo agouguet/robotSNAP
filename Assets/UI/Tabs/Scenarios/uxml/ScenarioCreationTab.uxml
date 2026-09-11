@@ -47,7 +47,8 @@
                     <ui:VisualElement name="MapImageDropZone" class="map-image-drop-zone">
                         <ui:Label text="CARTE DE SIMULATION" class="upload-title"/>
                         <ui:DropdownField name="MapDropdown" class="creation-dropdown drop-zone-dropdown"/>
-                        <ui:Label text="Choisissez une carte disponible" class="upload-hint"/>
+                        <ui:Button name="OpenEnvironmentImportButton" text="+ Importer une nouvelle grille" class="upload-environment-button"/>
+                        <ui:Label text="Carte existante ou image PNG/JPG avec métadonnées" class="upload-hint"/>
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement class="creation-field">
@@ -110,12 +111,12 @@
                                 <ui:Label name="MapName" text="—" class="metadata-value"/>
                             </ui:VisualElement>
                             <ui:VisualElement class="environment-metadata-item">
-                                <ui:Label text="Points" class="metadata-label"/>
-                                <ui:Label name="MapPointCount" text="2 requis" class="metadata-value"/>
+                                <ui:Label text="Image" class="metadata-label"/>
+                                <ui:Label name="MapPointCount" text="—" class="metadata-value"/>
                             </ui:VisualElement>
                             <ui:VisualElement class="environment-metadata-item">
-                                <ui:Label text="Mode" class="metadata-label"/>
-                                <ui:Label name="MapMode" text="2D" class="metadata-value"/>
+                                <ui:Label text="Emprise" class="metadata-label"/>
+                                <ui:Label name="MapMode" text="—" class="metadata-value"/>
                             </ui:VisualElement>
                         </ui:VisualElement>
                         <ui:Label text="Les positions précises sont configurées à l'étape 2." class="environment-footer-hint"/>
@@ -124,127 +125,127 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
-        <ui:VisualElement name="Step2Content" class="creation-body creation-step-content creation-step-hidden">
-            <ui:VisualElement class="creation-panel agent-config-panel">
-                <ui:VisualElement class="config-panel-heading">
-                    <ui:VisualElement class="agent-status-dot robot-dot"/>
-                    <ui:VisualElement>
-                        <ui:Label text="Robot" class="creation-panel-title compact-title"/>
-                        <ui:Label text="Modèle et comportement de navigation" class="config-panel-subtitle"/>
-                    </ui:VisualElement>
-                </ui:VisualElement>
-                <ui:VisualElement class="creation-field">
-                    <ui:Label text="Type de robot" class="creation-field-label"/>
-                    <ui:DropdownField name="RobotTypeDropdown" class="creation-dropdown"/>
-                </ui:VisualElement>
-                <ui:VisualElement class="creation-field">
-                    <ui:Label text="Comportement" class="creation-field-label"/>
-                    <ui:DropdownField name="RobotBehaviorDropdown" class="creation-dropdown"/>
-                </ui:VisualElement>
-                <ui:VisualElement class="creation-field">
-                    <ui:Label text="Vitesse maximale (m/s) *" class="creation-field-label"/>
-                    <ui:FloatField name="RobotSpeedField" class="creation-text-field"/>
-                </ui:VisualElement>
-                <ui:VisualElement class="creation-field">
-                    <ui:Label text="Durée maximale (secondes)" class="creation-field-label"/>
-                    <ui:FloatField name="DurationField" class="creation-text-field"/>
-                    <ui:Label text="0 = durée illimitée" class="field-help"/>
-                </ui:VisualElement>
-            </ui:VisualElement>
-
-            <ui:VisualElement class="creation-panel route-config-panel">
-                <ui:Label text="Trajectoire de référence" class="creation-panel-title"/>
-                <ui:Label text="Ces points initialisent la position du robot et son objectif dans l'environnement." class="config-panel-subtitle route-subtitle"/>
-                <ui:VisualElement class="point-card">
-                    <ui:VisualElement class="point-card-header">
+        <ui:VisualElement name="Step2Content" class="creation-body creation-step-content agents-step-layout creation-step-hidden">
+            <ui:VisualElement class="creation-panel agent-settings-panel">
+                <ui:ScrollView class="agent-settings-scroll">
+                    <ui:VisualElement class="config-panel-heading">
                         <ui:VisualElement class="agent-status-dot robot-dot"/>
-                        <ui:Label text="Départ du robot" class="point-card-title"/>
+                        <ui:VisualElement>
+                            <ui:Label text="Robot" class="creation-panel-title compact-title"/>
+                            <ui:Label text="Modèle et comportement" class="config-panel-subtitle"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="creation-field">
+                        <ui:Label text="Type de robot" class="creation-field-label"/>
+                        <ui:DropdownField name="RobotTypeDropdown" class="creation-dropdown"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="creation-field">
+                        <ui:Label text="Comportement" class="creation-field-label"/>
+                        <ui:DropdownField name="RobotBehaviorDropdown" class="creation-dropdown"/>
                     </ui:VisualElement>
                     <ui:VisualElement class="coordinate-row">
-                        <ui:VisualElement class="coordinate-field">
-                            <ui:Label text="X" class="coordinate-label"/>
-                            <ui:FloatField name="StartXField" class="creation-text-field"/>
+                        <ui:VisualElement class="creation-field half-field">
+                            <ui:Label text="Vitesse (m/s) *" class="creation-field-label"/>
+                            <ui:FloatField name="RobotSpeedField" class="creation-text-field"/>
                         </ui:VisualElement>
-                        <ui:VisualElement class="coordinate-field coordinate-middle">
-                            <ui:Label text="Z" class="coordinate-label"/>
-                            <ui:FloatField name="StartZField" class="creation-text-field"/>
-                        </ui:VisualElement>
-                        <ui:VisualElement class="coordinate-field">
-                            <ui:Label text="Orientation Y" class="coordinate-label"/>
-                            <ui:FloatField name="StartYawField" class="creation-text-field"/>
+                        <ui:VisualElement class="creation-field half-field field-row-right">
+                            <ui:Label text="Durée (s)" class="creation-field-label"/>
+                            <ui:FloatField name="DurationField" class="creation-text-field"/>
                         </ui:VisualElement>
                     </ui:VisualElement>
-                </ui:VisualElement>
-                <ui:VisualElement class="route-arrow">
-                    <ui:Label text="↓"/>
-                </ui:VisualElement>
-                <ui:VisualElement class="point-card">
-                    <ui:VisualElement class="point-card-header">
-                        <ui:VisualElement class="agent-status-dot goal-dot"/>
-                        <ui:Label text="Objectif du robot" class="point-card-title"/>
+                    <ui:VisualElement class="agent-panel-divider"/>
+                    <ui:VisualElement class="config-panel-heading human-heading">
+                        <ui:VisualElement class="agent-status-dot pedestrian-dot"/>
+                        <ui:VisualElement>
+                            <ui:Label text="Piétons" class="creation-panel-title compact-title"/>
+                            <ui:Label text="Groupe humain optionnel" class="config-panel-subtitle"/>
+                        </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement class="coordinate-row">
-                        <ui:VisualElement class="coordinate-field">
-                            <ui:Label text="X" class="coordinate-label"/>
-                            <ui:FloatField name="GoalXField" class="creation-text-field"/>
+                        <ui:VisualElement class="creation-field half-field">
+                            <ui:Label text="Nombre" class="creation-field-label"/>
+                            <ui:IntegerField name="HumanCountField" class="creation-text-field"/>
                         </ui:VisualElement>
-                        <ui:VisualElement class="coordinate-field coordinate-middle">
-                            <ui:Label text="Z" class="coordinate-label"/>
-                            <ui:FloatField name="GoalZField" class="creation-text-field"/>
+                        <ui:VisualElement class="creation-field half-field field-row-right">
+                            <ui:Label text="Vitesse (m/s)" class="creation-field-label"/>
+                            <ui:FloatField name="HumanSpeedField" class="creation-text-field"/>
                         </ui:VisualElement>
-                        <ui:VisualElement class="coordinate-field coordinate-placeholder"/>
                     </ui:VisualElement>
+                    <ui:VisualElement class="creation-field">
+                        <ui:Label text="Comportement" class="creation-field-label"/>
+                        <ui:DropdownField name="HumanBehaviorDropdown" class="creation-dropdown"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="creation-field">
+                        <ui:Label text="Contrôleur de mouvement" class="creation-field-label"/>
+                        <ui:DropdownField name="MovementControllerDropdown" class="creation-dropdown"/>
+                    </ui:VisualElement>
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="creation-panel agents-map-panel">
+                <ui:VisualElement class="agents-map-heading">
+                    <ui:VisualElement>
+                        <ui:Label text="Placement sur la carte" class="creation-panel-title compact-title"/>
+                        <ui:Label name="PlacementInstructionLabel" text="Choisissez un point puis cliquez sur la carte." class="config-panel-subtitle"/>
+                    </ui:VisualElement>
+                    <ui:Label name="MapCursorCoordinatesLabel" text="X —  Z —" class="map-cursor-coordinates"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="placement-toolbar">
+                    <ui:Button name="PlaceRobotStartButton" text="Robot · départ" class="placement-tool active"/>
+                    <ui:Button name="PlaceRobotGoalButton" text="Robot · objectif" class="placement-tool"/>
+                    <ui:Button name="PlaceHumanSpawnButton" text="Humains · départ" class="placement-tool"/>
+                    <ui:Button name="PlaceHumanGoalButton" text="Humains · objectif" class="placement-tool"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="AgentsEnvironmentCanvas" class="agents-environment-canvas">
+                    <ui:Image name="AgentsEnvironmentImage" class="agents-environment-image"/>
+                    <ui:VisualElement name="RobotStartMapMarker" class="placement-marker robot-start-map-marker"><ui:Label text="R"/></ui:VisualElement>
+                    <ui:VisualElement name="RobotGoalMapMarker" class="placement-marker robot-goal-map-marker"><ui:Label text="R"/></ui:VisualElement>
+                    <ui:VisualElement name="HumanSpawnMapMarker" class="placement-marker human-spawn-map-marker"><ui:Label text="H"/></ui:VisualElement>
+                    <ui:VisualElement name="HumanGoalMapMarker" class="placement-marker human-goal-map-marker"><ui:Label text="H"/></ui:VisualElement>
+                    <ui:Label name="AgentsMapPlaceholder" text="Sélectionnez d'abord un environnement à l'étape 1." class="environment-placeholder"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="map-legend">
+                    <ui:Label text="● Robot départ" class="legend-robot-start"/>
+                    <ui:Label text="● Robot objectif" class="legend-robot-goal"/>
+                    <ui:Label text="● Humains départ" class="legend-human-start"/>
+                    <ui:Label text="● Humains objectif" class="legend-human-goal"/>
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <ui:VisualElement class="creation-panel agent-config-panel human-config-panel">
-                <ui:VisualElement class="config-panel-heading">
-                    <ui:VisualElement class="agent-status-dot pedestrian-dot"/>
-                    <ui:VisualElement>
-                        <ui:Label text="Piétons" class="creation-panel-title compact-title"/>
-                        <ui:Label text="Groupe humain optionnel" class="config-panel-subtitle"/>
+            <ui:VisualElement class="creation-panel manual-coordinates-panel">
+                <ui:ScrollView class="manual-coordinates-scroll">
+                    <ui:Label text="Coordonnées manuelles" class="creation-panel-title"/>
+                    <ui:Label text="Les champs et les marqueurs de la carte restent synchronisés." class="config-panel-subtitle route-subtitle"/>
+                    <ui:VisualElement class="point-card compact-point-card">
+                        <ui:VisualElement class="point-card-header"><ui:VisualElement class="agent-status-dot robot-dot"/><ui:Label text="Départ robot" class="point-card-title"/></ui:VisualElement>
+                        <ui:VisualElement class="coordinate-row">
+                            <ui:VisualElement class="coordinate-field"><ui:Label text="X" class="coordinate-label"/><ui:FloatField name="StartXField" class="creation-text-field"/></ui:VisualElement>
+                            <ui:VisualElement class="coordinate-field coordinate-middle"><ui:Label text="Z" class="coordinate-label"/><ui:FloatField name="StartZField" class="creation-text-field"/></ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="creation-field yaw-field"><ui:Label text="Orientation Y" class="coordinate-label"/><ui:FloatField name="StartYawField" class="creation-text-field"/></ui:VisualElement>
                     </ui:VisualElement>
-                </ui:VisualElement>
-                <ui:VisualElement class="coordinate-row">
-                    <ui:VisualElement class="creation-field half-field">
-                        <ui:Label text="Nombre dans ce groupe" class="creation-field-label"/>
-                        <ui:IntegerField name="HumanCountField" class="creation-text-field"/>
+                    <ui:VisualElement class="point-card compact-point-card">
+                        <ui:VisualElement class="point-card-header"><ui:VisualElement class="agent-status-dot goal-dot"/><ui:Label text="Objectif robot" class="point-card-title"/></ui:VisualElement>
+                        <ui:VisualElement class="coordinate-row">
+                            <ui:VisualElement class="coordinate-field"><ui:Label text="X" class="coordinate-label"/><ui:FloatField name="GoalXField" class="creation-text-field"/></ui:VisualElement>
+                            <ui:VisualElement class="coordinate-field coordinate-middle"><ui:Label text="Z" class="coordinate-label"/><ui:FloatField name="GoalZField" class="creation-text-field"/></ui:VisualElement>
+                        </ui:VisualElement>
                     </ui:VisualElement>
-                    <ui:VisualElement class="creation-field half-field field-row-right">
-                        <ui:Label text="Vitesse (m/s)" class="creation-field-label"/>
-                        <ui:FloatField name="HumanSpeedField" class="creation-text-field"/>
+                    <ui:VisualElement class="point-card compact-point-card">
+                        <ui:VisualElement class="point-card-header"><ui:VisualElement class="agent-status-dot pedestrian-dot"/><ui:Label text="Départ humains" class="point-card-title"/></ui:VisualElement>
+                        <ui:VisualElement class="coordinate-row">
+                            <ui:VisualElement class="coordinate-field"><ui:Label text="X" class="coordinate-label"/><ui:FloatField name="HumanSpawnXField" class="creation-text-field"/></ui:VisualElement>
+                            <ui:VisualElement class="coordinate-field coordinate-middle"><ui:Label text="Z" class="coordinate-label"/><ui:FloatField name="HumanSpawnZField" class="creation-text-field"/></ui:VisualElement>
+                        </ui:VisualElement>
                     </ui:VisualElement>
-                </ui:VisualElement>
-                <ui:VisualElement class="creation-field">
-                    <ui:Label text="Comportement" class="creation-field-label"/>
-                    <ui:DropdownField name="HumanBehaviorDropdown" class="creation-dropdown"/>
-                </ui:VisualElement>
-                <ui:VisualElement class="creation-field">
-                    <ui:Label text="Contrôleur de mouvement" class="creation-field-label"/>
-                    <ui:DropdownField name="MovementControllerDropdown" class="creation-dropdown"/>
-                </ui:VisualElement>
-                <ui:Label text="Départ des piétons" class="point-section-label"/>
-                <ui:VisualElement class="coordinate-row">
-                    <ui:VisualElement class="coordinate-field">
-                        <ui:Label text="X" class="coordinate-label"/>
-                        <ui:FloatField name="HumanSpawnXField" class="creation-text-field"/>
+                    <ui:VisualElement class="point-card compact-point-card last-point-card">
+                        <ui:VisualElement class="point-card-header"><ui:VisualElement class="agent-status-dot human-goal-dot"/><ui:Label text="Objectif humains" class="point-card-title"/></ui:VisualElement>
+                        <ui:VisualElement class="coordinate-row">
+                            <ui:VisualElement class="coordinate-field"><ui:Label text="X" class="coordinate-label"/><ui:FloatField name="HumanGoalXField" class="creation-text-field"/></ui:VisualElement>
+                            <ui:VisualElement class="coordinate-field coordinate-middle"><ui:Label text="Z" class="coordinate-label"/><ui:FloatField name="HumanGoalZField" class="creation-text-field"/></ui:VisualElement>
+                        </ui:VisualElement>
                     </ui:VisualElement>
-                    <ui:VisualElement class="coordinate-field field-row-right">
-                        <ui:Label text="Z" class="coordinate-label"/>
-                        <ui:FloatField name="HumanSpawnZField" class="creation-text-field"/>
-                    </ui:VisualElement>
-                </ui:VisualElement>
-                <ui:Label text="Objectif des piétons" class="point-section-label"/>
-                <ui:VisualElement class="coordinate-row">
-                    <ui:VisualElement class="coordinate-field">
-                        <ui:Label text="X" class="coordinate-label"/>
-                        <ui:FloatField name="HumanGoalXField" class="creation-text-field"/>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="coordinate-field field-row-right">
-                        <ui:Label text="Z" class="coordinate-label"/>
-                        <ui:FloatField name="HumanGoalZField" class="creation-text-field"/>
-                    </ui:VisualElement>
-                </ui:VisualElement>
+                </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -341,6 +342,34 @@
                 <ui:Button name="PreviousStepButton" text="←   Précédent" class="action-button secondary creation-previous-button creation-step-hidden"/>
                 <ui:Button name="NextStepButton" text="Suivant   →" class="action-button primary creation-save-button"/>
                 <ui:Button name="SaveEditorButton" text="Enregistrer le scénario" class="action-button primary creation-save-button creation-step-hidden"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="EnvironmentImportOverlay" class="creation-modal-overlay creation-step-hidden">
+            <ui:VisualElement class="creation-modal">
+                <ui:Label text="Importer une grille d'occupation" class="creation-modal-title"/>
+                <ui:Label text="L'image sera normalisée en PNG et ajoutée aux environnements disponibles." class="creation-modal-subtitle"/>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Fichier PNG, JPG ou JPEG *" class="creation-field-label"/>
+                    <ui:VisualElement class="import-file-row">
+                        <ui:TextField name="EnvironmentImportPathField" placeholder="Chemin du fichier image" class="creation-text-field import-path-field"/>
+                        <ui:Button name="BrowseEnvironmentFileButton" text="Parcourir…" class="action-button secondary import-browse-button"/>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Nom de l'environnement" class="creation-field-label"/>
+                    <ui:TextField name="EnvironmentImportNameField" placeholder="Ex. : laboratoire_rdc" class="creation-text-field"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="import-metadata-row">
+                    <ui:VisualElement class="creation-field import-metadata-field"><ui:Label text="Résolution (m/pixel) *" class="creation-field-label"/><ui:FloatField name="EnvironmentResolutionField" class="creation-text-field"/></ui:VisualElement>
+                    <ui:VisualElement class="creation-field import-metadata-field import-field-middle"><ui:Label text="Origine X (m)" class="creation-field-label"/><ui:FloatField name="EnvironmentOriginXField" class="creation-text-field"/></ui:VisualElement>
+                    <ui:VisualElement class="creation-field import-metadata-field import-field-middle"><ui:Label text="Origine Z (m)" class="creation-field-label"/><ui:FloatField name="EnvironmentOriginZField" class="creation-text-field"/></ui:VisualElement>
+                </ui:VisualElement>
+                <ui:Label name="EnvironmentImportFeedbackLabel" text="" class="import-feedback"/>
+                <ui:VisualElement class="creation-modal-actions">
+                    <ui:Button name="CancelEnvironmentImportButton" text="Annuler" class="action-button secondary"/>
+                    <ui:Button name="ConfirmEnvironmentImportButton" text="Importer l'environnement" class="action-button primary"/>
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

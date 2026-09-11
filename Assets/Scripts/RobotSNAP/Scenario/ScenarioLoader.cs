@@ -339,17 +339,23 @@ namespace RobotSNAP.Core.Scenario
             texture = null;
             bounds = new Bounds();
 
-            string basePath = Path.Combine(Application.streamingAssetsPath, MapsPath);
+            if (string.IsNullOrWhiteSpace(mapIdentifier) || string.IsNullOrWhiteSpace(_mapsPath))
+                return false;
+
+            string basePath = _mapsPath;
             string mapName = mapIdentifier.Replace('\\', '/').Trim('/');
 
-            string pngPath, jsonPath;
+            string imagePath, jsonPath;
 
             if (mapName.Contains("/"))
             {
                 // Format "dataset/mapname"
                 string dataset = mapName.Substring(0, mapName.IndexOf('/'));
                 string map = mapName.Substring(mapName.IndexOf('/') + 1);
-                pngPath = Path.Combine(basePath, dataset, "png", map + ".png");
+                string imageBasePath = Path.Combine(basePath, dataset, "png", map);
+                imagePath = new[] { ".png", ".jpg", ".jpeg" }
+                    .Select(extension => imageBasePath + extension)
+                    .FirstOrDefault(File.Exists);
                 jsonPath = Path.Combine(basePath, dataset, "json", map + ".json");
             }
             else
@@ -362,36 +368,41 @@ namespace RobotSNAP.Core.Scenario
                     Debug.LogError($"[ScenarioLoader] Dataset folder not found: {pngFolder}");
                     return false;
                 }
-                string[] pngFiles = Directory.GetFiles(pngFolder, "*.png");
-                if (pngFiles.Length == 0)
+                string[] imageFiles = new[] { "*.png", "*.jpg", "*.jpeg" }
+                    .SelectMany(pattern => Directory.GetFiles(pngFolder, pattern, SearchOption.TopDirectoryOnly))
+                    .ToArray();
+                if (imageFiles.Length == 0)
                 {
-                    Debug.LogError($"[ScenarioLoader] No PNG files in {pngFolder}");
+                    Debug.LogError($"[ScenarioLoader] No occupancy-grid images in {pngFolder}");
                     return false;
                 }
                 // Sélection aléatoire
-                int index = UnityEngine.Random.Range(0, pngFiles.Length);
-                string selected = Path.GetFileNameWithoutExtension(pngFiles[index]);
-                pngPath = pngFiles[index];
+                int index = UnityEngine.Random.Range(0, imageFiles.Length);
+                string selected = Path.GetFileNameWithoutExtension(imageFiles[index]);
+                imagePath = imageFiles[index];
                 jsonPath = Path.Combine(basePath, dataset, "json", selected + ".json");
             }
 
-            if (!File.Exists(pngPath) || !File.Exists(jsonPath))
+            if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath) || !File.Exists(jsonPath))
             {
-                Debug.LogError($"[ScenarioLoader] Map files missing: {pngPath} or {jsonPath}");
+                Debug.LogError($"[ScenarioLoader] Map files missing for: {mapIdentifier}");
                 return false;
             }
 
             // Charger texture
-            byte[] pngData = File.ReadAllBytes(pngPath);
+            byte[] pngData = File.ReadAllBytes(imagePath);
             texture = new Texture2D(2, 2);
             texture.LoadImage(pngData);
 
             // Charger JSON
             string json = File.ReadAllText(jsonPath);
             var metadata = JsonConvert.DeserializeObject<MapMetadata>(json);
-            if (metadata?.bbox == null)
+            if (metadata?.bbox?.min == null || metadata.bbox.max == null ||
+                metadata.bbox.min.Length < 2 || metadata.bbox.max.Length < 2)
             {
                 Debug.LogError($"[ScenarioLoader] Invalid JSON metadata for {mapIdentifier}");
+                Destroy(texture);
+                texture = null;
                 return false;
             }
 
@@ -544,24 +555,33 @@ namespace RobotSNAP.Core.Scenario
             {
                 return new List<string>();
             }
-            
-            var maps = new List<string>();
+
+            var maps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             string[] imageExtensions = { "*.png", "*.jpg", "*.jpeg" };
-            
-            foreach (var pattern in imageExtensions)
+
+            // Legacy maps stored directly at the dataset root.
+            foreach (string pattern in imageExtensions)
             {
-                string[] files = Directory.GetFiles(_mapsPath, pattern);
-                foreach (var file in files)
+                foreach (string file in Directory.GetFiles(_mapsPath, pattern, SearchOption.TopDirectoryOnly))
+                    maps.Add(Path.GetFileNameWithoutExtension(file));
+            }
+
+            // Current layout: Dataset/<dataset>/png/<map>.<extension>.
+            foreach (string datasetDirectory in Directory.GetDirectories(_mapsPath))
+            {
+                string pngDirectory = Path.Combine(datasetDirectory, "png");
+                if (!Directory.Exists(pngDirectory))
+                    continue;
+
+                string dataset = Path.GetFileName(datasetDirectory);
+                foreach (string pattern in imageExtensions)
                 {
-                    string name = Path.GetFileNameWithoutExtension(file);
-                    if (!maps.Contains(name))
-                    {
-                        maps.Add(name);
-                    }
+                    foreach (string file in Directory.GetFiles(pngDirectory, pattern, SearchOption.TopDirectoryOnly))
+                        maps.Add($"{dataset}/{Path.GetFileNameWithoutExtension(file)}");
                 }
             }
-            
-            return maps.OrderBy(x => x).ToList();
+
+            return maps.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
         }
         
         /// <summary>
@@ -570,6 +590,61 @@ namespace RobotSNAP.Core.Scenario
         public bool ScenarioExists(string scenarioName)
         {
             return FindScenarioFile(scenarioName) != null;
+        }
+
+        /// <summary>
+        /// Moves a scenario to a recoverable archive folder instead of deleting it permanently.
+        /// </summary>
+        public bool ArchiveScenario(string scenarioName, out string archivedPath, out string error)
+        {
+            archivedPath = null;
+            error = null;
+
+            string sourcePath = FindScenarioFile(scenarioName);
+            if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+            {
+                error = "Le fichier du scénario est introuvable.";
+                return false;
+            }
+
+            try
+            {
+                string archiveDirectory = Path.Combine(_scenariosPath, "DeletedScenarios");
+                Directory.CreateDirectory(archiveDirectory);
+
+                string extension = Path.GetExtension(sourcePath);
+                string fileName = Path.GetFileNameWithoutExtension(sourcePath);
+                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string destination = Path.Combine(archiveDirectory, $"{fileName}_{timestamp}{extension}");
+                int suffix = 2;
+                while (File.Exists(destination))
+                    destination = Path.Combine(archiveDirectory, $"{fileName}_{timestamp}_{suffix++}{extension}");
+
+                File.Move(sourcePath, destination);
+                if (File.Exists(sourcePath + ".meta"))
+                {
+                    try
+                    {
+                        File.Move(sourcePath + ".meta", destination + ".meta");
+                    }
+                    catch (Exception metaException)
+                    {
+                        Debug.LogWarning($"[ScenarioLoader] Scenario archived, but its meta file could not be moved: {metaException.Message}");
+                    }
+                }
+
+                archivedPath = destination;
+                ClearScenarioCache();
+#if UNITY_EDITOR
+                AssetDatabase.Refresh();
+#endif
+                return true;
+            }
+            catch (Exception exception)
+            {
+                error = $"Suppression impossible : {exception.Message}";
+                return false;
+            }
         }
         
         /// <summary>

@@ -6,6 +6,9 @@ using RobotSNAP.Core.Scenario;
 using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.UIElements;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 /// <summary>
 /// Drives the scenario browser and the three-step scenario creation workflow.
@@ -47,6 +50,13 @@ public class ScenariosTabController : MonoBehaviour
     private Button _nextButton;
     private Button _saveButton;
     private Button _addTagButton;
+    private Button _openEnvironmentImportButton;
+    private Button _browseEnvironmentFileButton;
+    private Button _cancelEnvironmentImportButton;
+    private Button _confirmEnvironmentImportButton;
+    private Button _cancelDeleteScenarioButton;
+    private Button _confirmDeleteScenarioButton;
+    private readonly Button[] _placementButtons = new Button[4];
 
     private Label _editorTitle;
     private Label _editorSubtitle;
@@ -54,8 +64,19 @@ public class ScenariosTabController : MonoBehaviour
     private Label _nameCounter;
     private Label _descriptionCounter;
     private Label _mapName;
+    private Label _mapPointCount;
+    private Label _mapMode;
     private Image _environmentImage;
     private Label _environmentPlaceholder;
+    private Image _agentsEnvironmentImage;
+    private Label _agentsMapPlaceholder;
+    private Label _placementInstructionLabel;
+    private Label _mapCursorCoordinatesLabel;
+    private readonly VisualElement[] _mapMarkers = new VisualElement[4];
+    private VisualElement _agentsEnvironmentCanvas;
+    private VisualElement _environmentImportOverlay;
+    private VisualElement _deleteScenarioOverlay;
+    private Label _deleteScenarioNameLabel;
 
     private TextField _nameField;
     private TextField _descriptionField;
@@ -64,6 +85,12 @@ public class ScenariosTabController : MonoBehaviour
     private DropdownField _previewDropdown;
     private DropdownField _tagsDropdown;
     private VisualElement _selectedTagsContainer;
+    private TextField _environmentImportPathField;
+    private TextField _environmentImportNameField;
+    private FloatField _environmentResolutionField;
+    private FloatField _environmentOriginXField;
+    private FloatField _environmentOriginZField;
+    private Label _environmentImportFeedbackLabel;
 
     private DropdownField _robotTypeDropdown;
     private DropdownField _robotBehaviorDropdown;
@@ -109,6 +136,19 @@ public class ScenariosTabController : MonoBehaviour
     private int _currentStep = 1;
     private string _editingScenarioId;
     private ScenarioData _editingScenario;
+    private string _pendingDeleteScenarioId;
+    private string _loadedMapIdentifier;
+    private Texture2D _occupancyTexture;
+    private Bounds _occupancyBounds;
+    private PlacementTarget _placementTarget = PlacementTarget.RobotStart;
+
+    private enum PlacementTarget
+    {
+        RobotStart,
+        RobotGoal,
+        HumanSpawn,
+        HumanGoal
+    }
 
     private void Awake()
     {
@@ -129,6 +169,13 @@ public class ScenariosTabController : MonoBehaviour
         if (_nextButton != null) _nextButton.clicked -= GoToNextStep;
         if (_saveButton != null) _saveButton.clicked -= SaveScenario;
         if (_addTagButton != null) _addTagButton.clicked -= AddCustomTag;
+        if (_openEnvironmentImportButton != null) _openEnvironmentImportButton.clicked -= OpenEnvironmentImport;
+        if (_browseEnvironmentFileButton != null) _browseEnvironmentFileButton.clicked -= BrowseEnvironmentFile;
+        if (_cancelEnvironmentImportButton != null) _cancelEnvironmentImportButton.clicked -= CloseEnvironmentImport;
+        if (_confirmEnvironmentImportButton != null) _confirmEnvironmentImportButton.clicked -= ImportEnvironment;
+        if (_cancelDeleteScenarioButton != null) _cancelDeleteScenarioButton.clicked -= CloseDeleteConfirmation;
+        if (_confirmDeleteScenarioButton != null) _confirmDeleteScenarioButton.clicked -= ConfirmDeleteScenario;
+        ReleaseOccupancyTexture();
     }
 
     private void OnEnable()
@@ -177,6 +224,16 @@ public class ScenariosTabController : MonoBehaviour
         _nextButton = Require<Button>(root, "NextStepButton", missing);
         _saveButton = Require<Button>(root, "SaveEditorButton", missing);
         _addTagButton = Require<Button>(root, "AddTagButton", missing);
+        _openEnvironmentImportButton = Require<Button>(root, "OpenEnvironmentImportButton", missing);
+        _browseEnvironmentFileButton = Require<Button>(root, "BrowseEnvironmentFileButton", missing);
+        _cancelEnvironmentImportButton = Require<Button>(root, "CancelEnvironmentImportButton", missing);
+        _confirmEnvironmentImportButton = Require<Button>(root, "ConfirmEnvironmentImportButton", missing);
+        _cancelDeleteScenarioButton = Require<Button>(root, "CancelDeleteScenarioButton", missing);
+        _confirmDeleteScenarioButton = Require<Button>(root, "ConfirmDeleteScenarioButton", missing);
+        _placementButtons[0] = Require<Button>(root, "PlaceRobotStartButton", missing);
+        _placementButtons[1] = Require<Button>(root, "PlaceRobotGoalButton", missing);
+        _placementButtons[2] = Require<Button>(root, "PlaceHumanSpawnButton", missing);
+        _placementButtons[3] = Require<Button>(root, "PlaceHumanGoalButton", missing);
 
         _editorTitle = Require<Label>(root, "EditorTitle", missing);
         _editorSubtitle = Require<Label>(root, "EditorSubtitle", missing);
@@ -184,8 +241,22 @@ public class ScenariosTabController : MonoBehaviour
         _nameCounter = Require<Label>(root, "NameCounter", missing);
         _descriptionCounter = Require<Label>(root, "DescriptionCounter", missing);
         _mapName = Require<Label>(root, "MapName", missing);
+        _mapPointCount = Require<Label>(root, "MapPointCount", missing);
+        _mapMode = Require<Label>(root, "MapMode", missing);
         _environmentImage = Require<Image>(root, "EnvironmentImage", missing);
         _environmentPlaceholder = Require<Label>(root, "EnvironmentPlaceholder", missing);
+        _agentsEnvironmentImage = Require<Image>(root, "AgentsEnvironmentImage", missing);
+        _agentsEnvironmentCanvas = Require<VisualElement>(root, "AgentsEnvironmentCanvas", missing);
+        _agentsMapPlaceholder = Require<Label>(root, "AgentsMapPlaceholder", missing);
+        _placementInstructionLabel = Require<Label>(root, "PlacementInstructionLabel", missing);
+        _mapCursorCoordinatesLabel = Require<Label>(root, "MapCursorCoordinatesLabel", missing);
+        _mapMarkers[0] = Require<VisualElement>(root, "RobotStartMapMarker", missing);
+        _mapMarkers[1] = Require<VisualElement>(root, "RobotGoalMapMarker", missing);
+        _mapMarkers[2] = Require<VisualElement>(root, "HumanSpawnMapMarker", missing);
+        _mapMarkers[3] = Require<VisualElement>(root, "HumanGoalMapMarker", missing);
+        _environmentImportOverlay = Require<VisualElement>(root, "EnvironmentImportOverlay", missing);
+        _deleteScenarioOverlay = Require<VisualElement>(root, "DeleteScenarioOverlay", missing);
+        _deleteScenarioNameLabel = Require<Label>(root, "DeleteScenarioNameLabel", missing);
 
         _nameField = Require<TextField>(root, "NameField", missing);
         _descriptionField = Require<TextField>(root, "DescriptionField", missing);
@@ -194,6 +265,12 @@ public class ScenariosTabController : MonoBehaviour
         _previewDropdown = Require<DropdownField>(root, "PreviewDropdown", missing);
         _tagsDropdown = Require<DropdownField>(root, "TagsDropdown", missing);
         _selectedTagsContainer = Require<VisualElement>(root, "SelectedTags", missing);
+        _environmentImportPathField = Require<TextField>(root, "EnvironmentImportPathField", missing);
+        _environmentImportNameField = Require<TextField>(root, "EnvironmentImportNameField", missing);
+        _environmentResolutionField = Require<FloatField>(root, "EnvironmentResolutionField", missing);
+        _environmentOriginXField = Require<FloatField>(root, "EnvironmentOriginXField", missing);
+        _environmentOriginZField = Require<FloatField>(root, "EnvironmentOriginZField", missing);
+        _environmentImportFeedbackLabel = Require<Label>(root, "EnvironmentImportFeedbackLabel", missing);
 
         _robotTypeDropdown = Require<DropdownField>(root, "RobotTypeDropdown", missing);
         _robotBehaviorDropdown = Require<DropdownField>(root, "RobotBehaviorDropdown", missing);
@@ -290,11 +367,16 @@ public class ScenariosTabController : MonoBehaviour
         editButton.AddToClassList("action-button");
         editButton.AddToClassList("secondary");
 
+        var deleteButton = new Button(RequestDeleteSelectedScenario) { text = "Supprimer" };
+        deleteButton.AddToClassList("action-button");
+        deleteButton.AddToClassList("danger");
+
         var useButton = new Button(UseSelectedScenario) { text = "Utiliser le scénario" };
         useButton.AddToClassList("action-button");
         useButton.AddToClassList("primary");
 
         actions.Add(editButton);
+        actions.Add(deleteButton);
         actions.Add(useButton);
         detailsContainer.Add(actions);
     }
@@ -332,6 +414,22 @@ public class ScenariosTabController : MonoBehaviour
             UpdateEnvironmentPreview();
         });
         _previewDropdown.RegisterValueChangedCallback(_ => UpdateEnvironmentPreview());
+
+        RegisterMapCoordinateCallbacks();
+        _agentsEnvironmentImage.scaleMode = ScaleMode.ScaleToFit;
+        _environmentImage.scaleMode = ScaleMode.ScaleToFit;
+        _agentsEnvironmentCanvas.AddManipulator(new OccupancyMapPlacementManipulator(
+            OnMapPointerDown,
+            OnMapPointerMove,
+            () => _mapCursorCoordinatesLabel.text = "X —  Z —"));
+        _agentsEnvironmentCanvas.RegisterCallback<GeometryChangedEvent>(_ => UpdateMapMarkers());
+
+        _environmentImportPathField.RegisterValueChangedCallback(evt =>
+        {
+            if (string.IsNullOrWhiteSpace(_environmentImportNameField.value) && File.Exists(evt.newValue))
+                _environmentImportNameField.SetValueWithoutNotify(Path.GetFileNameWithoutExtension(evt.newValue));
+            _environmentImportFeedbackLabel.text = string.Empty;
+        });
     }
 
     private void RegisterEvents()
@@ -343,6 +441,16 @@ public class ScenariosTabController : MonoBehaviour
         _nextButton.clicked += GoToNextStep;
         _saveButton.clicked += SaveScenario;
         _addTagButton.clicked += AddCustomTag;
+        _openEnvironmentImportButton.clicked += OpenEnvironmentImport;
+        _browseEnvironmentFileButton.clicked += BrowseEnvironmentFile;
+        _cancelEnvironmentImportButton.clicked += CloseEnvironmentImport;
+        _confirmEnvironmentImportButton.clicked += ImportEnvironment;
+        _cancelDeleteScenarioButton.clicked += CloseDeleteConfirmation;
+        _confirmDeleteScenarioButton.clicked += ConfirmDeleteScenario;
+        _placementButtons[0].clicked += () => SelectPlacementTarget(PlacementTarget.RobotStart);
+        _placementButtons[1].clicked += () => SelectPlacementTarget(PlacementTarget.RobotGoal);
+        _placementButtons[2].clicked += () => SelectPlacementTarget(PlacementTarget.HumanSpawn);
+        _placementButtons[3].clicked += () => SelectPlacementTarget(PlacementTarget.HumanGoal);
     }
 
     private void RefreshChoiceOptions()
@@ -462,6 +570,9 @@ public class ScenariosTabController : MonoBehaviour
         _nameCounter.text = "0/60";
         _descriptionCounter.text = "0/300";
         _mapName.text = "—";
+        _mapPointCount.text = "—";
+        _mapMode.text = "2D";
+        SelectPlacementTarget(PlacementTarget.RobotStart);
         ClearFeedback();
         UpdateEnvironmentPreview();
     }
@@ -581,6 +692,8 @@ public class ScenariosTabController : MonoBehaviour
 
         if (_currentStep == 3)
             UpdateValidationSummary();
+        else if (_currentStep == 2)
+            UpdateMapMarkers();
     }
 
     private static void SetVisible(VisualElement element, bool visible, string hiddenClass)
@@ -924,6 +1037,18 @@ public class ScenariosTabController : MonoBehaviour
             RebuildTagChips();
     }
 
+    private void RegisterMapCoordinateCallbacks()
+    {
+        _startXField.RegisterValueChangedCallback(_ => UpdateMapMarkers());
+        _startZField.RegisterValueChangedCallback(_ => UpdateMapMarkers());
+        _goalXField.RegisterValueChangedCallback(_ => UpdateMapMarkers());
+        _goalZField.RegisterValueChangedCallback(_ => UpdateMapMarkers());
+        _humanSpawnXField.RegisterValueChangedCallback(_ => UpdateMapMarkers());
+        _humanSpawnZField.RegisterValueChangedCallback(_ => UpdateMapMarkers());
+        _humanGoalXField.RegisterValueChangedCallback(_ => UpdateMapMarkers());
+        _humanGoalZField.RegisterValueChangedCallback(_ => UpdateMapMarkers());
+    }
+
     private void RebuildTagChips()
     {
         _selectedTagsContainer.Clear();
@@ -946,15 +1071,185 @@ public class ScenariosTabController : MonoBehaviour
 
     private void UpdateEnvironmentPreview()
     {
-        string previewName = IsPlaceholder(_previewDropdown.value, PreviewPlaceholder)
+        string mapIdentifier = IsPlaceholder(_mapDropdown.value, MapPlaceholder)
             ? null
-            : Path.GetFileNameWithoutExtension(_previewDropdown.value);
-        Texture2D texture = string.IsNullOrWhiteSpace(previewName)
-            ? Resources.Load<Texture2D>("ScenarioPreviews/default")
-            : Resources.Load<Texture2D>($"ScenarioPreviews/{previewName}");
+            : _mapDropdown.value;
 
-        _environmentImage.image = texture;
-        _environmentPlaceholder.EnableInClassList(StepHiddenClass, texture != null);
+        if (!string.Equals(_loadedMapIdentifier, mapIdentifier, StringComparison.Ordinal))
+        {
+            ReleaseOccupancyTexture();
+            _loadedMapIdentifier = mapIdentifier;
+
+            if (!string.IsNullOrWhiteSpace(mapIdentifier) && scenarioLoader != null &&
+                scenarioLoader.LoadMapData(mapIdentifier, out Texture2D texture, out Bounds bounds))
+            {
+                _occupancyTexture = texture;
+                _occupancyBounds = bounds;
+            }
+        }
+
+        if (_occupancyTexture != null)
+        {
+            _environmentImage.image = _occupancyTexture;
+            _agentsEnvironmentImage.image = _occupancyTexture;
+            _environmentPlaceholder.text = string.Empty;
+            _mapPointCount.text = $"{_occupancyTexture.width} × {_occupancyTexture.height} px";
+            _mapMode.text = $"{_occupancyBounds.size.x:0.##} × {_occupancyBounds.size.z:0.##} m";
+        }
+        else
+        {
+            string previewName = IsPlaceholder(_previewDropdown.value, PreviewPlaceholder)
+                ? null
+                : Path.GetFileNameWithoutExtension(_previewDropdown.value);
+            Texture2D coverTexture = string.IsNullOrWhiteSpace(previewName)
+                ? Resources.Load<Texture2D>("ScenarioPreviews/default")
+                : Resources.Load<Texture2D>($"ScenarioPreviews/{previewName}");
+
+            _environmentImage.image = coverTexture;
+            _agentsEnvironmentImage.image = null;
+            _environmentPlaceholder.text = string.IsNullOrWhiteSpace(mapIdentifier)
+                ? "Sélectionnez une carte pour afficher sa grille d'occupation."
+                : "La grille ou ses métadonnées JSON sont introuvables.";
+            _mapPointCount.text = "—";
+            _mapMode.text = "—";
+        }
+
+        bool hasStepOneImage = _environmentImage.image != null;
+        _environmentPlaceholder.EnableInClassList(StepHiddenClass, hasStepOneImage && _occupancyTexture != null);
+        _agentsMapPlaceholder.EnableInClassList(StepHiddenClass, _occupancyTexture != null);
+        UpdateMapMarkers();
+    }
+
+    private void ReleaseOccupancyTexture()
+    {
+        if (_occupancyTexture != null)
+        {
+            if (Application.isPlaying)
+                Destroy(_occupancyTexture);
+            else
+                DestroyImmediate(_occupancyTexture);
+        }
+
+        _occupancyTexture = null;
+        _loadedMapIdentifier = null;
+        _occupancyBounds = new Bounds();
+    }
+
+    private void SelectPlacementTarget(PlacementTarget target)
+    {
+        _placementTarget = target;
+        for (int index = 0; index < _placementButtons.Length; index++)
+            _placementButtons[index]?.EnableInClassList("active", index == (int)target);
+
+        if (_placementInstructionLabel != null)
+            _placementInstructionLabel.text = target switch
+            {
+                PlacementTarget.RobotStart => "Cliquez sur la carte pour placer le départ du robot.",
+                PlacementTarget.RobotGoal => "Cliquez sur la carte pour placer l'objectif du robot.",
+                PlacementTarget.HumanSpawn => "Cliquez sur la carte pour placer le départ des humains.",
+                _ => "Cliquez sur la carte pour placer l'objectif des humains."
+            };
+    }
+
+    private void OnMapPointerDown(Vector2 localPosition)
+    {
+        if (!TryLocalToWorld(localPosition, out Vector2 worldPosition))
+            return;
+
+        switch (_placementTarget)
+        {
+            case PlacementTarget.RobotStart:
+                _startXField.SetValueWithoutNotify(worldPosition.x);
+                _startZField.SetValueWithoutNotify(worldPosition.y);
+                break;
+            case PlacementTarget.RobotGoal:
+                _goalXField.SetValueWithoutNotify(worldPosition.x);
+                _goalZField.SetValueWithoutNotify(worldPosition.y);
+                break;
+            case PlacementTarget.HumanSpawn:
+                _humanSpawnXField.SetValueWithoutNotify(worldPosition.x);
+                _humanSpawnZField.SetValueWithoutNotify(worldPosition.y);
+                break;
+            case PlacementTarget.HumanGoal:
+                _humanGoalXField.SetValueWithoutNotify(worldPosition.x);
+                _humanGoalZField.SetValueWithoutNotify(worldPosition.y);
+                break;
+        }
+
+        UpdateMapMarkers();
+        ClearFeedback();
+    }
+
+    private void OnMapPointerMove(Vector2 localPosition)
+    {
+        if (TryLocalToWorld(localPosition, out Vector2 worldPosition))
+            _mapCursorCoordinatesLabel.text = $"X {worldPosition.x:0.##}  Z {worldPosition.y:0.##}";
+        else
+            _mapCursorCoordinatesLabel.text = "X —  Z —";
+    }
+
+    private bool TryLocalToWorld(Vector2 localPosition, out Vector2 worldPosition)
+    {
+        worldPosition = default;
+        if (_occupancyTexture == null || _agentsEnvironmentCanvas == null)
+            return false;
+
+        Rect imageRect = GetDisplayedMapRect();
+        if (imageRect.width <= 0f || imageRect.height <= 0f || !imageRect.Contains(localPosition))
+            return false;
+
+        float normalizedX = Mathf.InverseLerp(imageRect.xMin, imageRect.xMax, localPosition.x);
+        float normalizedZ = 1f - Mathf.InverseLerp(imageRect.yMin, imageRect.yMax, localPosition.y);
+        worldPosition = new Vector2(
+            Mathf.Lerp(_occupancyBounds.min.x, _occupancyBounds.max.x, normalizedX),
+            Mathf.Lerp(_occupancyBounds.min.z, _occupancyBounds.max.z, normalizedZ));
+        return true;
+    }
+
+    private Rect GetDisplayedMapRect()
+    {
+        Rect canvasRect = _agentsEnvironmentCanvas.contentRect;
+        if (_occupancyTexture == null || canvasRect.width <= 0f || canvasRect.height <= 0f)
+            return Rect.zero;
+
+        float imageAspect = (float)_occupancyTexture.width / _occupancyTexture.height;
+        float canvasAspect = canvasRect.width / canvasRect.height;
+        if (imageAspect > canvasAspect)
+        {
+            float height = canvasRect.width / imageAspect;
+            return new Rect(0f, (canvasRect.height - height) * 0.5f, canvasRect.width, height);
+        }
+
+        float width = canvasRect.height * imageAspect;
+        return new Rect((canvasRect.width - width) * 0.5f, 0f, width, canvasRect.height);
+    }
+
+    private void UpdateMapMarkers()
+    {
+        if (_mapMarkers.Any(marker => marker == null))
+            return;
+
+        bool canDisplay = _occupancyTexture != null && GetDisplayedMapRect().width > 0f;
+        foreach (VisualElement marker in _mapMarkers)
+            marker.EnableInClassList(StepHiddenClass, !canDisplay);
+        if (!canDisplay)
+            return;
+
+        PositionMarker(_mapMarkers[0], _startXField.value, _startZField.value);
+        PositionMarker(_mapMarkers[1], _goalXField.value, _goalZField.value);
+        PositionMarker(_mapMarkers[2], _humanSpawnXField.value, _humanSpawnZField.value);
+        PositionMarker(_mapMarkers[3], _humanGoalXField.value, _humanGoalZField.value);
+    }
+
+    private void PositionMarker(VisualElement marker, float worldX, float worldZ)
+    {
+        Rect imageRect = GetDisplayedMapRect();
+        float normalizedX = Mathf.InverseLerp(_occupancyBounds.min.x, _occupancyBounds.max.x, worldX);
+        float normalizedZ = Mathf.InverseLerp(_occupancyBounds.min.z, _occupancyBounds.max.z, worldZ);
+        float x = imageRect.xMin + normalizedX * imageRect.width - 11f;
+        float y = imageRect.yMax - normalizedZ * imageRect.height - 11f;
+        marker.transform.position = new Vector3(x, y, 0f);
+        marker.tooltip = $"X {worldX:0.##}, Z {worldZ:0.##}";
     }
 
     private void OnScenarioSelected(string scenarioId)
@@ -967,6 +1262,107 @@ public class ScenariosTabController : MonoBehaviour
     {
         if (!string.IsNullOrWhiteSpace(_listView?.SelectedScenarioId))
             dataService?.LoadScenario(_listView.SelectedScenarioId);
+    }
+
+    private void RequestDeleteSelectedScenario()
+    {
+        string scenarioId = _listView?.SelectedScenarioId;
+        if (string.IsNullOrWhiteSpace(scenarioId))
+        {
+            Debug.LogWarning("[ScenariosTabController] Select a scenario before deleting it.");
+            return;
+        }
+
+        _pendingDeleteScenarioId = scenarioId;
+        string displayName = _listView.SelectedScenarioInfo?.Name;
+        _deleteScenarioNameLabel.text = $"{(string.IsNullOrWhiteSpace(displayName) ? scenarioId : displayName)}";
+        _deleteScenarioOverlay.RemoveFromClassList(HiddenClass);
+    }
+
+    private void CloseDeleteConfirmation()
+    {
+        _pendingDeleteScenarioId = null;
+        _deleteScenarioOverlay?.AddToClassList(HiddenClass);
+    }
+
+    private void ConfirmDeleteScenario()
+    {
+        if (string.IsNullOrWhiteSpace(_pendingDeleteScenarioId) || scenarioLoader == null)
+            return;
+
+        string scenarioId = _pendingDeleteScenarioId;
+        if (!scenarioLoader.ArchiveScenario(scenarioId, out string archivedPath, out string error))
+        {
+            _deleteScenarioNameLabel.text = error;
+            return;
+        }
+
+        CloseDeleteConfirmation();
+        dataService?.ReloadAllScenarioInfos();
+        _listView?.ClearSelection();
+        _detailsView?.ShowEmpty();
+        Log($"Scenario archived: {archivedPath}");
+    }
+
+    private void OpenEnvironmentImport()
+    {
+        _environmentImportPathField.SetValueWithoutNotify(string.Empty);
+        _environmentImportNameField.SetValueWithoutNotify(string.Empty);
+        _environmentResolutionField.SetValueWithoutNotify(0.05f);
+        _environmentOriginXField.SetValueWithoutNotify(0f);
+        _environmentOriginZField.SetValueWithoutNotify(0f);
+        _environmentImportFeedbackLabel.text = string.Empty;
+        _environmentImportOverlay.RemoveFromClassList(StepHiddenClass);
+    }
+
+    private void CloseEnvironmentImport()
+    {
+        _environmentImportOverlay?.AddToClassList(StepHiddenClass);
+    }
+
+    private void BrowseEnvironmentFile()
+    {
+#if UNITY_EDITOR
+        string path = EditorUtility.OpenFilePanel("Sélectionner une grille d'occupation", string.Empty, string.Empty);
+        if (!string.IsNullOrWhiteSpace(path))
+            _environmentImportPathField.value = path;
+#else
+        _environmentImportFeedbackLabel.text = "Saisissez le chemin complet de l'image.";
+#endif
+    }
+
+    private void ImportEnvironment()
+    {
+        if (scenarioLoader == null)
+        {
+            _environmentImportFeedbackLabel.text = "Le chargeur de scénarios n'est pas disponible.";
+            return;
+        }
+
+        if (!OccupancyMapImporter.TryImport(
+                _environmentImportPathField.value,
+                scenarioLoader.MapsPath,
+                _environmentImportNameField.value,
+                _environmentResolutionField.value,
+                _environmentOriginXField.value,
+                _environmentOriginZField.value,
+                out string mapIdentifier,
+                out string error))
+        {
+            _environmentImportFeedbackLabel.text = error;
+            return;
+        }
+
+        scenarioLoader.ClearMapCache();
+#if UNITY_EDITOR
+        AssetDatabase.Refresh();
+#endif
+        RefreshChoiceOptions();
+        EnsureChoice(_mapDropdown, mapIdentifier, MapPlaceholder);
+        _mapName.text = mapIdentifier;
+        UpdateEnvironmentPreview();
+        CloseEnvironmentImport();
+        SetFeedback($"Environnement « {mapIdentifier} » importé.");
     }
 
     private void SetFeedback(string message)

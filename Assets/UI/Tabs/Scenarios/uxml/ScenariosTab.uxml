@@ -6,5 +6,16 @@
     <ui:VisualElement name="ScenarioPage" class="scenario-page">
         <ui:Instance template="ScenarioBrowserTab" name="ScenarioBrowserView" class="scenario-browser-view"/>
         <ui:Instance template="ScenarioCreationTab" name="ScenarioEditorView" class="scenario-creation-view scenario-view-hidden"/>
+        <ui:VisualElement name="DeleteScenarioOverlay" class="scenario-modal-overlay scenario-view-hidden">
+            <ui:VisualElement class="scenario-modal">
+                <ui:Label text="Supprimer ce scénario ?" class="scenario-modal-title"/>
+                <ui:Label name="DeleteScenarioNameLabel" text="" class="scenario-modal-description"/>
+                <ui:Label text="Le fichier sera déplacé dans DeletedScenarios et pourra être récupéré." class="scenario-modal-hint"/>
+                <ui:VisualElement class="scenario-modal-actions">
+                    <ui:Button name="CancelDeleteScenarioButton" text="Annuler" class="action-button secondary"/>
+                    <ui:Button name="ConfirmDeleteScenarioButton" text="Supprimer" class="action-button danger"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

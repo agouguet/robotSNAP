@@ -1405,3 +1405,301 @@
     height: 38px;
     margin-right: 10px;
 }
+
+/* ================================================================
+   OCCUPANCY GRID IMPORT
+   ================================================================ */
+
+.upload-environment-button {
+    margin-top: 7px;
+    padding: 5px 10px;
+    background-color: transparent;
+    border-width: 0;
+    color: var(--accent);
+    font-size: 10px;
+}
+
+.upload-environment-button:hover {
+    background-color: rgba(0, 110, 255, 0.09);
+}
+
+.creation-modal-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(4, 9, 14, 0.82);
+}
+
+.creation-modal {
+    width: 570px;
+    padding: 24px;
+    background-color: var(--bg-secondary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 10px;
+}
+
+.creation-modal-title {
+    margin-bottom: 6px;
+    color: var(--text-primary);
+    font-size: 18px;
+    -unity-font-style: bold;
+}
+
+.creation-modal-subtitle {
+    margin-bottom: 20px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    white-space: normal;
+}
+
+.import-file-row,
+.import-metadata-row,
+.creation-modal-actions {
+    flex-direction: row;
+    align-items: center;
+}
+
+.import-path-field {
+    flex-grow: 1;
+}
+
+.import-browse-button {
+    min-width: 105px;
+    height: 36px;
+    margin-left: 8px;
+}
+
+.import-metadata-field {
+    flex-grow: 1;
+    flex-basis: 0;
+}
+
+.import-field-middle {
+    margin-left: 10px;
+}
+
+.import-feedback {
+    min-height: 24px;
+    color: rgb(245, 145, 145);
+    font-size: 11px;
+    white-space: normal;
+}
+
+.creation-modal-actions {
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.creation-modal-actions .action-button {
+    min-width: 115px;
+    height: 38px;
+    margin-left: 8px;
+}
+
+/* ================================================================
+   INTERACTIVE AGENT PLACEMENT
+   ================================================================ */
+
+.agents-step-layout {
+    align-items: stretch;
+}
+
+.agent-settings-panel {
+    width: 255px;
+    min-width: 230px;
+    margin-right: 14px;
+    padding: 0;
+    overflow: hidden;
+}
+
+.agent-settings-scroll,
+.manual-coordinates-scroll {
+    flex-grow: 1;
+    padding: 16px;
+}
+
+.agent-panel-divider {
+    height: 1px;
+    margin-top: 4px;
+    margin-bottom: 18px;
+    background-color: var(--border-color);
+}
+
+.human-heading {
+    margin-bottom: 14px;
+}
+
+.agents-map-panel {
+    flex-grow: 1;
+    min-width: 360px;
+    margin-right: 14px;
+    padding: 0;
+    overflow: hidden;
+}
+
+.agents-map-heading {
+    min-height: 60px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+}
+
+.map-cursor-coordinates {
+    color: var(--accent);
+    font-size: 10px;
+}
+
+.placement-toolbar {
+    min-height: 42px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-top-color: var(--border-color);
+    border-bottom-color: var(--border-color);
+    background-color: var(--bg-primary);
+}
+
+.placement-tool {
+    flex-grow: 1;
+    height: 30px;
+    margin-right: 4px;
+    padding-left: 5px;
+    padding-right: 5px;
+    background-color: transparent;
+    border-width: 1px;
+    border-color: transparent;
+    border-radius: 5px;
+    color: var(--text-secondary);
+    font-size: 9px;
+}
+
+.placement-tool:hover {
+    background-color: var(--button-hover);
+    color: var(--text-primary);
+}
+
+.placement-tool.active {
+    background-color: rgba(0, 110, 255, 0.18);
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+
+.agents-environment-canvas {
+    position: relative;
+    flex-grow: 1;
+    min-height: 260px;
+    overflow: hidden;
+    background-color: #101820;
+}
+
+.agents-environment-image {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.placement-marker {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    align-items: center;
+    justify-content: center;
+    border-width: 2px;
+    border-color: rgb(12, 20, 27);
+    border-radius: 11px;
+}
+
+.placement-marker Label {
+    color: white;
+    font-size: 9px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.robot-start-map-marker {
+    background-color: rgb(55, 200, 115);
+}
+
+.robot-goal-map-marker {
+    background-color: rgb(235, 150, 40);
+}
+
+.human-spawn-map-marker {
+    background-color: rgb(55, 145, 230);
+}
+
+.human-goal-map-marker,
+.human-goal-dot {
+    background-color: rgb(155, 90, 220);
+}
+
+.map-legend {
+    min-height: 38px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: var(--bg-primary);
+}
+
+.map-legend Label {
+    margin-left: 6px;
+    margin-right: 6px;
+    font-size: 8px;
+}
+
+.legend-robot-start {
+    color: rgb(75, 220, 135);
+}
+
+.legend-robot-goal {
+    color: rgb(245, 170, 65);
+}
+
+.legend-human-start {
+    color: rgb(80, 165, 245);
+}
+
+.legend-human-goal {
+    color: rgb(180, 115, 240);
+}
+
+.manual-coordinates-panel {
+    width: 275px;
+    min-width: 250px;
+    padding: 0;
+    overflow: hidden;
+}
+
+.compact-point-card {
+    margin-bottom: 10px;
+    padding: 10px;
+}
+
+.compact-point-card .point-card-header {
+    margin-bottom: 8px;
+}
+
+.last-point-card {
+    margin-bottom: 0;
+}
+
+.yaw-field {
+    margin-top: 8px;
+    margin-bottom: 0;
+}

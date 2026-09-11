@@ -55,3 +55,68 @@
 .scenario-view-hidden {
     display: none;
 }
+
+.scenario-modal-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(4, 9, 14, 0.82);
+}
+
+.scenario-modal {
+    width: 430px;
+    padding: 24px;
+    background-color: var(--bg-secondary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 10px;
+}
+
+.scenario-modal-title {
+    margin-bottom: 12px;
+    color: var(--text-primary);
+    font-size: 18px;
+    -unity-font-style: bold;
+}
+
+.scenario-modal-description {
+    margin-bottom: 7px;
+    color: var(--text-primary);
+    font-size: 12px;
+    white-space: normal;
+}
+
+.scenario-modal-hint {
+    color: var(--text-secondary);
+    font-size: 10px;
+    white-space: normal;
+}
+
+.scenario-modal-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 22px;
+}
+
+.scenario-modal-actions .action-button {
+    min-width: 100px;
+    height: 38px;
+    margin-left: 8px;
+}
+
+.action-button.danger,
+.scenario-details-actions .action-button.danger {
+    background-color: rgba(205, 55, 65, 0.18);
+    border-width: 1px;
+    border-color: rgb(210, 70, 80);
+    color: rgb(245, 145, 150);
+}
+
+.action-button.danger:hover,
+.scenario-details-actions .action-button.danger:hover {
+    background-color: rgba(205, 55, 65, 0.32);
+}

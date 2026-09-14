@@ -21,23 +21,40 @@ namespace RobotSNAP.Core.Scenario
         /// <summary>Formation and spacing shared by every human config declaring the same group id.</summary>
         public readonly struct GroupLayout
         {
-            public GroupLayout(string formation, float spacing, bool hasFormation, bool hasSpacing = true)
+            public GroupLayout(
+                string formation,
+                float spacing,
+                bool hasFormation,
+                bool hasSpacing = true,
+                float parameter = 0f)
             {
                 Formation = formation;
-                Spacing = ClampSpacing(spacing);
+                Spacing = ClampSpacing(spacing, formation);
                 HasFormation = hasFormation;
                 HasSpacing = hasSpacing;
+                Parameter = parameter;
             }
 
             public string Formation { get; }
             public float Spacing { get; }
             public bool HasFormation { get; }
             public bool HasSpacing { get; }
+            public float Parameter { get; }
         }
 
         /// <summary>A group is meant to stay a compact bloc, so its spacing window is bounded.</summary>
         public static float ClampSpacing(float spacing) =>
             Mathf.Clamp(spacing <= 0f ? DefaultSpacing : spacing, MinSpacing, MaxSpacing);
+
+        /// <summary>
+        /// Same window, raised to the smallest spacing the formation itself can hold: a single file
+        /// below one metre walks into its own leader, a loose cluster can stay tighter.
+        /// </summary>
+        public static float ClampSpacing(float spacing, string formation)
+        {
+            float floor = Mathf.Max(MinSpacing, GroupFormation.MinSpacing(formation));
+            return Mathf.Clamp(spacing <= 0f ? DefaultSpacing : spacing, floor, MaxSpacing);
+        }
 
         /// <summary>
         /// Resolves one layout per group id. The first config that sets a formation or a spacing wins,
@@ -60,11 +77,15 @@ namespace RobotSNAP.Core.Scenario
 
                 string formation = layout.Formation;
                 bool hasFormation = layout.HasFormation;
+                float parameter = layout.Parameter;
                 if (!hasFormation && !string.IsNullOrWhiteSpace(config.Spawn?.Formation))
                 {
                     formation = config.Spawn.Formation;
                     hasFormation = true;
                 }
+
+                if (parameter <= 0f && config.Spawn != null && config.Spawn.FormationParameter > 0f)
+                    parameter = config.Spawn.FormationParameter;
 
                 float spacing = layout.Spacing;
                 bool hasSpacing = layout.HasSpacing;
@@ -74,7 +95,7 @@ namespace RobotSNAP.Core.Scenario
                     hasSpacing = true;
                 }
 
-                layouts[id] = new GroupLayout(formation, spacing, hasFormation, hasSpacing);
+                layouts[id] = new GroupLayout(formation, spacing, hasFormation, hasSpacing, parameter);
             }
 
             return layouts;
@@ -100,9 +121,19 @@ namespace RobotSNAP.Core.Scenario
         /// Leader-local formation slot of one member, already rotated into world axes.
         /// The leader always owns the first slot and stays on the anchor.
         /// </summary>
-        public static Vector2 SlotOffset(int index, int count, float spacing, string formation, float headingRadians)
+        public static Vector2 SlotOffset(
+            int index,
+            int count,
+            float spacing,
+            string formation,
+            float headingRadians,
+            float parameter = 0f)
         {
-            List<Vector2> slots = GroupFormation.CreateSlots(Mathf.Max(0, count), ClampSpacing(spacing), formation);
+            List<Vector2> slots = GroupFormation.CreateSlots(
+                Mathf.Max(0, count),
+                ClampSpacing(spacing, formation),
+                formation,
+                parameter);
             if (slots.Count == 0)
                 return Vector2.zero;
 

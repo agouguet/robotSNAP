@@ -39,17 +39,21 @@ namespace RobotSNAP.Agents
         private float _heading;
         private bool _frameInitialized;
 
-        public HumanGroup(string id, float spacing, string formation)
+        public HumanGroup(string id, float spacing, string formation, float parameter = 0f)
         {
             Id = id;
-            // Same window as the spawn layout: a group is meant to stay a compact bloc.
-            Spacing = Mathf.Clamp(spacing, 0.4f, 3f);
             Formation = GroupFormation.Normalize(formation);
+            // Never below what the formation itself can hold, never wide enough to break the group apart.
+            Spacing = Mathf.Clamp(spacing, GroupFormation.MinSpacing(Formation), 3f);
+            Parameter = parameter;
         }
 
         public string Id { get; }
         public float Spacing { get; }
         public string Formation { get; }
+
+        /// <summary>The one value the formation tunes; zero means its natural default.</summary>
+        public float Parameter { get; }
         public int Count => _members.Count;
         public IReadOnlyList<HumanAgent> Members => _members;
         public HumanAgent Leader => _members.Count > 0 ? _members[0] : null;
@@ -211,7 +215,7 @@ namespace RobotSNAP.Agents
         private void RebuildSlots()
         {
             _slots.Clear();
-            _slots.AddRange(GroupFormation.CreateSlots(_members.Count, Spacing, Formation));
+            _slots.AddRange(GroupFormation.CreateSlots(_members.Count, Spacing, Formation, Parameter));
             for (int index = 0; index < _members.Count && index < _slots.Count; index++)
                 _members[index].SetFormationOffset(_slots[index]);
         }

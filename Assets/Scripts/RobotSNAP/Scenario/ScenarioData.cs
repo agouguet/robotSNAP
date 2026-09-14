@@ -276,6 +276,13 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("formation")]
         public string Formation { get; set; }
+
+        /// <summary>
+        /// The single value a formation can tune: a wedge opening (degrees), a row stagger (m),
+        /// a cluster radius (m) or a pair front spacing (m). Zero keeps the formation default.
+        /// </summary>
+        [YamlMember("formation_parameter")]
+        public float FormationParameter { get; set; }
         
         [YamlMember("spacing")]
         public float Spacing { get; set; } = 1.5f;

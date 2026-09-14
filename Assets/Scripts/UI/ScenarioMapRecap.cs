@@ -65,10 +65,12 @@ public sealed class ScenarioMapRecap
         _overlay.SetMap(_bounds, GetDisplayedRect());
         _overlay.ShowGrid = true;
         _overlay.SetRoutes(_routes);
+        bool planned = _routes.Exists(route => route.Planned);
         _legend.text = _texture == null || _bounds.size.x <= 0f
             ? "No environment"
             : $"{_routes.Count} route(s) · grid {_overlay.GridStep:0.##} m · " +
-              $"map {_bounds.size.x:0.#} × {_bounds.size.z:0.#} m";
+              $"map {_bounds.size.x:0.#} × {_bounds.size.z:0.#} m" +
+              (planned ? " · paths follow walkable space" : string.Empty);
     }
 
     /// <summary>Colour key of the recap: one entry per configured route.</summary>
@@ -88,7 +90,8 @@ public sealed class ScenarioMapRecap
             swatch.style.backgroundColor = route.Color;
 
             string routeName = string.IsNullOrWhiteSpace(route.Name) ? "Route" : route.Name;
-            var name = new Label($"{routeName} · {route.Points.Count} pts");
+            string geometry = route.Planned ? " · walkable path" : string.Empty;
+            var name = new Label($"{routeName} · {route.Points.Count} pts{geometry}");
             name.AddToClassList("map-legend-name");
 
             entry.Add(swatch);

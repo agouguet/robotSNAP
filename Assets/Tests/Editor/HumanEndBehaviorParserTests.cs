@@ -50,5 +50,47 @@ namespace RobotSNAP.Tests.Editor
                     Is.EqualTo(behavior));
             }
         }
+
+        [TestCase("SFM", MovementControllerType.SFM)]
+        [TestCase("sfm", MovementControllerType.SFM)]
+        [TestCase("social force", MovementControllerType.SFM)]
+        [TestCase("ONNX", MovementControllerType.ONNXPrediction)]
+        [TestCase("onnx_prediction", MovementControllerType.ONNXPrediction)]
+        [TestCase("Hybrid", MovementControllerType.Hybrid)]
+        [TestCase("SFM (social forces)", MovementControllerType.SFM)]
+        [TestCase("ONNX (learned)", MovementControllerType.ONNXPrediction)]
+        [TestCase("Hybrid (SFM + ONNX)", MovementControllerType.Hybrid)]
+        public void MovementController_Parse_ReadsYamlValuesAndDisplayNames(
+            string value,
+            MovementControllerType expected)
+        {
+            Assert.That(HumanMovementControllerParser.TryParse(value, out MovementControllerType parsed), Is.True);
+            Assert.That(parsed, Is.EqualTo(expected));
+        }
+
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("   ")]
+        [TestCase("curious")]
+        public void MovementController_Parse_LeavesUnknownValuesToTheConfigAsset(string value)
+        {
+            Assert.That(HumanMovementControllerParser.TryParse(value, out _), Is.False);
+        }
+
+        [Test]
+        public void MovementController_WritesTheValueItParsed()
+        {
+            foreach (MovementControllerType controller in new[]
+                     {
+                         MovementControllerType.SFM,
+                         MovementControllerType.ONNXPrediction,
+                         MovementControllerType.Hybrid
+                     })
+            {
+                string yaml = HumanMovementControllerParser.ToYamlValue(controller);
+                Assert.That(HumanMovementControllerParser.TryParse(yaml, out MovementControllerType parsed), Is.True);
+                Assert.That(parsed, Is.EqualTo(controller));
+            }
+        }
     }
 }

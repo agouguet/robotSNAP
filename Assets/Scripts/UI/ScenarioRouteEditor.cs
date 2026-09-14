@@ -21,6 +21,15 @@ public sealed class ScenarioRouteEditor
     private const float PointLabelWidth = 78f;
     private const int UndoLimit = 60;
 
+    /// <summary>Cell budget of the walkable grid sampled from the occupancy image.</summary>
+    private const int NavigationResolution = 320;
+
+    /// <summary>
+    /// Body radius kept clear from walls, matched to the pedestrian radius of the simulation
+    /// (<see cref="RobotSNAP.Agents.HumanConfig.agentRadius"/>), so the drawn path is one an agent walks.
+    /// </summary>
+    private const float NavigationAgentRadius = 0.25f;
+
     private sealed class RouteDraft
     {
         public string Id;
@@ -29,8 +38,10 @@ public sealed class ScenarioRouteEditor
         public float Speed = 1f;
         public HumanEndBehavior EndBehavior = HumanEndBehavior.Stay;
         public string Group;
+        public string MovementController;
         public string Formation = "pair";
         public float GroupSpacing = 1.5f;
+        public float FormationParameter;
         public readonly List<Vector2> Points = new();
         public HumanScenarioConfig Source;
         public bool RouteModified;
@@ -45,8 +56,10 @@ public sealed class ScenarioRouteEditor
         public float Speed;
         public HumanEndBehavior EndBehavior;
         public string Group;
+        public string MovementController;
         public string Formation;
         public float GroupSpacing;
+        public float FormationParameter;
         public List<Vector2> Points;
         public HumanScenarioConfig Source;
         public bool RouteModified;
@@ -58,6 +71,15 @@ public sealed class ScenarioRouteEditor
         public List<RouteSnapshot> Routes;
         public int ActiveRouteIndex;
         public int PendingPointIndex;
+    }
+
+    /// <summary>Drawable geometry of one route, cached until its points or the map change.</summary>
+    private sealed class PlannedGeometry
+    {
+        public int Epoch;
+        public int Signature;
+        public List<Vector2> Points;
+        public int FallbackSegments;
     }
 
     private struct CoordinateFields
@@ -81,6 +103,17 @@ public sealed class ScenarioRouteEditor
         HumanEndBehaviorParser.ToDisplayName(HumanEndBehavior.Stay),
         HumanEndBehaviorParser.ToDisplayName(HumanEndBehavior.Disappear),
         HumanEndBehaviorParser.ToDisplayName(HumanEndBehavior.Loop)
+    };
+
+    /// <summary>First entry keeps the controller of the HumanConfig asset; the rest pin it for the group.</summary>
+    private const string InheritControllerChoice = "Inherit from config";
+
+    private static readonly string[] MovementControllerChoices =
+    {
+        InheritControllerChoice,
+        HumanMovementControllerParser.ToDisplayName(MovementControllerType.SFM),
+        HumanMovementControllerParser.ToDisplayName(MovementControllerType.ONNXPrediction),
+        HumanMovementControllerParser.ToDisplayName(MovementControllerType.Hybrid)
     };
 
     private static readonly string[] FormationChoices =
@@ -110,8 +143,11 @@ public sealed class ScenarioRouteEditor
     private readonly FloatField _humanSpeedField;
     private readonly DropdownField _endBehaviorDropdown;
     private readonly TextField _groupField;
+    private readonly DropdownField _movementControllerDropdown;
     private readonly DropdownField _formationDropdown;
     private readonly FloatField _groupSpacingField;
+    private readonly FloatField _formationParameterField;
+    private readonly Label _formationParameterLabel;
     private readonly Label _formationPreviewLabel;
     private readonly VisualElement _routePointsContainer;
     private readonly VisualElement _canvas;
@@ -121,12 +157,17 @@ public sealed class ScenarioRouteEditor
     private readonly Label _cursorCoordinatesLabel;
     private readonly Label _activeRouteLabel;
     private readonly Label _gridScaleLabel;
+    private readonly Label _mapPathStatusLabel;
     private readonly OccupancyMapRouteOverlay _overlay;
     private readonly VisualElement _pointLabelLayer;
     private readonly List<OccupancyMapRouteOverlay.FormationPreview> _formationPreviews = new();
+    private readonly Dictionary<int, PlannedGeometry> _plannedGeometry = new();
 
     private Texture2D _mapTexture;
     private Bounds _mapBounds;
+    private OccupancyGrid _navigationGrid;
+    private OccupancyGrid _occupancyGrid;
+    private int _navigationGridEpoch;
     private int _activeRouteIndex;
     private int _pendingPointIndex;
     private bool _updatingFields;
@@ -159,8 +200,11 @@ public sealed class ScenarioRouteEditor
         _humanSpeedField = root.Q<FloatField>("HumanSpeedField");
         _endBehaviorDropdown = root.Q<DropdownField>("EndBehaviorDropdown");
         _groupField = root.Q<TextField>("GroupField");
+        _movementControllerDropdown = root.Q<DropdownField>("MovementControllerDropdown");
         _formationDropdown = root.Q<DropdownField>("FormationDropdown");
         _groupSpacingField = root.Q<FloatField>("GroupSpacingField");
+        _formationParameterField = root.Q<FloatField>("FormationParameterField");
+        _formationParameterLabel = root.Q<Label>("FormationParameterLabel");
         _formationPreviewLabel = root.Q<Label>("FormationPreviewLabel");
         _routePointsContainer = root.Q<VisualElement>("RoutePointsContainer");
         _canvas = root.Q<VisualElement>("AgentsEnvironmentCanvas");
@@ -170,6 +214,7 @@ public sealed class ScenarioRouteEditor
         _cursorCoordinatesLabel = root.Q<Label>("MapCursorCoordinatesLabel");
         _activeRouteLabel = root.Q<Label>("ActiveRouteLabel");
         _gridScaleLabel = root.Q<Label>("GridScaleLabel");
+        _mapPathStatusLabel = root.Q<Label>("MapPathStatusLabel");
         VisualElement overlayHost = root.Q<VisualElement>("RouteOverlayHost");
 
         if (new VisualElement[]
@@ -178,9 +223,12 @@ public sealed class ScenarioRouteEditor
                 _setRouteStartButton, _addRouteObjectiveButton, _toggleMapGridButton,
                 _robotRouteSettings, _humanRouteSettings, _humanCountField, _humanSpeedField,
                 _endBehaviorDropdown, _groupField, _formationDropdown, _groupSpacingField,
+                _movementControllerDropdown,
+                _formationParameterField, _formationParameterLabel,
                 _formationPreviewLabel,
                 _routePointsContainer, _canvas, _mapImage, _mapPlaceholder, _instructionLabel,
-                _cursorCoordinatesLabel, _activeRouteLabel, _gridScaleLabel, overlayHost
+                _cursorCoordinatesLabel, _activeRouteLabel, _gridScaleLabel, _mapPathStatusLabel,
+                overlayHost
             }.Any(element => element == null))
         {
             throw new InvalidOperationException("The scenario route editor UI is incomplete.");
@@ -232,6 +280,15 @@ public sealed class ScenarioRouteEditor
             PushUndo($"human-end-behavior:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.EndBehavior = ParseEndBehaviorChoice(evt.newValue));
         });
+        _movementControllerDropdown.choices = new List<string>(MovementControllerChoices);
+        _movementControllerDropdown.RegisterValueChangedCallback(evt =>
+        {
+            if (_updatingFields) return;
+            PushUndo($"human-controller:{_activeRouteIndex}");
+            UpdateHumanDraft(draft => draft.MovementController = ParseMovementControllerChoice(evt.newValue));
+            ApplyGroupLayoutToPeers(ActiveRoute);
+            RefreshGroupList();
+        });
         _groupField.RegisterValueChangedCallback(evt =>
         {
             if (_updatingFields) return;
@@ -244,17 +301,37 @@ public sealed class ScenarioRouteEditor
         {
             if (_updatingFields) return;
             PushUndo($"human-formation:{_activeRouteIndex}");
-            UpdateHumanDraft(draft => draft.Formation = FormationFromDisplay(evt.newValue));
+            UpdateHumanDraft(draft =>
+            {
+                draft.Formation = FormationFromDisplay(evt.newValue);
+                // A single file needs more room than a loose cluster: keep the spacing legal.
+                draft.GroupSpacing = Mathf.Clamp(
+                    draft.GroupSpacing,
+                    GroupFormation.MinSpacing(draft.Formation),
+                    3f);
+            });
             ApplyGroupLayoutToPeers(ActiveRoute);
+            RefreshActiveRoute();
             RefreshGroupList();
         });
         _groupSpacingField.RegisterValueChangedCallback(evt =>
         {
-            float value = Mathf.Clamp(evt.newValue, 0.4f, 3f);
+            float floor = ActiveRoute != null
+                ? GroupFormation.MinSpacing(ActiveRoute.Formation)
+                : 0.4f;
+            float value = Mathf.Clamp(evt.newValue, floor, 3f);
             if (!Mathf.Approximately(value, evt.newValue)) _groupSpacingField.SetValueWithoutNotify(value);
             if (_updatingFields) return;
             PushUndo($"human-group-spacing:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.GroupSpacing = value);
+            ApplyGroupLayoutToPeers(ActiveRoute);
+            RefreshGroupList();
+        });
+        _formationParameterField.RegisterValueChangedCallback(evt =>
+        {
+            if (_updatingFields) return;
+            PushUndo($"human-formation-parameter:{_activeRouteIndex}");
+            UpdateHumanDraft(draft => draft.FormationParameter = Mathf.Max(0f, evt.newValue));
             ApplyGroupLayoutToPeers(ActiveRoute);
             RefreshGroupList();
         });
@@ -295,10 +372,11 @@ public sealed class ScenarioRouteEditor
         var previews = new List<OccupancyMapRouteOverlay.RouteVisual>(_routes.Count);
         for (int index = 0; index < _routes.Count; index++)
             previews.Add(new OccupancyMapRouteOverlay.RouteVisual(
-                _routes[index].Points,
+                GetDisplayPoints(index),
                 RouteColor(index),
                 true,
-                _routes[index].Id));
+                _routes[index].Id,
+                IsPathPlanningActive));
         return previews;
     }
 
@@ -309,14 +387,17 @@ public sealed class ScenarioRouteEditor
     public List<ScenarioDryRun.Route> BuildDryRunRoutes(float robotSpeed)
     {
         var routes = new List<ScenarioDryRun.Route>(_routes.Count);
-        foreach (RouteDraft draft in _routes)
+        for (int index = 0; index < _routes.Count; index++)
         {
+            RouteDraft draft = _routes[index];
             bool skipped = !draft.IsRobot && draft.Count <= 0;
             if (skipped)
                 continue;
+            // The dry run measures the route the agents will walk, not the straight line between
+            // waypoints, so an obstacle detour shows up in the estimated walking time.
             routes.Add(new ScenarioDryRun.Route(
                 draft.Id,
-                draft.Points,
+                GetDisplayPoints(index),
                 draft.IsRobot ? robotSpeed : draft.Speed));
         }
         return routes;
@@ -325,6 +406,7 @@ public sealed class ScenarioRouteEditor
     public void Reset()
     {
         _routes.Clear();
+        _plannedGeometry.Clear();
         _routes.Add(new RouteDraft
         {
             Id = "Robot route",
@@ -382,11 +464,90 @@ public sealed class ScenarioRouteEditor
 
     public void SetMap(Texture2D texture, Bounds bounds)
     {
+        if (_mapTexture != texture || _mapBounds != bounds)
+            InvalidateNavigationGrid();
+
         _mapTexture = texture;
         _mapBounds = bounds;
+        _navigationGrid = texture == null
+            ? null
+            : OccupancyGrid.FromTexture(
+                texture,
+                bounds,
+                NavigationResolution,
+                NavigationAgentRadius);
+        // Walls are validated on the raw pixels: only a point really standing on an obstacle is refused,
+        // while the planning grid above also keeps a body radius of clearance.
+        _occupancyGrid = texture == null
+            ? null
+            : OccupancyGrid.FromTexture(texture, bounds, NavigationResolution);
         _mapImage.image = texture;
         _mapPlaceholder.EnableInClassList(HiddenClass, texture != null);
         RefreshOverlay();
+    }
+
+    /// <summary>True when the drawn routes are planned on the walkable pixels instead of straight lines.</summary>
+    public bool IsPathPlanningActive => _navigationGrid != null && _navigationGrid.IsValid;
+
+    private void InvalidateNavigationGrid()
+    {
+        _navigationGridEpoch++;
+        _plannedGeometry.Clear();
+        _navigationGrid = null;
+        _occupancyGrid = null;
+    }
+
+    /// <summary>
+    /// Drawable geometry of a route: the authored waypoints joined by the shortest walkable path, so the
+    /// map shows the route the global planner will produce rather than a line running through a wall.
+    ///
+    /// While a point is being dragged the raw waypoints are used, because replanning on every mouse move
+    /// would make the drag stutter; the planned path returns as soon as the point is released.
+    /// </summary>
+    private List<Vector2> GetDisplayPoints(int routeIndex)
+    {
+        if (routeIndex < 0 || routeIndex >= _routes.Count)
+            return new List<Vector2>();
+
+        RouteDraft route = _routes[routeIndex];
+        if (_navigationGrid == null || !_navigationGrid.IsValid)
+            return route.Points;
+        if (_dragActive && routeIndex == _dragRouteIndex)
+            return route.Points;
+
+        int signature = PointsSignature(route.Points);
+        if (_plannedGeometry.TryGetValue(routeIndex, out PlannedGeometry cached) &&
+            cached.Epoch == _navigationGridEpoch &&
+            cached.Signature == signature)
+            return cached.Points;
+
+        List<Vector2> planned = OccupancyPathPlanner.PlanRoute(
+            _navigationGrid,
+            route.Points,
+            out int fallbackSegments);
+        _plannedGeometry[routeIndex] = new PlannedGeometry
+        {
+            Epoch = _navigationGridEpoch,
+            Signature = signature,
+            Points = planned,
+            FallbackSegments = fallbackSegments
+        };
+        return planned;
+    }
+
+    private static int PointsSignature(IReadOnlyList<Vector2> points)
+    {
+        unchecked
+        {
+            int hash = 17;
+            for (int index = 0; index < points.Count; index++)
+            {
+                hash = hash * 31 + Mathf.RoundToInt(points[index].x * 100f);
+                hash = hash * 31 + Mathf.RoundToInt(points[index].y * 100f);
+            }
+
+            return hash;
+        }
     }
 
     public bool Validate(out string error)
@@ -419,7 +580,39 @@ public sealed class ScenarioRouteEditor
             }
         }
 
+        // A point standing on an obstacle is the mistake that shows up as an agent spawning inside a wall:
+        // the occupancy grid can catch it before the scenario is saved.
+        error ??= FindPointOffWalkableGround();
+
         return error == null;
+    }
+
+    /// <summary>
+    /// First route point that is not on walkable space, as a message the editor can show, or null when every
+    /// point stands on walkable pixels. Routes without a readable occupancy grid are not judged.
+    /// </summary>
+    private string FindPointOffWalkableGround()
+    {
+        if (_occupancyGrid == null || !_occupancyGrid.IsValid)
+            return null;
+
+        foreach (RouteDraft route in _routes)
+        {
+            if (!route.IsRobot && route.Count <= 0)
+                continue;
+            for (int index = 0; index < route.Points.Count; index++)
+            {
+                Vector2 point = route.Points[index];
+                if (_occupancyGrid.IsWorldWalkable(point))
+                    continue;
+
+                string label = RouteMapHitTesting.PointLabel(index);
+                return $"{route.Id}: {label} ({point.x:0.##}, {point.y:0.##}) is on a wall. " +
+                       "Move it onto the walkable area.";
+            }
+        }
+
+        return null;
     }
 
     public void WriteToScenario(ScenarioData scenario)
@@ -461,7 +654,15 @@ public sealed class ScenarioRouteEditor
             config.Group = string.IsNullOrWhiteSpace(draft.Group) ? null : draft.Group.Trim();
             config.Spawn ??= new SpawnConfig();
             config.Spawn.Formation = string.IsNullOrWhiteSpace(draft.Formation) ? "pair" : draft.Formation.Trim().ToLowerInvariant();
-            config.Spawn.Spacing = Mathf.Max(0.4f, draft.GroupSpacing);
+            config.Spawn.Spacing = Mathf.Clamp(
+                draft.GroupSpacing,
+                GroupFormation.MinSpacing(config.Spawn.Formation),
+                3f);
+            config.Spawn.FormationParameter = Mathf.Max(0f, draft.FormationParameter);
+            // An inherited controller is written as an absent block, so the HumanConfig asset keeps deciding.
+            config.MovementController = string.IsNullOrWhiteSpace(draft.MovementController)
+                ? null
+                : new MovementControllerConfig { Type = draft.MovementController.Trim() };
 
             if (draft.Source == null || draft.RouteModified)
             {
@@ -514,6 +715,8 @@ public sealed class ScenarioRouteEditor
             {
                 route.Formation = reference.Formation;
                 route.GroupSpacing = reference.GroupSpacing;
+                route.FormationParameter = reference.FormationParameter;
+                route.MovementController = reference.MovementController;
             }
             else
             {
@@ -611,9 +814,11 @@ public sealed class ScenarioRouteEditor
             SetEndBehaviorChoices();
             _endBehaviorDropdown.SetValueWithoutNotify(HumanEndBehaviorParser.ToDisplayName(active.EndBehavior));
             _groupField.SetValueWithoutNotify(active.Group ?? string.Empty);
+            _movementControllerDropdown.SetValueWithoutNotify(MovementControllerToDisplay(active.MovementController));
             SetFormationChoices();
             _formationDropdown.SetValueWithoutNotify(FormationToDisplay(active.Formation));
             _groupSpacingField.SetValueWithoutNotify(active.GroupSpacing);
+            UpdateFormationParameterField(active);
         }
         _updatingFields = false;
 
@@ -659,6 +864,9 @@ public sealed class ScenarioRouteEditor
     {
         RebuildGroupList();
         UpdateFormationPreviewLabel();
+        // The map draws the formation slots, so a formation or spacing change must repaint it
+        // immediately instead of waiting for the next point move.
+        RefreshOverlay();
     }
 
     private void RefreshRouteList()
@@ -770,8 +978,14 @@ public sealed class ScenarioRouteEditor
             ? FormationToDisplay(reference.Formation).ToLowerInvariant()
             : "pair";
         float spacing = reference != null ? reference.GroupSpacing : 1.5f;
+        string controller = reference != null
+            ? MovementControllerToDisplay(reference.MovementController)
+            : InheritControllerChoice;
+        if (string.Equals(controller, InheritControllerChoice, StringComparison.Ordinal))
+            controller = "controller from config";
+
         return $"{agents} agent{(agents == 1 ? string.Empty : "s")} · {routes.Count} route" +
-               $"{(routes.Count == 1 ? string.Empty : "s")} · {formation} · {spacing:0.##} m";
+               $"{(routes.Count == 1 ? string.Empty : "s")} · {formation} · {spacing:0.##} m · {controller}";
     }
 
     private void SelectFirstRouteOfGroup(string groupId)
@@ -968,6 +1182,45 @@ public sealed class ScenarioRouteEditor
     }
 
     /// <summary>
+    /// Exposes the one value the selected formation tunes — a wedge opening, a row stagger, a cluster
+    /// radius, a pair front spacing — and hides the field for the formations that have nothing to tune.
+    /// An empty field (zero) means "use the natural default", which the label spells out.
+    /// </summary>
+    private void UpdateFormationParameterField(RouteDraft active)
+    {
+        bool hasParameter = active != null && GroupFormation.HasParameter(active.Formation);
+        _formationParameterLabel.EnableInClassList(HiddenClass, !hasParameter);
+        _formationParameterField.EnableInClassList(HiddenClass, !hasParameter);
+        if (!hasParameter)
+            return;
+
+        _formationParameterLabel.text = GroupFormation.DescribeParameter(active.Formation, active.GroupSpacing);
+        _formationParameterField.SetValueWithoutNotify(active.FormationParameter);
+    }
+
+    /// <summary>
+    /// The controller dropdown exposes display labels while the YAML uses short values; "Inherit from config"
+    /// is written as an absent value so the HumanConfig asset keeps deciding.
+    /// </summary>
+    private static string MovementControllerToDisplay(string value)
+    {
+        return HumanMovementControllerParser.TryParse(value, out MovementControllerType controller)
+            ? HumanMovementControllerParser.ToDisplayName(controller)
+            : InheritControllerChoice;
+    }
+
+    private static string ParseMovementControllerChoice(string display)
+    {
+        if (string.IsNullOrWhiteSpace(display) ||
+            string.Equals(display.Trim(), InheritControllerChoice, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return HumanMovementControllerParser.TryParse(display, out MovementControllerType controller)
+            ? HumanMovementControllerParser.ToYamlValue(controller)
+            : null;
+    }
+
+    /// <summary>
     /// The formation dropdown exposes display labels while the YAML uses short values,
     /// so the two mappings are explicit and unknown values fall back to the default pair.
     /// </summary>
@@ -1021,6 +1274,8 @@ public sealed class ScenarioRouteEditor
 
             route.Formation = source.Formation;
             route.GroupSpacing = source.GroupSpacing;
+            route.FormationParameter = source.FormationParameter;
+            route.MovementController = source.MovementController;
         }
     }
 
@@ -1377,13 +1632,69 @@ public sealed class ScenarioRouteEditor
         _overlay.ShowGrid = _showGrid;
         _overlay.SetRoutes(_routes.Select((route, index) =>
             new OccupancyMapRouteOverlay.RouteVisual(
-                route.Points,
+                GetDisplayPoints(index),
                 RouteColor(index),
-                index == _activeRouteIndex)));
+                index == _activeRouteIndex,
+                route.Id,
+                IsPathPlanningActive)));
         _overlay.SetFormations(BuildFormationPreviews());
         UpdateGridScaleLabel();
+        UpdatePathStatusLabel();
         UpdateFormationPreviewLabel();
         RefreshPointLabels();
+    }
+
+    /// <summary>
+    /// Tells the author whether the drawn trajectories are planned on the walkable pixels or straight
+    /// lines, and reports the routes the grid cannot connect.
+    /// </summary>
+    private void UpdatePathStatusLabel()
+    {
+        if (_navigationGrid == null || !_navigationGrid.IsValid)
+        {
+            _mapPathStatusLabel.text = "Paths: straight lines (no readable occupancy grid)";
+            _mapPathStatusLabel.EnableInClassList("warning", false);
+            return;
+        }
+
+        int blocked = 0;
+        for (int index = 0; index < _routes.Count; index++)
+        {
+            if (_routes[index].Points.Count < 2)
+                continue;
+            if (_plannedGeometry.TryGetValue(index, out PlannedGeometry geometry) &&
+                geometry.Epoch == _navigationGridEpoch &&
+                geometry.FallbackSegments > 0)
+                blocked++;
+        }
+
+        int onWalls = CountPointsOffWalkableGround();
+        string wallNote = onWalls == 0
+            ? string.Empty
+            : $" · {onWalls} point{(onWalls == 1 ? string.Empty : "s")} on a wall";
+        string pathNote = blocked == 0
+            ? "Paths: shortest walkable route (walls avoided)"
+            : $"Paths: {blocked} route(s) cannot reach a point on the walkable grid";
+        _mapPathStatusLabel.text = pathNote + wallNote;
+        _mapPathStatusLabel.EnableInClassList("warning", blocked > 0 || onWalls > 0);
+    }
+
+    private int CountPointsOffWalkableGround()
+    {
+        if (_occupancyGrid == null || !_occupancyGrid.IsValid)
+            return 0;
+
+        int count = 0;
+        foreach (RouteDraft route in _routes)
+        {
+            if (!route.IsRobot && route.Count <= 0)
+                continue;
+            foreach (Vector2 point in route.Points)
+                if (!_occupancyGrid.IsWorldWalkable(point))
+                    count++;
+        }
+
+        return count;
     }
 
     /// <summary>
@@ -1400,9 +1711,13 @@ public sealed class ScenarioRouteEditor
             if (route.IsRobot || route.Count <= 1 || route.Points.Count < 2)
                 continue;
 
-            List<Vector2> slots = GroupFormation.CreateSlots(route.Count, route.GroupSpacing, route.Formation);
+            List<Vector2> slots = GroupFormation.CreateSlots(
+                route.Count,
+                route.GroupSpacing,
+                route.Formation,
+                route.FormationParameter);
             Vector2 origin = route.Points[0];
-            Vector2 direction = route.Points[1] - route.Points[0];
+            Vector2 direction = InitialDirection(GetDisplayPoints(index), route.Points, origin);
             float heading = direction.sqrMagnitude > 0.0001f
                 ? Mathf.Atan2(direction.x, direction.y)
                 : 0f;
@@ -1420,6 +1735,28 @@ public sealed class ScenarioRouteEditor
         return _formationPreviews;
     }
 
+    /// <summary>
+    /// Heading the group faces at spawn: the first leg of the drawn path, so a group standing in front of
+    /// a wall faces the direction it will actually walk instead of pointing through the wall.
+    /// </summary>
+    private static Vector2 InitialDirection(
+        IReadOnlyList<Vector2> drawn,
+        IReadOnlyList<Vector2> authored,
+        Vector2 origin)
+    {
+        if (drawn != null)
+        {
+            for (int index = 1; index < drawn.Count; index++)
+            {
+                Vector2 candidate = drawn[index] - origin;
+                if (candidate.sqrMagnitude > 0.0025f)
+                    return candidate;
+            }
+        }
+
+        return authored != null && authored.Count > 1 ? authored[1] - origin : Vector2.zero;
+    }
+
     /// <summary>Explains what the markers drawn around the route start mean.</summary>
     private void UpdateFormationPreviewLabel()
     {
@@ -1433,7 +1770,23 @@ public sealed class ScenarioRouteEditor
         _formationPreviewLabel.text = active.Count <= 1
             ? "One agent: no formation to lay out."
             : $"{active.Count} agents · {FormationToDisplay(active.Formation).ToLowerInvariant()} · " +
-              $"{active.GroupSpacing:0.##} m — slots shown on the start point.";
+              $"{active.GroupSpacing:0.##} m — slots shown on the start point" +
+              DescribeActiveParameter(active) + ".";
+    }
+
+    /// <summary>Names the tuned value of the formation, so the picture and the numbers agree.</summary>
+    private static string DescribeActiveParameter(RouteDraft active)
+    {
+        float resolved = GroupFormation.ResolveParameter(
+            active.Formation,
+            active.GroupSpacing,
+            active.FormationParameter);
+        string label = GroupFormation.DescribeParameter(active.Formation, active.GroupSpacing);
+        if (label.StartsWith("Single file", StringComparison.Ordinal))
+            return string.Empty;
+
+        string unit = label.StartsWith("Opening angle", StringComparison.Ordinal) ? "°" : " m";
+        return $", {resolved:0.##}{unit}";
     }
 
     private void RefreshPointLabels()
@@ -1568,8 +1921,10 @@ public sealed class ScenarioRouteEditor
                 Speed = route.Speed,
                 EndBehavior = route.EndBehavior,
                 Group = route.Group,
+                MovementController = route.MovementController,
                 Formation = route.Formation,
                 GroupSpacing = route.GroupSpacing,
+                FormationParameter = route.FormationParameter,
                 Points = new List<Vector2>(route.Points),
                 Source = route.Source,
                 RouteModified = route.RouteModified,
@@ -1596,8 +1951,10 @@ public sealed class ScenarioRouteEditor
                 Speed = route.Speed,
                 EndBehavior = route.EndBehavior,
                 Group = route.Group,
+                MovementController = route.MovementController,
                 Formation = route.Formation,
                 GroupSpacing = route.GroupSpacing,
+                FormationParameter = route.FormationParameter,
                 Source = route.Source,
                 RouteModified = route.RouteModified,
                 HasNonSpatialGoal = route.HasNonSpatialGoal
@@ -1652,8 +2009,10 @@ public sealed class ScenarioRouteEditor
             Speed = Mathf.Max(0.01f, human.Speed),
             EndBehavior = HumanEndBehaviorParser.Parse(human.EndBehavior),
             Group = human.Group,
+            MovementController = human.MovementController?.Type,
             Formation = string.IsNullOrWhiteSpace(human.Spawn?.Formation) ? "pair" : human.Spawn.Formation.Trim().ToLowerInvariant(),
             GroupSpacing = human.Spawn != null ? Mathf.Max(0.4f, human.Spawn.Spacing) : 1.5f,
+            FormationParameter = human.Spawn != null ? Mathf.Max(0f, human.Spawn.FormationParameter) : 0f,
             Source = human,
             RouteModified = false
         };

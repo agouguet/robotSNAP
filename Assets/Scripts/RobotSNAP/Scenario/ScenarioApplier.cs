@@ -383,7 +383,8 @@ namespace RobotSNAP.Core.Scenario
                                 group = new HumanGroup(
                                     groupId,
                                     layout.Spacing,
-                                    layout.HasFormation ? layout.Formation : null);
+                                    layout.HasFormation ? layout.Formation : null,
+                                    layout.Parameter);
                                 groups[groupId] = group;
                             }
                             group.Add(human);
@@ -457,7 +458,9 @@ namespace RobotSNAP.Core.Scenario
             }
 
             // --- Basic Parameters ---
-            human.SetSpeed(config.Speed);
+            // Speed and controller both live in the HumanConfig the controllers read, so they are applied
+            // together: writing BaseAgent.desiredSpeed alone left the editor's Speed value without effect.
+            human.ApplyScenarioMovement(config.Speed, config.MovementController?.Type);
 
             // --- Color ---
             if (config.Color != null && config.Color.Length >= 3)
@@ -511,7 +514,13 @@ namespace RobotSNAP.Core.Scenario
                 return anchor;
 
             float heading = SpawnPlanner.HeadingTowards(new Vector2(anchor.x, anchor.z), goals);
-            Vector2 offset = SpawnPlanner.SlotOffset(index, total, spawn.Spacing, spawn.Formation, heading);
+            Vector2 offset = SpawnPlanner.SlotOffset(
+                index,
+                total,
+                spawn.Spacing,
+                spawn.Formation,
+                heading,
+                spawn.FormationParameter);
             return SpawnPlanner.PlaceSlot(anchor, offset, spawn.Spacing);
         }
 

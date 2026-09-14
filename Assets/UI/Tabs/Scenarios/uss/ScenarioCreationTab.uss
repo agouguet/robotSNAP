@@ -2187,6 +2187,11 @@
     font-size: 11px;
 }
 
+/* The drawn trajectories are planned on the walkable pixels; this colour flags the routes that are not. */
+.map-pointer-hint.warning {
+    color: rgb(235, 170, 70);
+}
+
 .map-shortcut-row {
     flex-direction: row;
     flex-wrap: wrap;

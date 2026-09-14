@@ -43,6 +43,9 @@ namespace RobotSNAP.Agents
         private Vector2 _formationOffset;
         private HumanPoolManager _poolManager;
 
+        // Per-agent copy of the shared HumanConfig, created only when a scenario overrides speed or controller.
+        private HumanConfig _scenarioConfig;
+
         // Guards a route against agents wedged against geometry.
         private float _stalledTime;
         private const float StallSpeedThreshold = 0.08f;
@@ -293,6 +296,58 @@ namespace RobotSNAP.Agents
         }
 
         public void SetPoolManager(HumanPoolManager poolManager) => _poolManager = poolManager;
+
+        /// <summary>
+        /// Applies the movement settings the scenario authored for this agent: its walking speed and, when the
+        /// entry names one, the controller its group should use.
+        ///
+        /// The controllers read their parameters from <see cref="HumanConfig"/>, not from the fields of
+        /// <see cref="BaseAgent"/>, so writing only the base field left the Speed value of the editor without
+        /// any effect on a walking human. The asset is copied per agent the first time it is overridden, so a
+        /// scenario can never change the shared asset of everybody else.
+        /// </summary>
+        public void ApplyScenarioMovement(float speed, string controller = null)
+        {
+            float requestedSpeed = Mathf.Clamp(speed, 0.5f, 5f);
+            SetSpeed(requestedSpeed);
+
+            bool wantsController = HumanMovementControllerParser.TryParse(controller, out MovementControllerType parsed);
+            bool speedDiffers = humanConfig != null && !Mathf.Approximately(humanConfig.desiredSpeed, requestedSpeed);
+            bool controllerDiffers = humanConfig != null && wantsController && humanConfig.controllerType != parsed;
+            if (!speedDiffers && !controllerDiffers)
+                return;
+
+            HumanConfig effective = TakeScenarioConfig();
+            if (effective == null)
+                return;
+
+            effective.desiredSpeed = requestedSpeed;
+            effective.maxSpeed = Mathf.Max(effective.maxSpeed, requestedSpeed);
+            if (wantsController)
+                effective.controllerType = parsed;
+
+            _movement?.Initialize(this, effective);
+        }
+
+        /// <summary>The per-agent copy of the shared configuration, created on first override.</summary>
+        private HumanConfig TakeScenarioConfig()
+        {
+            if (humanConfig == null)
+                return null;
+            if (_scenarioConfig != null)
+                return _scenarioConfig;
+
+            _scenarioConfig = Instantiate(humanConfig);
+            _scenarioConfig.name = $"{humanConfig.name} (scenario)";
+            humanConfig = _scenarioConfig;
+            return _scenarioConfig;
+        }
+
+        private void OnDestroy()
+        {
+            if (_scenarioConfig != null)
+                Destroy(_scenarioConfig);
+        }
 
         /// <summary>Joins a walking group. The leader keeps its route, followers follow a slot.</summary>
         public void JoinGroup(HumanGroup group, Vector2 formationOffset, bool isLeader)

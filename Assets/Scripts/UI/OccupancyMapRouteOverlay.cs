@@ -12,18 +12,27 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
 {
     public readonly struct RouteVisual
     {
-        public RouteVisual(IReadOnlyList<Vector2> points, Color color, bool active, string name = null)
+        public RouteVisual(
+            IReadOnlyList<Vector2> points,
+            Color color,
+            bool active,
+            string name = null,
+            bool planned = false)
         {
             Points = points;
             Color = color;
             Active = active;
             Name = name;
+            Planned = planned;
         }
 
         public IReadOnlyList<Vector2> Points { get; }
         public Color Color { get; }
         public bool Active { get; }
         public string Name { get; }
+
+        /// <summary>True when the points follow a planned walkable path instead of straight waypoint legs.</summary>
+        public bool Planned { get; }
     }
 
     /// <summary>

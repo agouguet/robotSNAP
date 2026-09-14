@@ -28,18 +28,20 @@ namespace RobotSNAP.Agents
 
         public const string DefaultFormation = PairFormation;
 
-        /// <summary>
-        /// Lateral spread of a wedge relative to the requested spacing.
-        /// A pedestrian V is much wider than it is deep: 0.85 opens it to roughly 40° per side,
-        /// which reads as a group walking together instead of a tight queue.
-        /// </summary>
-        private const float WedgeLateralFactor = 0.85f;
-
         /// <summary>Depth of the wedge behind the apex, relative to the requested spacing.</summary>
         private const float WedgeDepthFactor = 0.7f;
 
         /// <summary>Trailing stagger of the outermost members of an abreast row.</summary>
         private const float RowStaggerFactor = 0.25f;
+
+        /// <summary>Default cluster radius, relative to the requested spacing.</summary>
+        private const float ClusterRadiusFactor = 1.6f;
+
+        /// <summary>Default front spacing of a pair, relative to the requested spacing.</summary>
+        private const float PairLateralFactor = 0.5f;
+
+        /// <summary>Default opening of a wedge: the half angle between its axis and each branch.</summary>
+        public const float DefaultWedgeAngleDegrees = 50f;
 
         /// <summary>
         /// Floor of the SFM speed ramp (see <c>SFMController.ComputeVelocity</c>):
@@ -84,15 +86,92 @@ namespace RobotSNAP.Agents
             }
         }
 
+        /// <summary>
+        /// Smallest spacing a formation can hold without its members walking into each other.
+        /// A single file needs a full body width, a loose cluster can be tighter.
+        /// </summary>
+        public static float MinSpacing(string formation)
+        {
+            switch (Normalize(formation))
+            {
+                case ColumnFormation: return 1f;
+                case ClusterFormation: return 0.7f;
+                default: return 0.8f;
+            }
+        }
+
+        /// <summary>An editor field is only useful for the formations that actually have something to tune.</summary>
+        public static bool HasParameter(string formation) => Normalize(formation) != ColumnFormation;
+
+        /// <summary>Label and default of the single parameter a formation exposes in the editor.</summary>
+        public static string DescribeParameter(string formation, float spacing)
+        {
+            float step = Mathf.Max(MinSpacing(formation), spacing);
+            switch (Normalize(formation))
+            {
+                case WedgeFormation:
+                    return $"Opening angle (°) · default {DefaultWedgeAngleDegrees:0.#}";
+                case RowFormation:
+                    return $"End stagger (m) · default {DefaultRowStagger(step):0.##}";
+                case ClusterFormation:
+                    return $"Maximum radius (m) · default {DefaultClusterRadius(step):0.##}";
+                case ColumnFormation:
+                    return "Single file: only the spacing matters.";
+                default:
+                    return $"Front spacing (m) · default {DefaultPairLateral(step):0.##}";
+            }
+        }
+
+        public static float DefaultWedgeAngle => DefaultWedgeAngleDegrees;
+        public static float DefaultRowStagger(float spacing) => Mathf.Max(0.1f, spacing * RowStaggerFactor);
+        public static float DefaultClusterRadius(float spacing) => Mathf.Max(0.3f, spacing * ClusterRadiusFactor);
+        public static float DefaultPairLateral(float spacing) => Mathf.Max(0.2f, spacing * PairLateralFactor);
+
+        /// <summary>
+        /// Resolves the formation parameter, falling back on its natural default when unset,
+        /// and clamps it to a window where the shape stays readable.
+        /// </summary>
+        public static float ResolveParameter(string formation, float spacing, float parameter)
+        {
+            string layout = Normalize(formation);
+            float step = Mathf.Max(MinSpacing(layout), spacing);
+
+            if (parameter > 0f)
+            {
+                return layout == WedgeFormation
+                    ? Mathf.Clamp(parameter, 15f, 85f)
+                    : Mathf.Max(0.05f, parameter);
+            }
+
+            switch (layout)
+            {
+                case WedgeFormation: return DefaultWedgeAngleDegrees;
+                case RowFormation: return DefaultRowStagger(step);
+                case ClusterFormation: return DefaultClusterRadius(step);
+                case ColumnFormation: return 0f;
+                default: return DefaultPairLateral(step);
+            }
+        }
+
         public static List<Vector2> CreateSlots(int count, float spacing, string formation)
+            => CreateSlots(count, spacing, formation, 0f);
+
+        /// <summary>
+        /// Builds the leader-local slots of a formation.
+        /// <paramref name="parameter"/> is the one value the formation exposes in the editor
+        /// (wedge opening in degrees, row stagger, cluster radius, pair front spacing);
+        /// zero means "use the natural default for this spacing".
+        /// </summary>
+        public static List<Vector2> CreateSlots(int count, float spacing, string formation, float parameter)
         {
             var slots = new List<Vector2>(Mathf.Max(0, count));
             if (count <= 0)
                 return slots;
 
-            float step = Mathf.Max(0.2f, spacing);
-            slots.Add(Vector2.zero);
             string layout = Normalize(formation);
+            float step = Mathf.Max(MinSpacing(layout), spacing);
+            slots.Add(Vector2.zero);
+            float resolved = ResolveParameter(layout, step, parameter);
 
             for (int index = 1; index < count; index++)
             {
@@ -106,9 +185,13 @@ namespace RobotSNAP.Agents
                     {
                         int row = (index + 1) / 2;
                         float side = index % 2 == 1 ? -1f : 1f;
+                        float depth = row * step * WedgeDepthFactor;
+                        // The opening angle is the half angle of the V: the branch leans out by
+                        // depth × tan(angle), which keeps the shape readable whatever the spacing.
+                        float lateral = depth * Mathf.Tan(resolved * Mathf.Deg2Rad);
                         slots.Add(new Vector2(
-                            side * row * step * WedgeLateralFactor,
-                            -row * step * WedgeDepthFactor));
+                            side * lateral,
+                            -depth));
                         continue;
                     }
 
@@ -118,13 +201,13 @@ namespace RobotSNAP.Agents
                         // trail slightly so the line reads as a loose arc rather than a rigid bar.
                         int rank = (index + 1) / 2;
                         float side = index % 2 == 1 ? 1f : -1f;
-                        slots.Add(new Vector2(side * rank * step, -(rank - 1) * step * RowStaggerFactor));
+                        slots.Add(new Vector2(side * rank * step, -(rank - 1) * resolved));
                         continue;
                     }
 
                     case ClusterFormation:
                     {
-                        float radius = Mathf.Min(step * 1.6f, step * 0.9f * Mathf.Sqrt(index));
+                        float radius = Mathf.Min(resolved, step * 0.9f * Mathf.Sqrt(index));
                         float angle = index * GoldenAngle;
                         slots.Add(new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius));
                         continue;
@@ -135,7 +218,7 @@ namespace RobotSNAP.Agents
                         // Pair: the second member walks beside the leader, then rows of two behind.
                         int row = index / 2;
                         float side = index % 2 == 1 ? 1f : -1f;
-                        slots.Add(new Vector2(side * step * 0.5f, -row * step));
+                        slots.Add(new Vector2(side * resolved, -row * step));
                         continue;
                     }
                 }

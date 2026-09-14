@@ -186,9 +186,19 @@
                             <ui:Label text="Routes sharing a group id walk together in formation." class="field-help"/>
                         </ui:VisualElement>
                         <ui:VisualElement class="creation-field">
+                            <ui:Label text="Movement controller" class="creation-field-label"/>
+                            <ui:DropdownField name="MovementControllerDropdown" class="creation-dropdown"/>
+                            <ui:Label text="SFM follows social forces, ONNX uses the learned policy, Hybrid blends both. Inherit keeps the setting of the agent configuration asset. Routes sharing a group id share the choice." class="field-help"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="creation-field">
                             <ui:Label text="Group formation" class="creation-field-label"/>
                             <ui:DropdownField name="FormationDropdown" class="creation-dropdown"/>
                             <ui:Label text="Pair, row and column are the most natural for pedestrians; wedge and cluster are looser. Sharing a group id applies the same formation to every route of the group." class="field-help"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="creation-field">
+                            <ui:Label name="FormationParameterLabel" text="Formation parameter" class="creation-field-label"/>
+                            <ui:FloatField name="FormationParameterField" class="creation-text-field"/>
+                            <ui:Label text="Leave 0 to keep the natural default of the selected formation." class="field-help"/>
                         </ui:VisualElement>
                         <ui:VisualElement class="creation-field">
                             <ui:Label text="Group spacing (m)" class="creation-field-label"/>
@@ -222,6 +232,7 @@
                     <ui:Label text="Click a point to select it, drag to move it." class="map-pointer-hint"/>
                     <ui:Label name="ActiveRouteLabel" text="Robot route" class="active-route-label"/>
                     <ui:Label name="GridScaleLabel" text="Grid and scale: 1 m" class="grid-scale-label"/>
+                    <ui:Label name="MapPathStatusLabel" text="Paths: shortest walkable route" class="map-pointer-hint"/>
                     <ui:Label text="◎ spawn slot of a group" class="map-pointer-hint"/>
                 </ui:VisualElement>
                 <ui:VisualElement class="map-shortcut-row">

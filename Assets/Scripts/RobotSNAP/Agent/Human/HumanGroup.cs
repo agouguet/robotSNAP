@@ -62,6 +62,16 @@ namespace RobotSNAP.Agents
         public int Count => _members.Count;
         public IReadOnlyList<HumanAgent> Members => _members;
 
+        /// <summary>True when the given agent walks in this group.</summary>
+        public bool ContainsAgent(int agentId)
+        {
+            foreach (HumanAgent member in _members)
+                if (member != null && member.agentId == agentId)
+                    return true;
+
+            return false;
+        }
+
         /// <summary>Position of the virtual reference the whole formation is built around.</summary>
         public Vector2 Anchor => _anchor;
 
@@ -272,7 +282,7 @@ namespace RobotSNAP.Agents
             for (int index = 0; index < _members.Count && index < _slots.Count; index++)
             {
                 HumanAgent member = _members[index];
-                if (member == null || !member.gameObject.activeInHierarchy)
+                if (member == null || !member.gameObject.activeInHierarchy || member.IsYielding)
                     continue;
 
                 float error = Vector2.Distance(member.Position2D, SlotPosition(index));
@@ -290,7 +300,7 @@ namespace RobotSNAP.Agents
             for (int index = 0; index < _members.Count; index++)
             {
                 HumanAgent member = _members[index];
-                if (member == null || !member.gameObject.activeInHierarchy)
+                if (member == null || !member.gameObject.activeInHierarchy || member.IsYielding)
                     continue;
 
                 float speed = member.Velocity2D.magnitude;
@@ -322,6 +332,8 @@ namespace RobotSNAP.Agents
                     Vector2 projected = SpawnPlacement.ProjectWithin(slot, _anchor, SlotTolerance(index));
                     member.transform.position = new Vector3(projected.x, member.transform.position.y, projected.y);
                     member.SetGroupDestination(projected);
+                    // Start already looking where the group is about to walk.
+                    member.FaceTowards(forward);
                     continue;
                 }
 
@@ -329,6 +341,16 @@ namespace RobotSNAP.Agents
                     _speed,
                     member.CruiseSpeed,
                     member.SlowDownDistance);
+
+                if (member.IsYielding)
+                {
+                    // Stepping aside: the slot is shifted by the member's own avoidance offset, and the member
+                    // keeps its own pace so the group cannot drag it back into the conflict.
+                    member.SetGroupDestination(slot + forward * reach + member.YieldOffset);
+                    member.SetGroupCruiseSpeed(0f);
+                    continue;
+                }
+
                 member.SetGroupDestination(slot + forward * reach);
 
                 // Feedback on the along-track error: a member that fell behind is allowed to walk faster than

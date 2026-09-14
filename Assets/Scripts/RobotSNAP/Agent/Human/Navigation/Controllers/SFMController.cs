@@ -1,4 +1,5 @@
 using UnityEngine;
+using RobotSNAP.Agents;
 using RobotSNAP.Agents.Movement.Interfaces;
 
 namespace RobotSNAP.Agents.Movement.Controllers
@@ -31,9 +32,10 @@ namespace RobotSNAP.Agents.Movement.Controllers
         private float _obstacleForceStrength;
         private float _obstacleForceDistance;
 
-        // Overtaking (face-to-face avoidance)
+        // Overtaking: anticipatory, reciprocal avoidance of the agents in front
         private float _overtakingStrength;
-        private float _noiseStrength;
+        private float _anticipationHorizon;
+        private float _anticipationMargin;
 
         // Damping
         private float _backwardDampening;
@@ -75,8 +77,9 @@ namespace RobotSNAP.Agents.Movement.Controllers
             _obstacleForceDistance = config.obstacleForceDistance;
 
             // Overtaking parameters (use defaults if not present in config)
-            _overtakingStrength = 2.0f; // can be made configurable
-            _noiseStrength = 0.05f;     // can be made configurable
+            _overtakingStrength = 2.4f;                                        // can be made configurable
+            _anticipationHorizon = HumanAvoidance.DefaultHorizon;              // seconds
+            _anticipationMargin = HumanAvoidance.DefaultMargin;                // metres
 
             _backwardDampening = config.backwardDampening;
             _lateralDampening = config.lateralDampening;
@@ -147,32 +150,39 @@ namespace RobotSNAP.Agents.Movement.Controllers
 
                 Vector2 dirToNeighbor = toNeighbor / distance;
 
+                // ---- Anticipatory reciprocal avoidance ----
+                // Looking a few seconds ahead is what the old rule missed: it only reacted under 1.5 m, with a
+                // random side, so two agents met and stalled instead of choosing who goes where.
+                HumanAvoidance.Prediction prediction = HumanAvoidance.Predict(
+                    currentPosition,
+                    currentVelocity,
+                    _agentRadius,
+                    neighborPos,
+                    neighborVel,
+                    _agentRadius,
+                    desiredDir,
+                    _anticipationHorizon,
+                    _anticipationMargin);
+
                 // ---- Social repulsion (anisotropic) ----
                 float angle = Vector2.Angle(desiredDir, dirToNeighbor) * Mathf.Deg2Rad;
                 float cosPhi = Mathf.Cos(angle);
                 float angularFactor = ANISOTROPIC_FACTOR + (1f - ANISOTROPIC_FACTOR) * (1f + cosPhi) / 2f;
 
+                // The repulsion is what stops a pedestrian dead when somebody walks at them, so it is relaxed
+                // while the agent is already steering aside: the anticipation replaces part of the reaction.
+                float repulsionScale = prediction.IsConflict
+                    ? Mathf.Lerp(1f, 0.45f, prediction.Urgency)
+                    : 1f;
+
                 float socialForceMag = _socialForceA * Mathf.Exp((_agentRadius * 2f - distance) / _socialForceB);
                 Vector2 socialForce = -socialForceMag * angularFactor * dirToNeighbor;
-                socialAccel += socialForce / _mass;
+                socialAccel += socialForce * repulsionScale / _mass;
 
-                // ---- Overtaking force (face-to-face avoidance) ----
-                // Detect if both agents are moving towards each other
-                Vector2 otherVelocity = neighborVel;
-                float dotForward = Vector2.Dot(desiredDir, dirToNeighbor);
-                float dotOtherForward = Vector2.Dot(otherVelocity.normalized, -desiredDir);
-
-                if (dotForward < -0.2f && dotOtherForward < -0.2f && distance < _perceptionRadius * 0.6f)
+                if (prediction.IsConflict)
                 {
-                    // Right direction in agent's local frame
-                    Vector2 rightDir = new Vector2(-desiredDir.y, desiredDir.x);
-                    float overtakeWeight = Mathf.Exp(-distance / 1.2f);
-                    float overtakeForce = _overtakingStrength * overtakeWeight;
-                    socialAccel += rightDir * overtakeForce / _mass;
-
-                    // Add slight random noise to break symmetry
-                    float noise = (Random.Range(-1f, 1f) * _noiseStrength);
-                    socialAccel += rightDir * noise / _mass;
+                    Vector2 rightDir = HumanAvoidance.RightOf(desiredDir);
+                    socialAccel += rightDir * (prediction.Side * _overtakingStrength * prediction.Urgency) / _mass;
                 }
 
                 // ---- Alignment ----

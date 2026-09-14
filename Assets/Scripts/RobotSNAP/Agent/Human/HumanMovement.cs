@@ -45,6 +45,12 @@ namespace RobotSNAP.Agents
         private readonly List<Vector2> _neighborPositions = new List<Vector2>();
         private readonly List<Vector2> _neighborVelocities = new List<Vector2>();
 
+        /// <summary>
+        /// Smallest radius the neighbour query uses. The social repulsion only matters under a metre or two, but
+        /// anticipatory avoidance has to see a conflict coming from further away, so the query is widened.
+        /// </summary>
+        private const float AnticipationLookAhead = 4.5f;
+
         // Obstacles
         private readonly List<Vector2> _tempObstacles = new List<Vector2>();
 
@@ -168,6 +174,21 @@ namespace RobotSNAP.Agents
 
         public void SetHumanManager(HumanManager manager) => _humanManager = manager;
 
+        /// <summary>
+        /// Turns the agent on the spot. The controller only rotates while it is walking, so a freshly spawned
+        /// agent used to keep facing whatever direction its prefab was authored with.
+        /// </summary>
+        public void SnapRotation(Vector2 direction)
+        {
+            if (direction.sqrMagnitude < 0.0001f)
+                return;
+
+            Quaternion target = Quaternion.LookRotation(new Vector3(direction.x, 0f, direction.y), Vector3.up);
+            transform.rotation = target;
+            if (_rb != null)
+                _rb.rotation = target;
+        }
+
         #endregion
 
         #region Movement Logic
@@ -183,10 +204,12 @@ namespace RobotSNAP.Agents
             _neighborVelocities.Clear();
             if (_humanManager != null)
             {
-                _humanManager.GetNeighbors(
+                // Anticipation needs to see further ahead than the repulsion does: a conflict four metres away
+                // is already worth steering for, and this query is what bounds what the controller can see.
+               _humanManager.GetNeighbors(
                     _agentId,
                     _currentPosition,
-                    _config.perceptionRadiusAgent,
+                    Mathf.Max(_config.perceptionRadiusAgent, AnticipationLookAhead),
                     _neighborPositions,
                     _neighborVelocities
                 );

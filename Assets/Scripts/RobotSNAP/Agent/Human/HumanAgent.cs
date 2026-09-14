@@ -50,6 +50,16 @@ namespace RobotSNAP.Agents
         private const float StallSpeedThreshold = 0.08f;
         private const float StallSecondsBeforeAdvance = 10f;
 
+        // Formation yielding: a member about to be walked through steps aside, then re-forms.
+        private const float YieldDistance = 0.7f;
+        private const float YieldHoldSeconds = 0.8f;
+        private const float YieldLookAheadRadius = 4f;
+        private readonly List<Vector2> _yieldNeighbourPositions = new();
+        private readonly List<Vector2> _yieldNeighbourVelocities = new();
+        private readonly List<int> _yieldNeighbourIds = new();
+        private Vector2 _yieldOffset;
+        private float _yieldUntil;
+
         // Propriétés héritées de BaseAgent
         public override Vector3 Position => transform.position;
         public override Quaternion Rotation => transform.rotation;
@@ -65,6 +75,12 @@ namespace RobotSNAP.Agents
         public IReadOnlyList<Vector3> RoutePoints => _walker.Points;
         /// <summary>True while the agent walks as part of a group. Nobody in the group is a leader.</summary>
         public bool IsGroupMember => _group != null;
+
+        /// <summary>True while the member has stepped out of its slot to let somebody pass.</summary>
+        public bool IsYielding => Time.time < _yieldUntil;
+
+        /// <summary>Lateral offset added to its slot while the member yields; zero otherwise.</summary>
+        public Vector2 YieldOffset => IsYielding ? _yieldOffset : Vector2.zero;
 
         /// <summary>
         /// Speed the movement controller regulates in open space. Group following needs it to aim ahead
@@ -112,6 +128,7 @@ namespace RobotSNAP.Agents
             }
 
             // Any member may advance the group; the group keeps that to once per frame.
+            UpdateFormationYield();
             _group?.UpdateGroup();
 
             AdvanceRouteIfReached();
@@ -375,6 +392,77 @@ namespace RobotSNAP.Agents
 
         /// <summary>Slot this member holds in its group's frame, relative to the group reference.</summary>
         public Vector2 FormationOffset => _formationOffset;
+
+        /// <summary>
+        /// Turns the agent on the spot, used at spawn so it looks at its first objective instead of keeping
+        /// the direction its prefab was authored with.
+        /// </summary>
+        public void FaceTowards(Vector2 direction)
+        {
+            if (direction.sqrMagnitude < 0.0001f)
+                return;
+
+            if (_movement != null)
+            {
+                _movement.SnapRotation(direction);
+                return;
+            }
+
+            transform.rotation = Quaternion.LookRotation(new Vector3(direction.x, 0f, direction.y), Vector3.up);
+        }
+
+        /// <summary>
+        /// Decides whether this member should leave its slot. Keeping formation is a preference, not a
+        /// constraint: when somebody outside the group is about to walk through it, the member steps aside for
+        /// a moment and re-forms afterwards. That is what real pedestrians in a group do, and it stops a rigid
+        /// slot from turning a face-to-face encounter into a standstill for the whole group.
+        /// </summary>
+        private void UpdateFormationYield()
+        {
+            if (_group == null || humanManager == null)
+                return;
+
+            Vector2 heading = currentDestination - Position2D;
+            if (heading.sqrMagnitude < 0.0001f)
+                heading = new Vector2(transform.forward.x, transform.forward.z);
+            if (heading.sqrMagnitude < 0.0001f)
+                return;
+            heading.Normalize();
+
+            float radius = humanConfig != null ? humanConfig.agentRadius : 0.25f;
+            humanManager.GetNeighbors(
+                agentId,
+                Position2D,
+                YieldLookAheadRadius,
+                _yieldNeighbourPositions,
+                _yieldNeighbourVelocities,
+                _yieldNeighbourIds);
+
+            HumanAvoidance.Prediction worst = HumanAvoidance.Prediction.None;
+            for (int index = 0; index < _yieldNeighbourIds.Count; index++)
+            {
+                // Companions hold their own slots: only strangers push a member out of formation.
+                if (_group.ContainsAgent(_yieldNeighbourIds[index]))
+                    continue;
+
+                HumanAvoidance.Prediction prediction = HumanAvoidance.Predict(
+                    Position2D,
+                    Velocity2D,
+                    radius,
+                    _yieldNeighbourPositions[index],
+                    _yieldNeighbourVelocities[index],
+                    radius,
+                    heading);
+                if (prediction.IsConflict && prediction.Urgency > worst.Urgency)
+                    worst = prediction;
+            }
+
+            if (!worst.IsConflict)
+                return;
+
+            _yieldOffset = HumanAvoidance.RightOf(heading) * (worst.Side * YieldDistance * worst.Urgency);
+            _yieldUntil = Time.time + YieldHoldSeconds;
+        }
 
         public void LeaveGroup()
         {

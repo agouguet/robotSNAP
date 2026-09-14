@@ -463,6 +463,11 @@ namespace RobotSNAP.Core.Scenario
                     route.Add(spawnPosition);
                 route.AddRange(goals);
                 human.SetGoals(route);
+
+                // Face the first objective from the very first frame, instead of the prefab's own direction.
+                human.FaceTowards(new Vector2(
+                    goals[0].x - spawnPosition.x,
+                    goals[0].z - spawnPosition.z));
             }
             else if (config.Goal != null)
             {

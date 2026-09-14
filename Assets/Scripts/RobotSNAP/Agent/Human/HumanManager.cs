@@ -129,8 +129,19 @@ namespace RobotSNAP.Agents
         public void GetNeighbors(int selfId, Vector2 center, float radius,
                                  List<Vector2> outPositions, List<Vector2> outVelocities)
         {
+            GetNeighbors(selfId, center, radius, outPositions, outVelocities, null);
+        }
+
+        /// <summary>
+        /// Same query, but also returns the id of each neighbour so a caller can ignore the agents it walks
+        /// with — a group member yields to strangers, not to its own companions.
+        /// </summary>
+        public void GetNeighbors(int selfId, Vector2 center, float radius,
+                                 List<Vector2> outPositions, List<Vector2> outVelocities, List<int> outIds)
+        {
             outPositions.Clear();
             outVelocities.Clear();
+            outIds?.Clear();
 
             float radiusSqr = radius * radius;
 
@@ -145,6 +156,7 @@ namespace RobotSNAP.Agents
                 {
                     outPositions.Add(data.Position);
                     outVelocities.Add(data.Velocity);
+                    outIds?.Add(data.Id);
                 }
             }
         }

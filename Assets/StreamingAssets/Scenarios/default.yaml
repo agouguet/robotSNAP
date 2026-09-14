@@ -1,11 +1,11 @@
-scenario_info:
+scenario_info: 
   name: Default
   type: Custom
   description: Default minimal scenario
   version: 1.0
   author: RobotSNAP
   created: "2026-09-11 15:11"
-  tags:
+  tags: 
   - Basic
   - Corner
   - Corridor
@@ -16,71 +16,71 @@ scenario_info:
   preview: corner.png
   robot_type: TurtleBot4
   duration: 0
-points:
-  start_robot:
+points: 
+  start_robot: 
     x: 9.43463
     y: 0
     z: 0.04240322
     yaw: -90
     center: null
     size: null
-  end_robot:
+  end_robot: 
     x: -0.02120304
     y: 0
     z: -9.498233
     yaw: null
     center: null
     size: null
-  spawn_zone:
+  spawn_zone: 
     x: null
     y: null
     z: null
     yaw: null
-    center:
+    center: 
       x: 0
       y: 0
       z: -9
-    size:
+    size: 
       x: 1
       y: 1
       z: 1
-  end_zone:
+  end_zone: 
     x: null
     y: null
     z: null
     yaw: null
-    center:
+    center: 
       x: 9
       y: 0
       z: 0
-    size:
+    size: 
       x: 1
       y: 1
       z: 1
-  pedestrians_start:
+  pedestrians_start: 
     x: 0.02120233
     y: 0
     z: -9.455832
     yaw: null
     center: null
     size: null
-  pedestrians_goal_1:
+  pedestrians_goal_1: 
     x: 9.477033
     y: 0
     z: 0.1272097
     yaw: null
     center: null
     size: null
-robot:
+robot: 
   start: start_robot
   goal: end_robot
   waypoints: null
   behavior: normal
   speed: 1.2
-humans:
+humans: 
 - id: pedestrians
   count: 1
-  spawn:
+  spawn: 
     type: point
     ref: pedestrians_start
     position: null
@@ -88,7 +88,7 @@ humans:
     formation: null
     spacing: 0
     relative_to: null
-  goal:
+  goal: 
     type: point
     ref: pedestrians_goal_1
     position: null
@@ -96,7 +96,7 @@ humans:
     target: null
     radius: 0
   goals: null
-  movement_controller:
+  movement_controller: 
     type: SFM
     onnx_model: null
     sfm_params: null

@@ -47,6 +47,11 @@ namespace RobotSNAP.Agents
         // Obstacles
         private readonly List<Vector2> _tempObstacles = new List<Vector2>();
 
+        // Robot to yield to (cached, refreshed periodically)
+        private Robot _robot;
+        private float _nextRobotLookup;
+        private const float RobotLookupInterval = 2f;
+
         // Public properties
         public bool IsPlaying => _isPlaying;
         public Vector2 CurrentVelocity => _currentVelocity;
@@ -222,6 +227,7 @@ namespace RobotSNAP.Agents
                 _neighborPositions.ToArray(),
                 _neighborVelocities.ToArray(),
                 _tempObstacles.ToArray(),
+                ObserveRobot(),
                 Time.fixedDeltaTime
             );
 
@@ -249,6 +255,30 @@ namespace RobotSNAP.Agents
         #endregion
 
         #region Navigation
+
+        /// <summary>
+        /// Describes the robot for the movement controller so humans yield to it.
+        /// The lookup is cached because finding it every physics step would be wasteful.
+        /// </summary>
+        private RobotObservation ObserveRobot()
+        {
+            if (_robot == null && Time.time >= _nextRobotLookup)
+            {
+                _nextRobotLookup = Time.time + RobotLookupInterval;
+                _robot = FindAnyObjectByType<Robot>();
+            }
+
+            if (_robot == null || !_robot.gameObject.activeInHierarchy)
+                return RobotObservation.None;
+
+            Vector3 position = _robot.Position;
+            Vector3 velocity = _robot.Velocity;
+            return new RobotObservation(
+                true,
+                new Vector2(position.x, position.z),
+                new Vector2(velocity.x, velocity.z),
+                Mathf.Max(0.25f, _robot.Radius));
+        }
 
         private void UpdateNavMeshPath()
         {
@@ -285,16 +315,16 @@ namespace RobotSNAP.Agents
                 return;
             }
 
-            float goalReachedDist = _config != null ? _config.goalReachedDistance : 0.2f;
-            foreach (Vector3 p in _pathCorners)
-            {
-                if (Vector2.Distance(_currentPosition, new Vector2(p.x, p.z)) > goalReachedDist)
-                {
-                    _currentGoalPoint = new Vector2(p.x, p.z);
-                    return;
-                }
-            }
-            _currentGoalPoint = _avatar.currentDestination;
+            float destinationReachedDistance = _config != null ? _config.goalReachedDistance : 0.2f;
+            float waypointAdvanceDistance = _config != null
+                ? Mathf.Max(_config.nextNavMinDistance, _config.slowDownDistance)
+                : 1f;
+            _currentGoalPoint = HumanPathTargetSelector.SelectTarget(
+                _currentPosition,
+                _avatar.currentDestination,
+                _pathCorners,
+                waypointAdvanceDistance,
+                destinationReachedDistance);
         }
 
         #endregion
@@ -346,6 +376,8 @@ namespace RobotSNAP.Agents
                 _avatar.currentDestination = goal;
                 _avatar.hasDestination = true;
             }
+            // Never expose the reset value (0,0) as a temporary steering target.
+            _currentGoalPoint = goal;
             _lastPathUpdate = -_config.pathUpdateInterval;
         }
 

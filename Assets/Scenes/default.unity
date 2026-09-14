@@ -1022,12 +1022,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenariosTabController
   uiDocument: {fileID: 1187733928}
-  _dataService: {fileID: 4147494}
-  _cardTemplate: {fileID: 9197481963319205126, guid: efb4d510811fa6ab5a4752b68470a224, type: 3}
-  _scenarioLoader: {fileID: 4147492}
-  _columns: 4
-  _cardSpacingPercent: 1
-  _logEvents: 1
+  dataService: {fileID: 4147494}
+  cardTemplate: {fileID: 9197481963319205126, guid: efb4d510811fa6ab5a4752b68470a224, type: 3}
+  scenarioLoader: {fileID: 4147492}
+  columns: 4
+  cardSpacingPercent: 0.2
 --- !u!1 &1185419207
 GameObject:
   m_ObjectHideFlags: 0
@@ -1339,7 +1338,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SidebarController
   uiDocument: {fileID: 1187733928}
-  _scenarioDataService: {fileID: 0}
+  _scenarioDataService: {fileID: 4147494}
 --- !u!114 &1187733934
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1936,7 +1935,7 @@ MonoBehaviour:
   simulationStartHour: 12
   _timeZoneId: Europe/Paris
   logTimeChanges: 0
-  editorTimeDisplay: 16:00:33
+  editorTimeDisplay: 17:29:01
 --- !u!4 &2049586426
 Transform:
   m_ObjectHideFlags: 0

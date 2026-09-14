@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 using RobotSNAP.Agents.Movement.Interfaces;
 using RobotSNAP.Movement.Predictors;
 using RobotSNAP.Agents;
@@ -18,6 +19,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
         private float _confidence = 0.5f;
         private Vector2[] _trajectoryBuffer;
         private int _bufferIndex;
+        private readonly List<Vector2> _neighborsWithRobot = new List<Vector2>();
         private const int TRAJECTORY_LENGTH = 8;  // Nombre de points d'historique utilisés par le modèle
 
         public ONNXPredictionController(HumanConfig config)
@@ -36,6 +38,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2[] neighbors,
             Vector2[] neighborVelocities,
             Vector2[] staticObstacles,
+            RobotObservation robot,
             float deltaTime)
         {
             // Mise à jour du buffer de trajectoire (historique)
@@ -47,7 +50,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
             if (Time.time - _lastUpdateTime >= updateInterval)
             {
                 _lastUpdateTime = Time.time;
-                UpdatePrediction(currentPosition, currentVelocity, goalPosition, neighbors);
+                UpdatePrediction(currentPosition, currentVelocity, goalPosition, WithRobot(neighbors, robot));
             }
 
             // Calcul de la direction à partir de la première prédiction (prochain point)
@@ -71,6 +74,20 @@ namespace RobotSNAP.Agents.Movement.Controllers
             // Vitesse adaptée à la confiance (plus confiant → plus rapide)
             float speed = _config.maxSpeed * (0.6f + _confidence * 0.4f);
             return predictedDirection * speed;
+        }
+
+        /// <summary>The robot is appended to the observed neighbours so the model can react to it.</summary>
+        private Vector2[] WithRobot(Vector2[] neighbors, RobotObservation robot)
+        {
+            if (!robot.IsVisible)
+                return neighbors;
+
+            int count = neighbors?.Length ?? 0;
+            _neighborsWithRobot.Clear();
+            for (int index = 0; index < count; index++)
+                _neighborsWithRobot.Add(neighbors[index]);
+            _neighborsWithRobot.Add(robot.Position);
+            return _neighborsWithRobot.ToArray();
         }
 
         private void UpdatePrediction(Vector2 currentPos, Vector2 currentVel, Vector2 goal, Vector2[] neighbors)

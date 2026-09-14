@@ -58,7 +58,7 @@
                             <ui:Label name="ScenarioAgents" text="—" class="scenario-info-value"/>
                         </ui:VisualElement>
                         <ui:VisualElement class="scenario-info-item">
-                            <ui:Label text="Duration" class="scenario-info-label"/>
+                            <ui:Label text="Mission time limit" class="scenario-info-label"/>
                             <ui:Label name="ScenarioDuration" text="—" class="scenario-info-value"/>
                         </ui:VisualElement>
                     </ui:VisualElement>

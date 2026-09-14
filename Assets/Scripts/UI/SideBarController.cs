@@ -231,6 +231,31 @@ public class SidebarController : MonoBehaviour
         OnViewChanged?.Invoke(viewName);
     }
 
+    /// <summary>Switches the app to a view by its menu label, e.g. "Simulator" or "Scenarios".</summary>
+    public void ShowView(string viewName)
+    {
+        if (string.IsNullOrWhiteSpace(viewName))
+            return;
+
+        var root = uiDocument != null ? uiDocument.rootVisualElement : null;
+        if (root == null)
+            return;
+
+        foreach (Button button in root.Query<Button>(className: "menu-item").ToList())
+        {
+            if (button.name == "DarkModeToggle")
+                continue;
+            var label = button.Q<Label>(className: "menu-label");
+            if (label != null && string.Equals(label.text, viewName, System.StringComparison.OrdinalIgnoreCase))
+            {
+                SetActiveView(button, viewName);
+                return;
+            }
+        }
+
+        Debug.LogWarning($"[SidebarController] No menu item found for view '{viewName}'.");
+    }
+
     private void ToggleSidebar()
     {
         _isSidebarCollapsed = !_isSidebarCollapsed;

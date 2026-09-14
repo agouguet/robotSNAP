@@ -1,0 +1,75 @@
+scenario_info: 
+  name: Crowd Groupes
+  type: Custom
+  description: ""
+  version: 1.0
+  author: RobotSNAP
+  created: "2026-09-14 14:41"
+  tags: []
+  map: basic/crowd
+  location: null
+  dataset: null
+  preview: ""
+  robot_type: TurtleBot4
+  duration: 0
+points: 
+  robot_start: 
+    x: -5.8
+    y: 0
+    z: -0.04
+    yaw: 0
+    center: null
+    size: null
+  robot_goal: 
+    x: 6.36
+    y: 0
+    z: 0.04
+    yaw: null
+    center: null
+    size: null
+  human_route_1_start: 
+    x: 0.11
+    y: 0
+    z: -3.9
+    yaw: null
+    center: null
+    size: null
+  human_route_1_goal_1: 
+    x: -0.08
+    y: 0
+    z: 6.67
+    yaw: null
+    center: null
+    size: null
+robot: 
+  start: robot_start
+  goal: robot_goal
+  waypoints: null
+  behavior: normal
+  speed: 1.2
+humans: 
+- id: human_route_1
+  count: 5
+  spawn: 
+    type: point
+    ref: human_route_1_start
+    position: null
+    zone: null
+    formation: null
+    spacing: 1.5
+    relative_to: null
+  goal: 
+    type: point
+    ref: human_route_1_goal_1
+    position: null
+    zone: null
+    target: null
+    radius: 5
+  goals: null
+  end_behavior: stay
+  group: 1
+  movement_controller: null
+  behavior: normal
+  speed: 1
+  color: null
+  personality: null

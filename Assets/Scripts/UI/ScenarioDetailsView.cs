@@ -83,7 +83,7 @@ public class ScenarioDetailsView : VisualElement
         _environmentLabel = AddInfoItem(infoGrid, "Environment", "—");
         _robotLabel = AddInfoItem(infoGrid, "Robot", "—");
         _agentsLabel = AddInfoItem(infoGrid, "Agents", "—");
-        _durationLabel = AddInfoItem(infoGrid, "Duration", "—");
+        _durationLabel = AddInfoItem(infoGrid, "Mission time limit", "—");
 
         infoSection.Add(infoTitle);
         infoSection.Add(infoGrid);

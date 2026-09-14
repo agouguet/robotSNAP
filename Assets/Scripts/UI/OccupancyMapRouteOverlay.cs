@@ -12,19 +12,22 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
 {
     public readonly struct RouteVisual
     {
-        public RouteVisual(IReadOnlyList<Vector2> points, Color color, bool active)
+        public RouteVisual(IReadOnlyList<Vector2> points, Color color, bool active, string name = null)
         {
             Points = points;
             Color = color;
             Active = active;
+            Name = name;
         }
 
         public IReadOnlyList<Vector2> Points { get; }
         public Color Color { get; }
         public bool Active { get; }
+        public string Name { get; }
     }
 
     private readonly List<RouteVisual> _routes = new();
+    private readonly Label _scaleValueLabel;
     private Bounds _worldBounds;
     private Rect _imageRect;
     private bool _showGrid = true;
@@ -35,6 +38,12 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
         pickingMode = PickingMode.Ignore;
         AddToClassList("route-map-overlay");
         generateVisualContent += GenerateRouteVisuals;
+
+        // Painter2D cannot draw text, so the scale bar value is a child label.
+        _scaleValueLabel = new Label();
+        _scaleValueLabel.AddToClassList("map-scale-value");
+        _scaleValueLabel.pickingMode = PickingMode.Ignore;
+        Add(_scaleValueLabel);
     }
 
     public bool ShowGrid
@@ -45,6 +54,7 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
             if (_showGrid == value)
                 return;
             _showGrid = value;
+            UpdateScaleLabel();
             MarkDirtyRepaint();
         }
     }
@@ -56,6 +66,7 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
         _worldBounds = worldBounds;
         _imageRect = imageRect;
         _gridStep = CalculateGridStep(worldBounds.size.x, imageRect.width);
+        UpdateScaleLabel();
         MarkDirtyRepaint();
     }
 
@@ -109,10 +120,22 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
             painter.Stroke();
         }
 
-        // A compact scale bar uses the same metric step as the grid.
+        // A compact scale bar uses the same metric step as the grid, so the value printed
+        // above it is the length of one grid cell in metres.
         float scaleWidth = _gridStep / _worldBounds.size.x * _imageRect.width;
         float barY = _imageRect.yMax - 13f;
         float barX = _imageRect.xMin + 12f;
+
+        // Dark plate behind the bar so the white strokes stay readable on a bright occupancy grid.
+        painter.fillColor = new Color(0.04f, 0.07f, 0.1f, 0.55f);
+        painter.BeginPath();
+        painter.MoveTo(new Vector2(barX - 6f, barY - 8f));
+        painter.LineTo(new Vector2(barX + scaleWidth + 6f, barY - 8f));
+        painter.LineTo(new Vector2(barX + scaleWidth + 6f, barY + 6f));
+        painter.LineTo(new Vector2(barX - 6f, barY + 6f));
+        painter.ClosePath();
+        painter.Fill();
+
         painter.strokeColor = new Color(0.95f, 0.97f, 1f, 0.9f);
         painter.lineWidth = 2f;
         painter.BeginPath();
@@ -170,6 +193,16 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
         return new Vector2(
             _imageRect.xMin + imagePosition.x * _imageRect.width,
             _imageRect.yMin + imagePosition.y * _imageRect.height);
+    }
+
+    /// <summary>Prints the metric value of the scale bar drawn by <see cref="DrawGrid"/>.</summary>
+    private void UpdateScaleLabel()
+    {
+        bool hasMap = _showGrid && _imageRect.width >= 1f && _imageRect.height >= 1f &&
+                      _worldBounds.size.x > 0f;
+        _scaleValueLabel.text = hasMap ? $"{_gridStep:0.##} m" : string.Empty;
+        _scaleValueLabel.style.left = _imageRect.xMin + 12f;
+        _scaleValueLabel.style.top = _imageRect.yMax - 34f;
     }
 
     private static float CalculateGridStep(float worldWidth, float pixelWidth)

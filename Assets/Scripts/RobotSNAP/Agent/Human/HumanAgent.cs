@@ -29,8 +29,24 @@ namespace RobotSNAP.Agents
         private Supervisor _supervisor;
         private bool _wasPlaying = true;
         private bool _wasPaused;
-        private readonly Queue<Vector3> _routeGoals = new();
+
+        // Ordered route: the agent walks from the first point to the last one, then applies its end behavior.
+        private readonly HumanRouteWalker _walker = new();
         private bool _followingRoute;
+
+        // What happens once the last point of the route is reached.
+        public HumanEndBehavior endBehavior = HumanEndBehavior.Stay;
+
+        // Group walking: the leader owns the route, the others follow a formation slot.
+        private HumanGroup _group;
+        private bool _isGroupLeader;
+        private Vector2 _formationOffset;
+        private HumanPoolManager _poolManager;
+
+        // Guards a route against agents wedged against geometry.
+        private float _stalledTime;
+        private const float StallSpeedThreshold = 0.08f;
+        private const float StallSecondsBeforeAdvance = 10f;
 
         // Propriétés héritées de BaseAgent
         public override Vector3 Position => transform.position;
@@ -43,6 +59,10 @@ namespace RobotSNAP.Agents
         public Vector3 CurrentGoal => _currentGoal;
         public float CurrentSpeed => _currentSpeed;
         public string CurrentBehavior => _currentBehavior;
+        public HumanEndBehavior EndBehavior => endBehavior;
+        public IReadOnlyList<Vector3> RoutePoints => _walker.Points;
+        public bool IsGroupLeader => _group != null && _isGroupLeader;
+        public bool IsGroupFollower => _group != null && !_isGroupLeader;
 
         // ==================== Unity Lifecycle ====================
         private void Awake()
@@ -76,6 +96,9 @@ namespace RobotSNAP.Agents
                 if (_animator != null && _animator.speed == 0f)
                     _animator.speed = 1f;
             }
+
+            if (_group != null && _isGroupLeader)
+                _group.UpdateMemberDestinations();
 
             AdvanceRouteIfReached();
 
@@ -154,7 +177,7 @@ namespace RobotSNAP.Agents
 
         public override void SetGoal(Vector3 goal)
         {
-            _routeGoals.Clear();
+            _walker.Clear();
             _followingRoute = false;
             SetRouteGoal(goal);
         }
@@ -168,31 +191,32 @@ namespace RobotSNAP.Agents
             _movement?.SetGoal(currentDestination);
         }
 
-        public void SetGoal(Vector2 goal)
-        {
-            _routeGoals.Clear();
-            _followingRoute = false;
-            currentDestination = goal;
-            _currentGoal = new Vector3(goal.x, 0, goal.y);
-            _hasGoal = true;
-            hasDestination = true;
-            _movement?.SetGoal(goal);
-        }
-
+        /// <summary>
+        /// Replaces the route with the given ordered points. The agent walks through every point,
+        /// from the first to the last one, then applies <see cref="endBehavior"/>.
+        /// </summary>
         public void SetGoals(IEnumerable<Vector3> goals)
         {
-            _routeGoals.Clear();
-            if (goals != null)
+            _walker.EndBehavior = endBehavior;
+            _walker.SetRoute(goals);
+            _stalledTime = 0f;
+            _followingRoute = _walker.HasCurrent && !IsGroupFollower;
+            if (_followingRoute)
+                SetRouteGoal(_walker.Current);
+            else if (_walker.Points.Count == 0)
+                ClearGoal();
+        }
+
+        private void AdvanceToNextGoal()
+        {
+            _stalledTime = 0f;
+            if (_walker.AdvanceNext())
             {
-                foreach (Vector3 goal in goals)
-                    _routeGoals.Enqueue(goal);
+                CompleteRoute();
+                return;
             }
 
-            _followingRoute = _routeGoals.Count > 0;
-            if (_followingRoute)
-                SetRouteGoal(_routeGoals.Dequeue());
-            else
-                ClearGoal();
+            SetRouteGoal(_walker.Current);
         }
 
         private void AdvanceRouteIfReached()
@@ -200,13 +224,43 @@ namespace RobotSNAP.Agents
             if (!_followingRoute || !hasDestination)
                 return;
 
-            float threshold = humanConfig != null ? humanConfig.goalReachedDistance : 0.2f;
-            if (Vector2.Distance(Position2D, currentDestination) > threshold)
-                return;
-
-            if (_routeGoals.Count > 0)
+            float arrivalRadius = ArrivalRadius;
+            float distance = Vector2.Distance(Position2D, currentDestination);
+            if (distance <= arrivalRadius)
             {
-                SetRouteGoal(_routeGoals.Dequeue());
+                AdvanceToNextGoal();
+                return;
+            }
+
+            // An agent wedged against geometry must not freeze the whole route.
+            if (currentVelocity3D.magnitude <= StallSpeedThreshold)
+            {
+                _stalledTime += Time.deltaTime;
+                if (_stalledTime >= StallSecondsBeforeAdvance && distance > arrivalRadius * 2f)
+                {
+                    Debug.LogWarning($"[HumanAgent] {AgentName} stalled before " +
+                                     $"({currentDestination.x:0.##}, {currentDestination.y:0.##}); " +
+                                     "skipping to the next route point.");
+                    AdvanceToNextGoal();
+                }
+            }
+            else
+            {
+                _stalledTime = 0f;
+            }
+        }
+
+        /// <summary>Arrival tolerance: the agent radius matters more than the raw goal distance.</summary>
+        private float ArrivalRadius =>
+            Mathf.Max(humanConfig != null ? humanConfig.goalReachedDistance : 0.2f, radius * 1.6f);
+
+        /// <summary>Called when the walker really ran out of points (a looping route never does).</summary>
+        private void CompleteRoute()
+        {
+            if (endBehavior == HumanEndBehavior.Disappear)
+            {
+                _group?.ApplyEndBehavior(HumanEndBehavior.Disappear);
+                Disappear();
                 return;
             }
 
@@ -218,10 +272,103 @@ namespace RobotSNAP.Agents
 
         public void SetPlay(bool isPlaying) => _movement?.SetPlaying(isPlaying);
 
+        // ==================== End behavior, groups and lifecycle ====================
+
+        public void SetEndBehavior(HumanEndBehavior behavior)
+        {
+            endBehavior = behavior;
+            _walker.EndBehavior = behavior;
+        }
+
+        public void SetPoolManager(HumanPoolManager poolManager) => _poolManager = poolManager;
+
+        /// <summary>Joins a walking group. The leader keeps its route, followers follow a slot.</summary>
+        public void JoinGroup(HumanGroup group, Vector2 formationOffset, bool isLeader)
+        {
+            _group = group;
+            _formationOffset = formationOffset;
+            _isGroupLeader = isLeader;
+
+            if (isLeader)
+                return;
+
+            // Followers do not advance a route of their own: the leader drives the group.
+            _walker.Clear();
+            _followingRoute = false;
+            _stalledTime = 0f;
+            HumanAgent leader = group != null ? group.Leader : null;
+            if (leader == null)
+            {
+                SetGroupDestination(Position2D);
+                return;
+            }
+
+            // Spawn directly on the slot so the group starts already formed.
+            Vector2 slotPosition = leader.Position2D + formationOffset;
+            float tolerance = formationOffset.magnitude + Mathf.Max(0.5f, (group?.Spacing ?? 1.5f) * 0.5f);
+            slotPosition = SpawnPlacement.ProjectWithin(slotPosition, leader.Position2D, tolerance);
+            transform.position = new Vector3(slotPosition.x, transform.position.y, slotPosition.y);
+            SetGroupDestination(slotPosition);
+        }
+
+        public void SetFormationOffset(Vector2 offset) => _formationOffset = offset;
+
+        public void LeaveGroup()
+        {
+            _group = null;
+            _isGroupLeader = false;
+            _formationOffset = Vector2.zero;
+        }
+
+        /// <summary>Steering target imposed by the group leader; does not touch the route.</summary>
+        public void SetGroupDestination(Vector2 destination)
+        {
+            currentDestination = destination;
+            hasDestination = true;
+            _hasGoal = true;
+            _currentGoal = new Vector3(destination.x, 0f, destination.y);
+            _movement?.SetGoal(destination);
+        }
+
+        /// <summary>End behavior propagated by the group leader to its followers.</summary>
+        public void SetGroupEndBehavior(HumanEndBehavior behavior)
+        {
+            if (_isGroupLeader)
+                return;
+
+            endBehavior = behavior;
+            if (behavior == HumanEndBehavior.Disappear)
+                Disappear();
+        }
+
+        /// <summary>Removes the agent from the simulation once its route is complete.</summary>
+        public void Disappear()
+        {
+            _followingRoute = false;
+            hasDestination = false;
+            _hasGoal = false;
+            _stalledTime = 0f;
+            Stop();
+
+            _group?.Remove(this);
+            LeaveGroup();
+
+            if (_poolManager != null)
+            {
+                _poolManager.ReturnHuman(gameObject);
+                return;
+            }
+
+            gameObject.SetActive(false);
+        }
+
         public override void Reset()
         {
-            _routeGoals.Clear();
+            _group?.Remove(this);
+            LeaveGroup();
+            _walker.Clear();
             _followingRoute = false;
+            _stalledTime = 0f;
             hasDestination = false;
             _hasGoal = false;
             currentVelocity3D = Vector3.zero;
@@ -289,8 +436,9 @@ namespace RobotSNAP.Agents
 
         public override void ClearGoal()
         {
-            _routeGoals.Clear();
+            _walker.Clear();
             _followingRoute = false;
+            _stalledTime = 0f;
             hasDestination = false;
             _hasGoal = false;
             _currentGoal = Vector3.zero;

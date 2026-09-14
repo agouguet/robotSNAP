@@ -1,21 +1,36 @@
-scenario_info:
-  name: "Demo"
-  description: "Default minimal scenario"
-  version: "1.0"
-  map: "hard"
-
-points:
-  start: {x: 0, y: 0, z: 0}
-  end: {x: 5, y: 0, z: 5}
-
-robot:
-  start: "start"
-  goal: "end"
-  behavior: "normal"
+scenario_info: 
+  name: Demo
+  type: Custom
+  description: Default minimal scenario
+  version: 1.0
+  author: RobotSNAP
+  created: "2026-09-11 15:04"
+  tags: []
+  map: hard
+  location: null
+  dataset: null
+  preview: ""
+  robot_type: TurtleBot4
+  duration: 0
+points: 
+  start: 
+    x: 0
+    y: 0
+    z: 0
+    yaw: 0
+    center: null
+    size: null
+  end: 
+    x: 5
+    y: 0
+    z: 5
+    yaw: null
+    center: null
+    size: null
+robot: 
+  start: start
+  goal: end
+  waypoints: null
+  behavior: normal
   speed: 1.2
-
-simulation:
-  duration: 60
-  random_seed: 42
-  min_humans: 1
-  max_humans: 1
+humans: []

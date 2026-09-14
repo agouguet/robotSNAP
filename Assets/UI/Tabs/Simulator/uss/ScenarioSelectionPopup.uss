@@ -85,7 +85,6 @@
     color: var(--text-primary);
     font-size: 14px;
     min-height: 36px;
-    --unity-cursor-color: var(--text-primary);
 }
 
 .scenario-search-field .unity-text-field__input {

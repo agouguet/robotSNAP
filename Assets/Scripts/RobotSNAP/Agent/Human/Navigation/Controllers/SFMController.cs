@@ -43,6 +43,13 @@ namespace RobotSNAP.Agents.Movement.Controllers
         private float _slowDownDistance;
         private float _goalReachedDistance;
 
+        // Robot (the human yields to it instead of walking through it)
+        private float _robotPerceptionRadius;
+        private float _robotRepulsionStrength;
+        private float _robotForceDistance;
+        private float _robotDampeningMin;
+        private float _robotDampeningMax;
+
         // Numerical stability
         private const float MAX_ACCELERATION = 20f;
         private const float ANISOTROPIC_FACTOR = 0.5f;
@@ -76,6 +83,12 @@ namespace RobotSNAP.Agents.Movement.Controllers
 
             _slowDownDistance = config.slowDownDistance;
             _goalReachedDistance = config.goalReachedDistance;
+
+            _robotPerceptionRadius = config.robotPerceptionRadius;
+            _robotRepulsionStrength = config.robotRepulsionStrength;
+            _robotForceDistance = Mathf.Max(0.05f, config.robotForceDistance);
+            _robotDampeningMin = config.robotRepulsionDampeningMin;
+            _robotDampeningMax = config.robotRepulsionDampeningMax;
         }
 
         public Vector2 ComputeVelocity(
@@ -85,6 +98,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2[] neighbors,
             Vector2[] neighborVelocities,
             Vector2[] staticObstacles,
+            RobotObservation robot,
             float deltaTime)
         {
             // ---- 1. Goal attraction ----
@@ -192,6 +206,40 @@ namespace RobotSNAP.Agents.Movement.Controllers
                 }
             }
 
+            // ---- 3b. Robot repulsion ----
+            // The robot is not a wall nor a regular pedestrian: it gets its own force so humans
+            // step aside instead of walking through it.
+            Vector2 robotAccel = Vector2.zero;
+            if (robot.IsVisible)
+            {
+                Vector2 toRobot = robot.Position - currentPosition;
+                float distance = toRobot.magnitude;
+                if (distance > 0.001f && distance < _robotPerceptionRadius)
+                {
+                    Vector2 dirToRobot = toRobot / distance;
+                    float combinedRadius = _agentRadius + robot.Radius;
+                    float forceMagnitude = _robotRepulsionStrength *
+                                           Mathf.Exp((combinedRadius - distance) / _robotForceDistance);
+                    float proximity = Mathf.Clamp01(1f - distance / _robotPerceptionRadius);
+                    float dampening = Mathf.Lerp(_robotDampeningMin, _robotDampeningMax, proximity);
+                    float effectiveForce = forceMagnitude * dampening;
+
+                    robotAccel += (-dirToRobot * effectiveForce) / _mass;
+
+                    // If the robot drives towards us, slide sideways out of its path. The side is
+                    // chosen from the current relative position so the agent does not dither.
+                    Vector2 robotHeading = robot.Velocity.sqrMagnitude > 0.01f
+                        ? robot.Velocity.normalized
+                        : dirToRobot;
+                    Vector2 lateral = new Vector2(-robotHeading.y, robotHeading.x);
+                    if (Vector2.Dot(currentPosition - robot.Position, lateral) < 0f)
+                        lateral = -lateral;
+                    float closingSpeed = Vector2.Dot(robot.Velocity - currentVelocity, dirToRobot);
+                    if (closingSpeed > 0.05f)
+                        robotAccel += lateral * effectiveForce * 0.4f / _mass;
+                }
+            }
+
             // ---- 4. Directional damping ----
             Vector2 forwardDir = desiredDir;
             Vector2 lateralDir = new Vector2(-forwardDir.y, forwardDir.x);
@@ -206,7 +254,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
                                 - dampLateral * lateralSpeed * lateralDir;
 
             // ---- 5. Total acceleration ----
-            Vector2 totalAccel = attractionAccel + socialAccel + contactAccel + alignmentAccel + obstacleAccel + dampAccel;
+            Vector2 totalAccel = attractionAccel + socialAccel + contactAccel + alignmentAccel + obstacleAccel + robotAccel + dampAccel;
 
             // Clamp acceleration
             float accelMag = totalAccel.magnitude;
@@ -252,6 +300,11 @@ namespace RobotSNAP.Agents.Movement.Controllers
             _lateralDampening = config.lateralDampening;
             _slowDownDistance = config.slowDownDistance;
             _goalReachedDistance = config.goalReachedDistance;
+            _robotPerceptionRadius = config.robotPerceptionRadius;
+            _robotRepulsionStrength = config.robotRepulsionStrength;
+            _robotForceDistance = Mathf.Max(0.05f, config.robotForceDistance);
+            _robotDampeningMin = config.robotRepulsionDampeningMin;
+            _robotDampeningMax = config.robotRepulsionDampeningMax;
             // Keep overtaking and noise as defined (could be extended from config)
         }
     }

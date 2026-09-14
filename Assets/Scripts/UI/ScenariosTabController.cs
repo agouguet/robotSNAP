@@ -34,6 +34,7 @@ public class ScenariosTabController : MonoBehaviour
     private ScenarioListView _listView;
     private ScenarioDetailsView _detailsView;
     private ScenarioRouteEditor _routeEditor;
+    private ScenarioMapRecap _mapRecap;
     private VisualElement _browserView;
     private VisualElement _editorView;
     private readonly VisualElement[] _stepContents = new VisualElement[3];
@@ -102,12 +103,9 @@ public class ScenariosTabController : MonoBehaviour
     private Label _deleteScenarioNameLabel;
 
     private DropdownField _robotTypeDropdown;
-    private DropdownField _robotBehaviorDropdown;
     private FloatField _robotSpeedField;
     private FloatField _durationField;
     private FloatField _startYawField;
-    private DropdownField _humanBehaviorDropdown;
-    private DropdownField _movementControllerDropdown;
 
     private Label _summaryName;
     private Label _summaryType;
@@ -167,6 +165,11 @@ public class ScenariosTabController : MonoBehaviour
 
     private void OnEnable()
     {
+        if (_editorView == null)
+        {
+            _initialized = false;
+            return;
+        }
         if (_initialized && _editorView.ClassListContains(HiddenClass)) _listView?.Refresh();
     }
 
@@ -262,12 +265,9 @@ public class ScenariosTabController : MonoBehaviour
         _deleteScenarioNameLabel = Require<Label>(root, "DeleteScenarioNameLabel", missing);
 
         _robotTypeDropdown = Require<DropdownField>(root, "RobotTypeDropdown", missing);
-        _robotBehaviorDropdown = Require<DropdownField>(root, "RobotBehaviorDropdown", missing);
         _robotSpeedField = Require<FloatField>(root, "RobotSpeedField", missing);
         _durationField = Require<FloatField>(root, "DurationField", missing);
         _startYawField = Require<FloatField>(root, "StartYawField", missing);
-        _humanBehaviorDropdown = Require<DropdownField>(root, "HumanBehaviorDropdown", missing);
-        _movementControllerDropdown = Require<DropdownField>(root, "MovementControllerDropdown", missing);
 
         _summaryName = Require<Label>(root, "SummaryName", missing);
         _summaryType = Require<Label>(root, "SummaryType", missing);
@@ -351,10 +351,8 @@ public class ScenariosTabController : MonoBehaviour
         _mapBrowserPreviewImage.scaleMode = ScaleMode.ScaleToFit;
         _environmentImportPreviewImage.scaleMode = ScaleMode.ScaleToFit;
         RefreshChoiceOptions();
-        _robotBehaviorDropdown.choices = new List<string> { "normal", "cautious", "aggressive", "attentive" };
-        _humanBehaviorDropdown.choices = new List<string> { "normal", "cautious", "aggressive", "attentive" };
-        _movementControllerDropdown.choices = new List<string> { "SFM", "ONNXPrediction", "Hybrid" };
         _routeEditor = new ScenarioRouteEditor(root);
+        _mapRecap = new ScenarioMapRecap(root);
 
         _nameField.RegisterValueChangedCallback(evt =>
         {
@@ -517,7 +515,6 @@ public class ScenariosTabController : MonoBehaviour
         _previewDropdown.SetValueWithoutNotify(PreviewPlaceholder);
         _tagsDropdown.SetValueWithoutNotify(TagPlaceholder);
         _robotTypeDropdown.SetValueWithoutNotify(_robotTypeDropdown.choices.FirstOrDefault() ?? "TurtleBot4");
-        _robotBehaviorDropdown.SetValueWithoutNotify("normal");
         _robotSpeedField.SetValueWithoutNotify(1.2f);
         _durationField.SetValueWithoutNotify(0f);
         _startYawField.SetValueWithoutNotify(0f);
@@ -555,7 +552,6 @@ public class ScenariosTabController : MonoBehaviour
         }
         if (scenario?.Robot != null)
         {
-            EnsureChoice(_robotBehaviorDropdown, scenario.Robot.Behavior, "normal");
             _robotSpeedField.SetValueWithoutNotify(Mathf.Max(0.01f, scenario.Robot.Speed));
             if (scenario.Points != null && !string.IsNullOrWhiteSpace(scenario.Robot.StartRef) &&
                 scenario.Points.TryGetValue(scenario.Robot.StartRef, out RefPoint startPoint) && startPoint != null)
@@ -619,6 +615,7 @@ public class ScenariosTabController : MonoBehaviour
         string message = null;
         if (string.IsNullOrWhiteSpace(_nameField.value)) message = "Scenario name is required.";
         else if (IsPlaceholder(_mapDropdown.value, MapPlaceholder)) message = "Choose an environment before continuing.";
+        else if (_durationField.value < 0f) message = "Mission time limit cannot be negative.";
         if (showFeedback) SetFeedback(message);
         return message == null;
     }
@@ -627,7 +624,6 @@ public class ScenariosTabController : MonoBehaviour
     {
         string message = null;
         if (_robotSpeedField.value <= 0f) message = "Robot speed must be greater than zero.";
-        else if (_durationField.value < 0f) message = "Duration cannot be negative.";
         else _routeEditor.Validate(out message);
         if (showFeedback) SetFeedback(message);
         return message == null;
@@ -635,9 +631,10 @@ public class ScenariosTabController : MonoBehaviour
 
     private void UpdateValidationSummary()
     {
+        RefreshMapRecap();
         bool informationValid = ValidateStepOne(false);
         bool routeEditorValid = _routeEditor.Validate(out _);
-        bool routeValid = routeEditorValid && _robotSpeedField.value > 0f && _durationField.value >= 0f;
+        bool routeValid = routeEditorValid && _robotSpeedField.value > 0f;
         bool humansValid = routeEditorValid;
         bool environmentValid = !IsPlaceholder(_mapDropdown.value, MapPlaceholder);
         bool allValid = informationValid && routeValid && humansValid && environmentValid;
@@ -650,7 +647,7 @@ public class ScenariosTabController : MonoBehaviour
         _summaryDuration.text = _durationField.value > 0f ? $"{_durationField.value:0.#} s" : "Unlimited";
         _pedestrianCount.text = humanTotal.ToString();
         _totalAgentCount.text = (humanTotal + 1).ToString();
-        _summaryRobotConfig.text = $"{_robotTypeDropdown.value} · {_robotBehaviorDropdown.value} · {_robotSpeedField.value:0.##} m/s";
+        _summaryRobotConfig.text = $"{_robotTypeDropdown.value} · {_robotSpeedField.value:0.##} m/s";
         _summaryRobotRoute.text = _routeEditor.RobotRouteSummary + $", orientation {_startYawField.value:0.#}°";
         _summaryHumanConfig.text = humanTotal == 0 ? "No humans" : $"{humanTotal} human(s) across {_routeEditor.HumanRouteCount} route(s)";
         _summaryHumanRoute.text = _routeEditor.HumanRouteSummary;
@@ -663,6 +660,14 @@ public class ScenariosTabController : MonoBehaviour
         _validationLabel.EnableInClassList(ErrorClass, !allValid);
         _validationLabel.text = allValid ? "The scenario is valid and ready to be saved." : "Fix the highlighted settings before saving.";
         _saveButton.SetEnabled(allValid);
+    }
+
+    private void RefreshMapRecap()
+    {
+        if (_mapRecap == null || _routeEditor == null)
+            return;
+        _mapRecap.SetMap(_occupancyTexture, _occupancyBounds);
+        _mapRecap.SetRoutes(_routeEditor.BuildRoutePreviews());
     }
 
     private static void SetCheck(Label label, bool valid, string validText, string invalidText)
@@ -729,7 +734,6 @@ public class ScenariosTabController : MonoBehaviour
         scenario.Info.PreviewImage = IsPlaceholder(_previewDropdown.value, PreviewPlaceholder) ? string.Empty : _previewDropdown.value;
         scenario.Info.RobotType = _robotTypeDropdown.value;
         scenario.Info.Duration = Mathf.Max(0f, _durationField.value);
-        scenario.Robot.Behavior = _robotBehaviorDropdown.value;
         scenario.Robot.Speed = _robotSpeedField.value;
         _routeEditor.WriteToScenario(scenario);
         if (scenario.Points.TryGetValue(scenario.Robot.StartRef, out RefPoint startPoint) && startPoint != null)
@@ -1102,7 +1106,15 @@ public class ScenariosTabController : MonoBehaviour
 
     private void UseSelectedScenario()
     {
-        if (!string.IsNullOrWhiteSpace(_listView?.SelectedScenarioId)) dataService?.LoadScenario(_listView.SelectedScenarioId);
+        string scenarioId = _listView?.SelectedScenarioId;
+        if (string.IsNullOrWhiteSpace(scenarioId))
+        {
+            Debug.LogWarning("[ScenariosTabController] Select a scenario before using it.");
+            return;
+        }
+
+        dataService?.LoadScenario(scenarioId);
+        FindAnyObjectByType<SidebarController>()?.ShowView("Simulator");
     }
 
     private void RequestDeleteSelectedScenario()

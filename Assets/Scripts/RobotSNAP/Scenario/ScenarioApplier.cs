@@ -35,6 +35,15 @@ namespace RobotSNAP.Core.Scenario
         private readonly Dictionary<string, HumanAgent> _spawnedHumans = new();
         private int _humanCounter;
 
+        /// <summary>Formation shared by every human config that declares the same group id.</summary>
+        private struct GroupLayout
+        {
+            public string Formation;
+            public float Spacing;
+            public bool HasFormation;
+            public bool HasSpacing;
+        }
+
         public ScenarioData CurrentScenario => _currentScenario;
         public bool IsApplying { get; private set; }
 
@@ -288,7 +297,6 @@ namespace RobotSNAP.Core.Scenario
             }
             robotRoute.Add(ResolvePosition(robotConfig.GoalRef));
             SetRobotGoals(robot, robotRoute);
-            SetRobotBehavior(robot, robotConfig.Behavior);
             SetRobotSpeed(robot, robotConfig.Speed);
 
             yield return null;
@@ -306,12 +314,6 @@ namespace RobotSNAP.Core.Scenario
         {
             var comp = robot.GetComponent<Robot>();
             comp?.SetGoals(goals);
-        }
-
-        private void SetRobotBehavior(GameObject robot, string behavior)
-        {
-            var comp = robot.GetComponent<Robot>();
-            comp?.SetBehavior(behavior);
         }
 
         private void SetRobotSpeed(GameObject robot, float speed)
@@ -363,8 +365,11 @@ namespace RobotSNAP.Core.Scenario
 
             yield return null; // let Unity stabilize
 
-            // Configure each human according to its YAML definition
+            // Configure each human according to its YAML definition.
+            // Humans sharing a group id are collected so they can walk together afterwards.
             int humanIndex = 0;
+            var groups = new Dictionary<string, HumanGroup>();
+            Dictionary<string, GroupLayout> groupLayouts = ResolveGroupLayouts();
             foreach (var config in _currentScenario.Humans)
             {
                 for (int i = 0; i < config.Count && humanIndex < allHumans.Count; i++)
@@ -372,12 +377,32 @@ namespace RobotSNAP.Core.Scenario
                     var human = allHumans[humanIndex];
                     if (human != null)
                     {
-                        ConfigureHuman(human, config, i, config.Count);
+                        ConfigureHuman(human, config, i, config.Count, poolManager);
+                        if (!string.IsNullOrWhiteSpace(config.Group))
+                        {
+                            string groupId = config.Group.Trim();
+                            if (!groups.TryGetValue(groupId, out HumanGroup group))
+                            {
+                                GroupLayout layout = groupLayouts.TryGetValue(groupId, out GroupLayout found)
+                                    ? found
+                                    : new GroupLayout { Spacing = 1.5f };
+                                group = new HumanGroup(
+                                    groupId,
+                                    layout.Spacing,
+                                    layout.HasFormation ? layout.Formation : null);
+                                groups[groupId] = group;
+                            }
+                            group.Add(human);
+                        }
                         _spawnedHumans[$"{config.Id}_{_humanCounter++}"] = human;
                     }
                     humanIndex++;
                 }
             }
+
+            // Lay every group out around its leader, facing the direction it is about to walk.
+            foreach (HumanGroup group in groups.Values)
+                group.PlaceMembersAtSpawn(ResolveGroupHeading(group.Leader));
 
             var robot = FindRobot();
             if (robot != null)
@@ -389,28 +414,48 @@ namespace RobotSNAP.Core.Scenario
 
             }
 
-            if (_logEvents) Debug.Log($"[ScenarioApplier] Configured {humanIndex} humans");
+            if (_logEvents)
+                Debug.Log($"[ScenarioApplier] Configured {humanIndex} humans across {groups.Count} group(s)");
         }
 
         // ==========================================
         //          INDIVIDUAL HUMAN CONFIGURATION
         // ==========================================
 
-        private void ConfigureHuman(HumanAgent human, HumanScenarioConfig config, int index, int total)
+        private void ConfigureHuman(
+            HumanAgent human,
+            HumanScenarioConfig config,
+            int index,
+            int total,
+            HumanPoolManager poolManager)
         {
-            // --- Spawn Position ---
-            if (config.Spawn != null)
+            human.SetPoolManager(poolManager);
+            human.SetEndBehavior(HumanEndBehaviorParser.Parse(config.EndBehavior));
+
+            // --- Ordered route: the spawn point first, then every goal until the last one ---
+            var goals = new List<Vector3>();
+            if (IsPointGoal(config.Goal))
             {
-                Vector3 spawnPos = ResolveSpawnPosition(config.Spawn, index, total);
-                human.transform.position = spawnPos;
+                goals.Add(ResolveGoalPosition(config.Goal));
+                if (config.Goals != null)
+                    goals.AddRange(config.Goals.Where(IsPointGoal).Select(ResolveGoalPosition));
             }
 
-            // --- Ordered goals ---
-            if (config.Goals != null && config.Goals.Count > 0 && IsPointGoal(config.Goal))
+            // --- Spawn Position ---
+            Vector3 spawnPosition = human.transform.position;
+            if (config.Spawn != null)
             {
-                var goals = new List<Vector3> { ResolveGoalPosition(config.Goal) };
-                goals.AddRange(config.Goals.Where(IsPointGoal).Select(ResolveGoalPosition));
-                human.SetGoals(goals);
+                spawnPosition = ResolveSpawnPosition(config, index, total, goals);
+                human.transform.position = spawnPosition;
+            }
+
+            if (goals.Count > 0)
+            {
+                var route = new List<Vector3>(goals.Count + 1);
+                if (config.Spawn != null)
+                    route.Add(spawnPosition);
+                route.AddRange(goals);
+                human.SetGoals(route);
             }
             else if (config.Goal != null)
             {
@@ -419,8 +464,6 @@ namespace RobotSNAP.Core.Scenario
 
             // --- Basic Parameters ---
             human.SetSpeed(config.Speed);
-            if (!string.IsNullOrEmpty(config.Behavior))
-                human.SetBehavior(config.Behavior);
 
             // --- Color ---
             if (config.Color != null && config.Color.Length >= 3)
@@ -430,9 +473,6 @@ namespace RobotSNAP.Core.Scenario
             if (config.Personality != null)
                 SetHumanPersonality(human, config.Personality);
 
-            // --- Movement Controller (SFM, ONNX, Hybrid) ---
-            if (config.MovementController != null)
-                SetHumanMovementController(human, config.MovementController);
         }
 
         // ==========================================
@@ -440,78 +480,152 @@ namespace RobotSNAP.Core.Scenario
         // ==========================================
 
         /// <summary>
-        /// Resolves a spawn position from a SpawnConfig.
-        /// Supports: 'ref' (legacy), direct 'position', or 'zone'.
-        /// Handles 'point', 'random', and 'formation' types.
+        /// Spawn policy, evaluated per human config.
+        ///
+        /// <para><b>Grouped route</b> — every member takes the same anchor, snapped onto the NavMesh.
+        /// The cluster is not spread here: <see cref="HumanGroup.PlaceMembersAtSpawn"/> lays the members
+        /// out on their formation slots around the leader once the whole group exists, so a group always
+        /// appears as one compact bloc.</para>
+        ///
+        /// <para><b>Ungrouped route with several agents</b> — the anchor is snapped onto the NavMesh and
+        /// the agents are placed on formation slots around it, each projection bounded to half a spacing
+        /// so nobody is pushed into the next room by the NavMesh sampling.</para>
+        ///
+        /// <para><b>Random spawn</b> — a random point inside the zone, snapped onto the NavMesh so agents
+        /// never start inside a wall.</para>
         /// </summary>
-        private Vector3 ResolveSpawnPosition(SpawnConfig spawn, int index, int total)
+        private Vector3 ResolveSpawnPosition(
+            HumanScenarioConfig config,
+            int index,
+            int total,
+            IList<Vector3> goals)
         {
-            // PRIORITY 1: Use a named reference (legacy/backward compatible)
-            if (!string.IsNullOrEmpty(spawn.Reference))
-            {
-                switch (spawn.Type?.ToLower())
-                {
-                    case "point":
-                        return ResolvePosition(spawn.Reference);
-
-                    case "random":
-                        Bounds refBounds = ResolveBounds(spawn.Reference);
-                        return new Vector3(
-                            UnityEngine.Random.Range(refBounds.min.x, refBounds.max.x),
-                            refBounds.center.y,
-                            UnityEngine.Random.Range(refBounds.min.z, refBounds.max.z)
-                        );
-
-                    case "formation":
-                        Vector3 center = GetFormationCenter(spawn);
-                        if (spawn.Formation == "line")
-                        {
-                            float offset = (index - (total - 1) / 2f) * spawn.Spacing;
-                            return center + new Vector3(offset, 0, 0);
-                        }
-                        if (spawn.Formation == "circle")
-                        {
-                            float angle = (index / (float)total) * Mathf.PI * 2;
-                            return center + new Vector3(Mathf.Cos(angle) * spawn.Spacing, 0, Mathf.Sin(angle) * spawn.Spacing);
-                        }
-                        break;
-                }
+            SpawnConfig spawn = config.Spawn;
+            if (spawn == null)
                 return Vector3.zero;
+
+            // Group members share the leader's anchor; the formation is applied after the whole group is built.
+            if (!string.IsNullOrWhiteSpace(config.Group))
+                return SpawnPlacement.SnapToNavMesh(ResolveSpawnAnchor(spawn));
+
+            if (string.Equals(spawn.Type, "random", StringComparison.OrdinalIgnoreCase))
+                return SpawnPlacement.SnapToNavMesh(ResolveRandomSpawn(spawn), 1.5f, 5f);
+
+            Vector3 anchor = SpawnPlacement.SnapToNavMesh(ResolveSpawnAnchor(spawn));
+            if (total <= 1)
+                return anchor;
+
+            float heading = ResolveHeading(anchor, goals);
+            float spacing = Mathf.Clamp(spawn.Spacing, 0.4f, 3f);
+            List<Vector2> slots = GroupFormation.CreateSlots(total, spacing, spawn.Formation);
+            Vector2 offset = GroupFormation.Rotate(slots[Mathf.Clamp(index, 0, slots.Count - 1)], heading);
+            Vector2 anchor2D = new Vector2(anchor.x, anchor.z);
+            Vector2 projected = SpawnPlacement.ProjectWithin(
+                anchor2D + offset,
+                anchor2D,
+                offset.magnitude + Mathf.Max(0.5f, spacing * 0.5f));
+            return new Vector3(projected.x, anchor.y, projected.y);
+        }
+
+        /// <summary>
+        /// Formation and spacing shared by all the human configs that declare the same group id.
+        /// The first config that sets a formation or a spacing wins, so hand-written YAML stays valid
+        /// even when only one entry of the group carries the layout.
+        /// </summary>
+        private Dictionary<string, GroupLayout> ResolveGroupLayouts()
+        {
+            var layouts = new Dictionary<string, GroupLayout>();
+            if (_currentScenario?.Humans == null)
+                return layouts;
+
+            foreach (HumanScenarioConfig config in _currentScenario.Humans)
+            {
+                if (config == null || string.IsNullOrWhiteSpace(config.Group))
+                    continue;
+
+                string id = config.Group.Trim();
+                if (!layouts.TryGetValue(id, out GroupLayout layout))
+                    layout = new GroupLayout { Spacing = 1.5f };
+
+                if (!layout.HasFormation && !string.IsNullOrWhiteSpace(config.Spawn?.Formation))
+                {
+                    layout.Formation = config.Spawn.Formation;
+                    layout.HasFormation = true;
+                }
+
+                if (!layout.HasSpacing && config.Spawn != null)
+                {
+                    layout.Spacing = config.Spawn.Spacing;
+                    layout.HasSpacing = true;
+                }
+
+                layouts[id] = layout;
             }
 
-            // PRIORITY 2: Direct position
+            return layouts;
+        }
+
+        /// <summary>Single anchor of a spawn definition: named reference, direct position or zone center.</summary>
+        private Vector3 ResolveSpawnAnchor(SpawnConfig spawn)
+        {
+            if (!string.IsNullOrEmpty(spawn.Reference))
+                return ResolvePosition(spawn.Reference);
             if (spawn.Position != null)
                 return spawn.Position.ToVector3();
-
-            // PRIORITY 3: Zone definition (center + size)
             if (spawn.Zone != null && spawn.Zone.IsBounds)
+                return spawn.Zone.Center.ToVector3();
+            return Vector3.zero;
+        }
+
+        private Vector3 ResolveRandomSpawn(SpawnConfig spawn)
+        {
+            if (!string.IsNullOrEmpty(spawn.Reference))
             {
-                switch (spawn.Type?.ToLower())
-                {
-                    case "point":
-                        return spawn.Zone.Center.ToVector3();
-
-                    case "random":
-                        Bounds zoneBounds = spawn.Zone.ToBounds();
-                        return new Vector3(
-                            UnityEngine.Random.Range(zoneBounds.min.x, zoneBounds.max.x),
-                            zoneBounds.center.y,
-                            UnityEngine.Random.Range(zoneBounds.min.z, zoneBounds.max.z)
-                        );
-
-                    case "formation":
-                        // Use the zone center as the formation anchor
-                        Vector3 formationBase = spawn.Zone.Center.ToVector3();
-                        // If relative_to is provided, we could offset, but for simplicity we use the center.
-                        // For a full implementation, we would check spawn.RelativeTo here.
-                        return formationBase;
-
-                    default:
-                        return spawn.Zone.Center.ToVector3();
-                }
+                Bounds referenceBounds = ResolveBounds(spawn.Reference);
+                if (referenceBounds.size != Vector3.zero)
+                    return RandomPointIn(referenceBounds);
             }
 
-            return Vector3.zero;
+            if (spawn.Zone != null && spawn.Zone.IsBounds)
+                return RandomPointIn(spawn.Zone.ToBounds());
+
+            return ResolveSpawnAnchor(spawn);
+        }
+
+        private static Vector3 RandomPointIn(Bounds bounds) => new Vector3(
+            UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
+            bounds.center.y,
+            UnityEngine.Random.Range(bounds.min.z, bounds.max.z));
+
+        /// <summary>Direction the agent will walk at spawn, used to orient its formation slot.</summary>
+        private static float ResolveHeading(Vector3 anchor, IList<Vector3> goals)
+        {
+            if (goals != null && goals.Count > 0)
+            {
+                Vector2 direction = new Vector2(goals[0].x - anchor.x, goals[0].z - anchor.z);
+                if (direction.sqrMagnitude < 0.0001f && goals.Count > 1)
+                    direction = new Vector2(goals[1].x - goals[0].x, goals[1].z - goals[0].z);
+                if (direction.sqrMagnitude > 0.0001f)
+                    return Mathf.Atan2(direction.x, direction.y);
+            }
+            return 0f;
+        }
+
+        /// <summary>Heading of a group: the direction from its spawn point to its first objective.</summary>
+        private static float ResolveGroupHeading(HumanAgent leader)
+        {
+            if (leader == null)
+                return 0f;
+
+            IReadOnlyList<Vector3> route = leader.RoutePoints;
+            for (int index = 1; index < route.Count; index++)
+            {
+                Vector2 direction = new Vector2(route[index].x - route[0].x, route[index].z - route[0].z);
+                if (direction.sqrMagnitude > 0.0001f)
+                    return Mathf.Atan2(direction.x, direction.y);
+            }
+
+            return 0f;
         }
 
         /// <summary>
@@ -562,7 +676,8 @@ namespace RobotSNAP.Core.Scenario
             switch (goal.Type?.ToLower())
             {
                 case "point":
-                    human.SetGoal(ResolveGoalPosition(goal));
+                    var goalPos = ResolveGoalPosition(goal);
+                    human.SetGoal(goalPos);
                     break;
 
                 case "random":
@@ -655,28 +770,5 @@ namespace RobotSNAP.Core.Scenario
             human.SetReactionTime(personality.ReactionTime);
         }
 
-        private void SetHumanMovementController(HumanAgent human, MovementControllerConfig movementConfig)
-        {
-            var movement = human.GetComponent<HumanMovement>();
-            if (movement == null) return;
-
-            int controllerType = 0;
-            switch (movementConfig.Type?.ToLower())
-            {
-                case "sfm": controllerType = 0; break;
-                case "onnx": controllerType = 1; break;
-                case "hybrid": controllerType = 2; break;
-                default: controllerType = 0; break;
-            }
-            movement.SetControllerType(controllerType);
-
-            // Log advanced SFM parameters (not yet applied)
-            if (movementConfig.SFMParameters != null && _logEvents)
-            {
-                Debug.Log($"[ScenarioApplier] SFM advanced parameters provided but not yet applied to {human.name}. " +
-                          $"Values: ForceStrength={movementConfig.SFMParameters.ForceStrength}, " +
-                          $"SocialForce={movementConfig.SFMParameters.SocialForce}, etc.");
-            }
-        }
     }
 }

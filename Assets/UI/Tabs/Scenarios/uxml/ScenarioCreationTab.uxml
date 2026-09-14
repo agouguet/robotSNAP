@@ -23,7 +23,7 @@
                 <ui:VisualElement class="step-number">
                     <ui:Label text="2"/>
                 </ui:VisualElement>
-                <ui:Label text="Agents &amp; Behaviors" class="step-label"/>
+                <ui:Label text="Agents &amp; Routes" class="step-label"/>
             </ui:VisualElement>
             <ui:VisualElement name="StepLine2" class="step-line"/>
             <ui:VisualElement name="Step3" class="creation-step">
@@ -59,6 +59,11 @@
                     <ui:Label text="Description" class="creation-field-label"/>
                     <ui:TextField name="DescriptionField" multiline="true" placeholder="Describe the context, purpose and special features of this scenario..." max-length="300" class="creation-textarea"/>
                     <ui:Label name="DescriptionCounter" text="0/300" class="field-counter"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="creation-field">
+                    <ui:Label text="Robot mission time limit (s)" class="creation-field-label"/>
+                    <ui:FloatField name="DurationField" class="creation-text-field"/>
+                    <ui:Label text="Maximum time allowed for the robot mission. Use 0 for no limit." class="field-help"/>
                 </ui:VisualElement>
                 <ui:VisualElement class="creation-field">
                     <ui:Label text="Tags" class="creation-field-label"/>
@@ -116,42 +121,35 @@
                 <ui:ScrollView class="agent-settings-scroll">
                     <ui:Label text="Route editor" class="creation-panel-title"/>
                     <ui:VisualElement class="creation-field">
-                        <ui:Label text="Active route" class="creation-field-label"/>
-                        <ui:DropdownField name="RouteSelectorDropdown" class="creation-dropdown"/>
+                        <ui:Label text="Routes" class="creation-field-label"/>
+                        <ui:Label text="Select a route here or click its line on the map." class="config-panel-subtitle"/>
+                        <ui:VisualElement name="RouteSelectorList" class="route-selector-list"/>
                     </ui:VisualElement>
                     <ui:VisualElement class="route-management-actions">
                         <ui:Button name="AddHumanRouteButton" text="+ Human route" class="route-management-button"/>
                         <ui:Button name="RemoveHumanRouteButton" text="Remove" class="route-management-button danger-subtle"/>
                     </ui:VisualElement>
-                    <ui:VisualElement class="agent-panel-divider"/>
-                    <ui:VisualElement class="config-panel-heading">
-                        <ui:VisualElement class="agent-status-dot robot-dot"/>
-                        <ui:VisualElement>
-                            <ui:Label text="Robot settings" class="creation-panel-title compact-title"/>
-                            <ui:Label text="Applied to the robot route" class="config-panel-subtitle"/>
+                    <ui:VisualElement name="RobotRouteSettings" class="route-editor-hidden">
+                        <ui:VisualElement class="agent-panel-divider"/>
+                        <ui:VisualElement class="config-panel-heading">
+                            <ui:VisualElement class="agent-status-dot robot-dot"/>
+                            <ui:VisualElement>
+                                <ui:Label text="Robot settings" class="creation-panel-title compact-title"/>
+                                <ui:Label text="Applied to the robot route" class="config-panel-subtitle"/>
+                            </ui:VisualElement>
                         </ui:VisualElement>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="creation-field">
-                        <ui:Label text="Robot type" class="creation-field-label"/>
-                        <ui:DropdownField name="RobotTypeDropdown" class="creation-dropdown"/>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="creation-field">
-                        <ui:Label text="Behavior" class="creation-field-label"/>
-                        <ui:DropdownField name="RobotBehaviorDropdown" class="creation-dropdown"/>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="coordinate-row">
-                        <ui:VisualElement class="creation-field half-field">
+                        <ui:VisualElement class="creation-field">
+                            <ui:Label text="Robot type" class="creation-field-label"/>
+                            <ui:DropdownField name="RobotTypeDropdown" class="creation-dropdown"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="creation-field">
                             <ui:Label text="Speed (m/s) *" class="creation-field-label"/>
                             <ui:FloatField name="RobotSpeedField" class="creation-text-field"/>
                         </ui:VisualElement>
-                        <ui:VisualElement class="creation-field half-field field-row-right">
-                            <ui:Label text="Duration (s)" class="creation-field-label"/>
-                            <ui:FloatField name="DurationField" class="creation-text-field"/>
+                        <ui:VisualElement class="creation-field">
+                            <ui:Label text="Start orientation Y (degrees)" class="creation-field-label"/>
+                            <ui:FloatField name="StartYawField" class="creation-text-field"/>
                         </ui:VisualElement>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="creation-field">
-                        <ui:Label text="Start orientation Y (degrees)" class="creation-field-label"/>
-                        <ui:FloatField name="StartYawField" class="creation-text-field"/>
                     </ui:VisualElement>
                     <ui:VisualElement name="HumanRouteSettings" class="route-editor-hidden">
                         <ui:VisualElement class="agent-panel-divider"/>
@@ -173,12 +171,24 @@
                             </ui:VisualElement>
                         </ui:VisualElement>
                         <ui:VisualElement class="creation-field">
-                            <ui:Label text="Behavior" class="creation-field-label"/>
-                            <ui:DropdownField name="HumanBehaviorDropdown" class="creation-dropdown"/>
+                            <ui:Label text="End behavior" class="creation-field-label"/>
+                            <ui:DropdownField name="EndBehaviorDropdown" class="creation-dropdown"/>
+                            <ui:Label text="What the agents do once they reach the last point of the route." class="field-help"/>
                         </ui:VisualElement>
                         <ui:VisualElement class="creation-field">
-                            <ui:Label text="Movement controller" class="creation-field-label"/>
-                            <ui:DropdownField name="MovementControllerDropdown" class="creation-dropdown"/>
+                            <ui:Label text="Group" class="creation-field-label"/>
+                            <ui:TextField name="GroupField" placeholder="No group" max-length="40" class="creation-text-field"/>
+                            <ui:Label text="Routes sharing a group id walk together in formation." class="field-help"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="creation-field">
+                            <ui:Label text="Group formation" class="creation-field-label"/>
+                            <ui:DropdownField name="FormationDropdown" class="creation-dropdown"/>
+                            <ui:Label text="Pair, row and column are the most natural for pedestrians; wedge and cluster are looser. Sharing a group id applies the same formation to every route of the group." class="field-help"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="creation-field">
+                            <ui:Label text="Group spacing (m)" class="creation-field-label"/>
+                            <ui:FloatField name="GroupSpacingField" class="creation-text-field"/>
+                            <ui:Label text="Distance kept between members of the same formation." class="field-help"/>
                         </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:ScrollView>
@@ -188,7 +198,7 @@
                 <ui:VisualElement class="agents-map-heading">
                     <ui:VisualElement>
                         <ui:Label text="Interactive route map" class="creation-panel-title compact-title"/>
-                        <ui:Label name="PlacementInstructionLabel" text="Select a route point, then click the map." class="config-panel-subtitle"/>
+                        <ui:Label name="PlacementInstructionLabel" text="Click the map to place the selected point, or drag a point to move it." class="config-panel-subtitle"/>
                     </ui:VisualElement>
                     <ui:Label name="MapCursorCoordinatesLabel" text="X —  Z —" class="map-cursor-coordinates"/>
                 </ui:VisualElement>
@@ -203,9 +213,18 @@
                     <ui:Label name="AgentsMapPlaceholder" text="Select an environment in step 1 first." class="environment-placeholder"/>
                 </ui:VisualElement>
                 <ui:VisualElement class="map-legend">
-                    <ui:Label text="○ Start  →  ● Objectives" class="legend-robot-start"/>
+                    <ui:Label text="Click a point to select it, drag to move it." class="map-pointer-hint"/>
                     <ui:Label name="ActiveRouteLabel" text="Robot route" class="active-route-label"/>
                     <ui:Label name="GridScaleLabel" text="Grid and scale: 1 m" class="grid-scale-label"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="map-shortcut-row">
+                    <ui:Label name="MapShortcutSnap" text="Ctrl  Snap to grid" class="map-shortcut-chip"/>
+                    <ui:Label name="MapShortcutAxis" text="Shift  Lock axis" class="map-shortcut-chip"/>
+                    <ui:Label name="MapShortcutDelete" text="Del  Remove point" class="map-shortcut-chip"/>
+                    <ui:Label name="MapShortcutUndo" text="Ctrl+Z  Undo" class="map-shortcut-chip"/>
+                    <ui:Label name="MapShortcutRedo" text="Ctrl+Y  Redo" class="map-shortcut-chip"/>
+                    <ui:Label name="MapShortcutNudge" text="Arrows  Nudge 0.1 m" class="map-shortcut-chip"/>
+                    <ui:Label name="MapShortcutCancel" text="Esc  Cancel drag" class="map-shortcut-chip"/>
                 </ui:VisualElement>
             </ui:VisualElement>
 
@@ -243,7 +262,7 @@
                         <ui:Label name="SummaryObjectives" text="1" class="summary-value"/>
                     </ui:VisualElement>
                     <ui:VisualElement class="summary-row last">
-                        <ui:Label text="Maximum duration" class="summary-label"/>
+                        <ui:Label text="Robot mission time limit" class="summary-label"/>
                         <ui:Label name="SummaryDuration" text="Unlimited" class="summary-value"/>
                     </ui:VisualElement>
                 </ui:VisualElement>
@@ -268,6 +287,22 @@
                         <ui:Label name="TotalAgentCount" text="1" class="summary-value"/>
                     </ui:VisualElement>
                 </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="ValidationMapPanel" class="creation-panel agents-map-panel validation-map-panel">
+                <ui:VisualElement class="agents-map-heading">
+                    <ui:VisualElement>
+                        <ui:Label text="Map recap" class="creation-panel-title compact-title"/>
+                        <ui:Label text="Read-only view of the environment and every configured route." class="config-panel-subtitle"/>
+                    </ui:VisualElement>
+                    <ui:Label name="ValidationMapLegend" text="No environment" class="map-cursor-coordinates"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="ValidationMapCanvas" class="agents-environment-canvas validation-map-canvas">
+                    <ui:Image name="ValidationMapImage" class="agents-environment-image"/>
+                    <ui:VisualElement name="ValidationMapOverlayHost" picking-mode="Ignore" class="route-overlay-host"/>
+                    <ui:Label name="ValidationMapPlaceholder" text="Select an environment in step 1 first." class="environment-placeholder"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="ValidationMapLegendList" class="map-legend-list recap-legend"/>
             </ui:VisualElement>
 
             <ui:VisualElement class="creation-panel validation-panel">

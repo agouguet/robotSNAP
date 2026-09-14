@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using RobotSNAP.Agents;
 using RobotSNAP.Core.Scenario;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -8,10 +9,17 @@ using UnityEngine.UIElements;
 /// <summary>
 /// Owns the multi-route editing state for the scenario wizard.
 /// One human route can represent one or several humans sharing the same ordered goals.
+/// The map is the primary editing surface: points are selected and dragged directly on it.
 /// </summary>
 public sealed class ScenarioRouteEditor
 {
     private const string HiddenClass = "route-editor-hidden";
+    private const float PointHitRadius = 16f;
+    private const float RouteHitRadius = 9f;
+    private const float DragThreshold = 2f;
+    private const float FieldEditCoalesceSeconds = 1.5f;
+    private const float PointLabelWidth = 78f;
+    private const int UndoLimit = 60;
 
     private sealed class RouteDraft
     {
@@ -19,12 +27,43 @@ public sealed class ScenarioRouteEditor
         public bool IsRobot;
         public int Count;
         public float Speed = 1f;
-        public string Behavior = "normal";
-        public string Controller = "SFM";
+        public HumanEndBehavior EndBehavior = HumanEndBehavior.Stay;
+        public string Group;
+        public string Formation = "pair";
+        public float GroupSpacing = 1.5f;
         public readonly List<Vector2> Points = new();
         public HumanScenarioConfig Source;
         public bool RouteModified;
         public bool HasNonSpatialGoal;
+    }
+
+    private sealed class RouteSnapshot
+    {
+        public string Id;
+        public bool IsRobot;
+        public int Count;
+        public float Speed;
+        public HumanEndBehavior EndBehavior;
+        public string Group;
+        public string Formation;
+        public float GroupSpacing;
+        public List<Vector2> Points;
+        public HumanScenarioConfig Source;
+        public bool RouteModified;
+        public bool HasNonSpatialGoal;
+    }
+
+    private sealed class EditorSnapshot
+    {
+        public List<RouteSnapshot> Routes;
+        public int ActiveRouteIndex;
+        public int PendingPointIndex;
+    }
+
+    private struct CoordinateFields
+    {
+        public FloatField X;
+        public FloatField Z;
     }
 
     private static readonly Color RobotColor = new(0.22f, 0.78f, 0.45f);
@@ -37,18 +76,41 @@ public sealed class ScenarioRouteEditor
         new(0.89f, 0.36f, 0.60f)
     };
 
+    private static readonly string[] EndBehaviorChoices =
+    {
+        HumanEndBehaviorParser.ToDisplayName(HumanEndBehavior.Stay),
+        HumanEndBehaviorParser.ToDisplayName(HumanEndBehavior.Disappear),
+        HumanEndBehaviorParser.ToDisplayName(HumanEndBehavior.Loop)
+    };
+
+    private static readonly string[] FormationChoices =
+    {
+        "Pair",
+        "Row",
+        "Column",
+        "Wedge",
+        "Cluster"
+    };
+
     private readonly List<RouteDraft> _routes = new();
-    private readonly DropdownField _routeSelector;
+    private readonly List<EditorSnapshot> _undoStack = new();
+    private readonly List<EditorSnapshot> _redoStack = new();
+    private readonly List<VisualElement> _pointRows = new();
+    private readonly Dictionary<int, CoordinateFields> _pointFields = new();
+    private readonly VisualElement _routeList;
     private readonly Button _addHumanRouteButton;
     private readonly Button _removeHumanRouteButton;
     private readonly Button _setRouteStartButton;
     private readonly Button _addRouteObjectiveButton;
     private readonly Button _toggleMapGridButton;
+    private readonly VisualElement _robotRouteSettings;
     private readonly VisualElement _humanRouteSettings;
     private readonly IntegerField _humanCountField;
     private readonly FloatField _humanSpeedField;
-    private readonly DropdownField _humanBehaviorDropdown;
-    private readonly DropdownField _movementControllerDropdown;
+    private readonly DropdownField _endBehaviorDropdown;
+    private readonly TextField _groupField;
+    private readonly DropdownField _formationDropdown;
+    private readonly FloatField _groupSpacingField;
     private readonly VisualElement _routePointsContainer;
     private readonly VisualElement _canvas;
     private readonly Image _mapImage;
@@ -58,6 +120,7 @@ public sealed class ScenarioRouteEditor
     private readonly Label _activeRouteLabel;
     private readonly Label _gridScaleLabel;
     private readonly OccupancyMapRouteOverlay _overlay;
+    private readonly VisualElement _pointLabelLayer;
 
     private Texture2D _mapTexture;
     private Bounds _mapBounds;
@@ -66,19 +129,34 @@ public sealed class ScenarioRouteEditor
     private bool _updatingFields;
     private bool _showGrid = true;
 
+    private bool _dragging;
+    private bool _dragActive;
+    private int _dragRouteIndex = -1;
+    private int _dragPointIndex = -1;
+    private Vector2 _dragOrigin;
+    private Vector2 _dragStartWorld;
+    private EditorSnapshot _dragUndoSnapshot;
+    private bool _skipNextDragUndo;
+
+    private string _lastEditKey;
+    private float _lastEditTime = float.NegativeInfinity;
+
     public ScenarioRouteEditor(VisualElement root)
     {
-        _routeSelector = root.Q<DropdownField>("RouteSelectorDropdown");
+        _routeList = root.Q<VisualElement>("RouteSelectorList");
         _addHumanRouteButton = root.Q<Button>("AddHumanRouteButton");
         _removeHumanRouteButton = root.Q<Button>("RemoveHumanRouteButton");
         _setRouteStartButton = root.Q<Button>("SetRouteStartButton");
         _addRouteObjectiveButton = root.Q<Button>("AddRouteObjectiveButton");
         _toggleMapGridButton = root.Q<Button>("ToggleMapGridButton");
+        _robotRouteSettings = root.Q<VisualElement>("RobotRouteSettings");
         _humanRouteSettings = root.Q<VisualElement>("HumanRouteSettings");
         _humanCountField = root.Q<IntegerField>("HumanCountField");
         _humanSpeedField = root.Q<FloatField>("HumanSpeedField");
-        _humanBehaviorDropdown = root.Q<DropdownField>("HumanBehaviorDropdown");
-        _movementControllerDropdown = root.Q<DropdownField>("MovementControllerDropdown");
+        _endBehaviorDropdown = root.Q<DropdownField>("EndBehaviorDropdown");
+        _groupField = root.Q<TextField>("GroupField");
+        _formationDropdown = root.Q<DropdownField>("FormationDropdown");
+        _groupSpacingField = root.Q<FloatField>("GroupSpacingField");
         _routePointsContainer = root.Q<VisualElement>("RoutePointsContainer");
         _canvas = root.Q<VisualElement>("AgentsEnvironmentCanvas");
         _mapImage = root.Q<Image>("AgentsEnvironmentImage");
@@ -91,11 +169,11 @@ public sealed class ScenarioRouteEditor
 
         if (new VisualElement[]
             {
-                _routeSelector, _addHumanRouteButton, _removeHumanRouteButton,
+                _routeList, _addHumanRouteButton, _removeHumanRouteButton,
                 _setRouteStartButton, _addRouteObjectiveButton, _toggleMapGridButton,
-                _humanRouteSettings, _humanCountField, _humanSpeedField,
-                _humanBehaviorDropdown, _movementControllerDropdown, _routePointsContainer,
-                _canvas, _mapImage, _mapPlaceholder, _instructionLabel,
+                _robotRouteSettings, _humanRouteSettings, _humanCountField, _humanSpeedField,
+                _endBehaviorDropdown, _groupField, _formationDropdown, _groupSpacingField,
+                _routePointsContainer, _canvas, _mapImage, _mapPlaceholder, _instructionLabel,
                 _cursorCoordinatesLabel, _activeRouteLabel, _gridScaleLabel, overlayHost
             }.Any(element => element == null))
         {
@@ -104,14 +182,21 @@ public sealed class ScenarioRouteEditor
 
         _overlay = new OccupancyMapRouteOverlay();
         overlayHost.Add(_overlay);
+
+        _pointLabelLayer = new VisualElement { pickingMode = PickingMode.Ignore };
+        _pointLabelLayer.AddToClassList("route-point-layer");
+        overlayHost.Add(_pointLabelLayer);
+
         _mapImage.scaleMode = ScaleMode.ScaleToFit;
+        _canvas.focusable = true;
         _canvas.AddManipulator(new OccupancyMapPlacementManipulator(
             OnMapPointerDown,
             OnMapPointerMove,
-            () => _cursorCoordinatesLabel.text = "X —  Z —"));
+            OnMapPointerLeave,
+            OnMapPointerUp));
+        _canvas.RegisterCallback<KeyDownEvent>(OnCanvasKeyDown);
         _canvas.RegisterCallback<GeometryChangedEvent>(_ => RefreshOverlay());
 
-        _routeSelector.RegisterValueChangedCallback(_ => SelectRouteByName(_routeSelector.value));
         _addHumanRouteButton.clicked += AddHumanRoute;
         _removeHumanRouteButton.clicked += RemoveActiveHumanRoute;
         _setRouteStartButton.clicked += SelectStartForPlacement;
@@ -122,16 +207,48 @@ public sealed class ScenarioRouteEditor
         {
             int value = Mathf.Max(0, evt.newValue);
             if (value != evt.newValue) _humanCountField.SetValueWithoutNotify(value);
+            if (_updatingFields) return;
+            PushUndo($"human-count:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.Count = value);
+            RefreshRouteList();
         });
         _humanSpeedField.RegisterValueChangedCallback(evt =>
         {
             float value = Mathf.Max(0.01f, evt.newValue);
             if (!Mathf.Approximately(value, evt.newValue)) _humanSpeedField.SetValueWithoutNotify(value);
+            if (_updatingFields) return;
+            PushUndo($"human-speed:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.Speed = value);
         });
-        _humanBehaviorDropdown.RegisterValueChangedCallback(evt => UpdateHumanDraft(draft => draft.Behavior = evt.newValue));
-        _movementControllerDropdown.RegisterValueChangedCallback(evt => UpdateHumanDraft(draft => draft.Controller = evt.newValue));
+        _endBehaviorDropdown.RegisterValueChangedCallback(evt =>
+        {
+            if (_updatingFields) return;
+            PushUndo($"human-end-behavior:{_activeRouteIndex}");
+            UpdateHumanDraft(draft => draft.EndBehavior = ParseEndBehaviorChoice(evt.newValue));
+        });
+        _groupField.RegisterValueChangedCallback(evt =>
+        {
+            if (_updatingFields) return;
+            PushUndo($"human-group:{_activeRouteIndex}");
+            UpdateHumanDraft(draft => draft.Group = evt.newValue);
+            ApplyGroupLayoutToPeers(ActiveRoute);
+        });
+        _formationDropdown.RegisterValueChangedCallback(evt =>
+        {
+            if (_updatingFields) return;
+            PushUndo($"human-formation:{_activeRouteIndex}");
+            UpdateHumanDraft(draft => draft.Formation = FormationFromDisplay(evt.newValue));
+            ApplyGroupLayoutToPeers(ActiveRoute);
+        });
+        _groupSpacingField.RegisterValueChangedCallback(evt =>
+        {
+            float value = Mathf.Clamp(evt.newValue, 0.4f, 3f);
+            if (!Mathf.Approximately(value, evt.newValue)) _groupSpacingField.SetValueWithoutNotify(value);
+            if (_updatingFields) return;
+            PushUndo($"human-group-spacing:{_activeRouteIndex}");
+            UpdateHumanDraft(draft => draft.GroupSpacing = value);
+            ApplyGroupLayoutToPeers(ActiveRoute);
+        });
     }
 
     public int TotalHumanCount => _routes.Where(route => !route.IsRobot).Sum(route => Mathf.Max(0, route.Count));
@@ -160,6 +277,22 @@ public sealed class ScenarioRouteEditor
         }
     }
 
+    /// <summary>
+    /// Every route as a drawable visual, for read-only previews such as the validation step recap.
+    /// All routes are marked active so the recap draws them with the full opacity used while editing.
+    /// </summary>
+    public List<OccupancyMapRouteOverlay.RouteVisual> BuildRoutePreviews()
+    {
+        var previews = new List<OccupancyMapRouteOverlay.RouteVisual>(_routes.Count);
+        for (int index = 0; index < _routes.Count; index++)
+            previews.Add(new OccupancyMapRouteOverlay.RouteVisual(
+                _routes[index].Points,
+                RouteColor(index),
+                true,
+                _routes[index].Id));
+        return previews;
+    }
+
     public void Reset()
     {
         _routes.Clear();
@@ -173,7 +306,8 @@ public sealed class ScenarioRouteEditor
         _routes.Add(CreateHumanDraft(1));
         _activeRouteIndex = 0;
         _pendingPointIndex = 0;
-        RebuildRouteSelector();
+        ResetHistory();
+        RebuildRouteList();
         RefreshActiveRoute();
     }
 
@@ -212,7 +346,8 @@ public sealed class ScenarioRouteEditor
 
         _activeRouteIndex = 0;
         _pendingPointIndex = 0;
-        RebuildRouteSelector();
+        ResetHistory();
+        RebuildRouteList();
         RefreshActiveRoute();
     }
 
@@ -283,6 +418,8 @@ public sealed class ScenarioRouteEditor
         }
         scenario.Robot.WaypointRefs = waypointRefs.Count > 0 ? waypointRefs : null;
 
+        NormalizeGroupLayouts();
+
         var humanConfigs = new List<HumanScenarioConfig>();
         int humanIndex = 1;
         foreach (RouteDraft draft in _routes.Where(route => !route.IsRobot && route.Count > 0))
@@ -291,9 +428,11 @@ public sealed class ScenarioRouteEditor
             config.Id = string.IsNullOrWhiteSpace(config.Id) ? $"human_route_{humanIndex}" : config.Id;
             config.Count = draft.Count;
             config.Speed = draft.Speed;
-            config.Behavior = draft.Behavior;
-            config.MovementController ??= new MovementControllerConfig();
-            config.MovementController.Type = draft.Controller;
+            config.EndBehavior = HumanEndBehaviorParser.ToYamlValue(draft.EndBehavior);
+            config.Group = string.IsNullOrWhiteSpace(draft.Group) ? null : draft.Group.Trim();
+            config.Spawn ??= new SpawnConfig();
+            config.Spawn.Formation = string.IsNullOrWhiteSpace(draft.Formation) ? "pair" : draft.Formation.Trim().ToLowerInvariant();
+            config.Spawn.Spacing = Mathf.Max(0.4f, draft.GroupSpacing);
 
             if (draft.Source == null || draft.RouteModified)
             {
@@ -329,13 +468,39 @@ public sealed class ScenarioRouteEditor
             scenario.Points.Remove(staleReference);
     }
 
+    /// <summary>
+    /// Writes one formation and one spacing per group: the first route of a group defines the layout
+    /// and every other route of the same group is aligned on it before the YAML is emitted.
+    /// </summary>
+    private void NormalizeGroupLayouts()
+    {
+        var layouts = new Dictionary<string, RouteDraft>(StringComparer.OrdinalIgnoreCase);
+        foreach (RouteDraft route in _routes.Where(route => !route.IsRobot && route.Count > 0))
+        {
+            string groupId = route.Group?.Trim();
+            if (string.IsNullOrEmpty(groupId))
+                continue;
+
+            if (layouts.TryGetValue(groupId, out RouteDraft reference))
+            {
+                route.Formation = reference.Formation;
+                route.GroupSpacing = reference.GroupSpacing;
+            }
+            else
+            {
+                layouts[groupId] = route;
+            }
+        }
+    }
+
     private void AddHumanRoute()
     {
+        PushUndo();
         RouteDraft draft = CreateHumanDraft(NextHumanRouteNumber());
         _routes.Add(draft);
         _activeRouteIndex = _routes.Count - 1;
         _pendingPointIndex = 0;
-        RebuildRouteSelector();
+        RebuildRouteList();
         RefreshActiveRoute();
     }
 
@@ -345,12 +510,13 @@ public sealed class ScenarioRouteEditor
         if (active == null || active.IsRobot)
             return;
 
+        PushUndo();
         _routes.RemoveAt(_activeRouteIndex);
         if (_routes.Count == 1)
             _routes.Add(CreateHumanDraft(1));
         _activeRouteIndex = Mathf.Clamp(_activeRouteIndex - 1, 0, _routes.Count - 1);
         _pendingPointIndex = 0;
-        RebuildRouteSelector();
+        RebuildRouteList();
         RefreshActiveRoute();
     }
 
@@ -360,6 +526,7 @@ public sealed class ScenarioRouteEditor
         if (active == null)
             return;
 
+        PushUndo();
         Vector2 anchor = active.Points.Count > 0 ? active.Points[^1] : Vector2.zero;
         active.Points.Add(anchor + Vector2.right);
         active.RouteModified = true;
@@ -373,8 +540,9 @@ public sealed class ScenarioRouteEditor
     private void SelectStartForPlacement()
     {
         _pendingPointIndex = 0;
+        UpdatePointSelectionHighlight();
         SetPlacementInstruction();
-        RebuildPointRows();
+        RefreshOverlay();
     }
 
     private void ToggleGrid()
@@ -385,10 +553,9 @@ public sealed class ScenarioRouteEditor
         UpdateGridScaleLabel();
     }
 
-    private void SelectRouteByName(string routeName)
+    private void SelectRoute(int index)
     {
-        int index = _routes.FindIndex(route => route.Id == routeName);
-        if (index < 0 || index == _activeRouteIndex)
+        if (index < 0 || index >= _routes.Count || index == _activeRouteIndex)
             return;
         _activeRouteIndex = index;
         _pendingPointIndex = 0;
@@ -401,36 +568,93 @@ public sealed class ScenarioRouteEditor
         if (active == null)
             return;
 
-        _routeSelector.SetValueWithoutNotify(active.Id);
         _activeRouteLabel.text = active.Id;
         _removeHumanRouteButton.SetEnabled(!active.IsRobot);
+        _robotRouteSettings.EnableInClassList(HiddenClass, !active.IsRobot);
         _humanRouteSettings.EnableInClassList(HiddenClass, active.IsRobot);
+        _pendingPointIndex = Mathf.Clamp(_pendingPointIndex, 0, Mathf.Max(0, active.Points.Count - 1));
 
         _updatingFields = true;
         if (!active.IsRobot)
         {
             _humanCountField.SetValueWithoutNotify(active.Count);
             _humanSpeedField.SetValueWithoutNotify(active.Speed);
-            EnsureChoice(_humanBehaviorDropdown, active.Behavior, "normal");
-            EnsureChoice(_movementControllerDropdown, active.Controller, "SFM");
+            SetEndBehaviorChoices();
+            _endBehaviorDropdown.SetValueWithoutNotify(HumanEndBehaviorParser.ToDisplayName(active.EndBehavior));
+            _groupField.SetValueWithoutNotify(active.Group ?? string.Empty);
+            SetFormationChoices();
+            _formationDropdown.SetValueWithoutNotify(FormationToDisplay(active.Formation));
+            _groupSpacingField.SetValueWithoutNotify(active.GroupSpacing);
         }
         _updatingFields = false;
 
+        RefreshRouteListSelection();
         RebuildPointRows();
         SetPlacementInstruction();
         RefreshOverlay();
     }
 
-    private void RebuildRouteSelector()
+    private void RebuildRouteList()
     {
-        _routeSelector.choices = _routes.Select(route => route.Id).ToList();
-        if (_routes.Count > 0)
-            _routeSelector.SetValueWithoutNotify(_routes[Mathf.Clamp(_activeRouteIndex, 0, _routes.Count - 1)].Id);
+        _routeList.Clear();
+        for (int index = 0; index < _routes.Count; index++)
+        {
+            int capturedIndex = index;
+            RouteDraft route = _routes[index];
+
+            var row = new VisualElement();
+            row.AddToClassList("route-selector-row");
+            row.EnableInClassList("selected", index == _activeRouteIndex);
+
+            var swatch = new VisualElement();
+            swatch.AddToClassList("route-selector-swatch");
+            swatch.style.backgroundColor = RouteColor(index);
+
+            var name = new Label(DescribeRoute(route));
+            name.AddToClassList("route-selector-name");
+
+            row.Add(swatch);
+            row.Add(name);
+            row.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                SelectRoute(capturedIndex);
+                evt.StopPropagation();
+            });
+            _routeList.Add(row);
+        }
+    }
+
+    private void RefreshRouteList()
+    {
+        for (int index = 0; index < _routeList.childCount && index < _routes.Count; index++)
+        {
+            if (_routeList[index].childCount < 2)
+                continue;
+            var name = _routeList[index][1] as Label;
+            if (name != null)
+                name.text = DescribeRoute(_routes[index]);
+        }
+    }
+
+    private void RefreshRouteListSelection()
+    {
+        for (int index = 0; index < _routeList.childCount && index < _routes.Count; index++)
+            _routeList[index].EnableInClassList("selected", index == _activeRouteIndex);
+    }
+
+    private static string DescribeRoute(RouteDraft route)
+    {
+        if (route.IsRobot)
+            return "Robot route";
+        int agents = Mathf.Max(0, route.Count);
+        return $"{route.Id} - {agents} agent{(agents == 1 ? string.Empty : "s")}";
     }
 
     private void RebuildPointRows()
     {
         _routePointsContainer.Clear();
+        _pointRows.Clear();
+        _pointFields.Clear();
         RouteDraft active = ActiveRoute;
         if (active == null)
             return;
@@ -445,12 +669,9 @@ public sealed class ScenarioRouteEditor
 
             var header = new VisualElement();
             header.AddToClassList("route-point-row-header");
-            var name = new Label(index == 0 ? "Start" : $"Objective {index}");
+            var name = new Label(RouteMapHitTesting.PointLabel(index));
             name.AddToClassList("route-point-name");
-            var placeButton = new Button(() => SelectPointForPlacement(capturedIndex)) { text = "Place" };
-            placeButton.AddToClassList("route-point-place-button");
             header.Add(name);
-            header.Add(placeButton);
             row.Add(header);
 
             var coordinates = new VisualElement();
@@ -462,6 +683,7 @@ public sealed class ScenarioRouteEditor
             coordinates.Add(xField);
             coordinates.Add(zField);
             row.Add(coordinates);
+            _pointFields[index] = new CoordinateFields { X = xField, Z = zField };
 
             if (index > 0)
             {
@@ -479,13 +701,21 @@ public sealed class ScenarioRouteEditor
                 row.Add(actions);
             }
 
+            row.RegisterCallback<PointerDownEvent>(_ => SelectPoint(capturedIndex));
+            _pointRows.Add(row);
             _routePointsContainer.Add(row);
         }
     }
 
+    private void UpdatePointSelectionHighlight()
+    {
+        for (int index = 0; index < _pointRows.Count; index++)
+            _pointRows[index].EnableInClassList("selected", index == _pendingPointIndex);
+    }
+
     private static FloatField CreateCoordinateField(string label, float value)
     {
-        var field = new FloatField(label) { value = value };
+        var field = new FloatField(label) { value = RoundCoordinate(value) };
         field.AddToClassList("creation-text-field");
         field.AddToClassList("route-coordinate-field");
         return field;
@@ -498,11 +728,15 @@ public sealed class ScenarioRouteEditor
         return button;
     }
 
-    private void SelectPointForPlacement(int index)
+    private void SelectPoint(int index)
     {
+        RouteDraft active = ActiveRoute;
+        if (active == null || index < 0 || index >= active.Points.Count)
+            return;
         _pendingPointIndex = index;
-        RebuildPointRows();
+        UpdatePointSelectionHighlight();
         SetPlacementInstruction();
+        RefreshOverlay();
     }
 
     private void SetPointCoordinate(int index, bool isX, float value)
@@ -510,7 +744,11 @@ public sealed class ScenarioRouteEditor
         RouteDraft active = ActiveRoute;
         if (active == null || index < 0 || index >= active.Points.Count)
             return;
+        value = RoundCoordinate(value);
         Vector2 point = active.Points[index];
+        if (Mathf.Abs((isX ? point.x : point.y) - value) < 0.0001f)
+            return;
+        PushUndo($"coordinate:{_activeRouteIndex}:{index}:{(isX ? "x" : "z")}");
         active.Points[index] = isX ? new Vector2(value, point.y) : new Vector2(point.x, value);
         active.RouteModified = true;
         active.HasNonSpatialGoal = false;
@@ -523,6 +761,7 @@ public sealed class ScenarioRouteEditor
         int targetIndex = index + direction;
         if (active == null || index <= 0 || targetIndex <= 0 || targetIndex >= active.Points.Count)
             return;
+        PushUndo();
         (active.Points[index], active.Points[targetIndex]) = (active.Points[targetIndex], active.Points[index]);
         active.RouteModified = true;
         _pendingPointIndex = targetIndex;
@@ -534,11 +773,16 @@ public sealed class ScenarioRouteEditor
     {
         RouteDraft active = ActiveRoute;
         if (active == null || index <= 0 || active.Points.Count <= 2)
+        {
+            _instructionLabel.text = "The start point and one objective must stay on the route.";
             return;
+        }
+        PushUndo();
         active.Points.RemoveAt(index);
         active.RouteModified = true;
         _pendingPointIndex = Mathf.Clamp(_pendingPointIndex, 0, active.Points.Count - 1);
         RebuildPointRows();
+        SetPlacementInstruction();
         RefreshOverlay();
     }
 
@@ -549,23 +793,401 @@ public sealed class ScenarioRouteEditor
         update(ActiveRoute);
     }
 
-    private void OnMapPointerDown(Vector2 localPosition)
+    private void SetEndBehaviorChoices()
     {
-        if (!TryLocalToWorld(localPosition, out Vector2 worldPosition) || ActiveRoute == null)
+        if (_endBehaviorDropdown.choices.Count == EndBehaviorChoices.Length &&
+            !_endBehaviorDropdown.choices.Where((choice, index) => choice != EndBehaviorChoices[index]).Any())
             return;
-        _pendingPointIndex = Mathf.Clamp(_pendingPointIndex, 0, ActiveRoute.Points.Count - 1);
-        ActiveRoute.Points[_pendingPointIndex] = worldPosition;
-        ActiveRoute.RouteModified = true;
-        ActiveRoute.HasNonSpatialGoal = false;
-        RebuildPointRows();
-        RefreshOverlay();
+        _endBehaviorDropdown.choices = new List<string>(EndBehaviorChoices);
     }
 
-    private void OnMapPointerMove(Vector2 localPosition)
+    private void SetFormationChoices()
     {
-        _cursorCoordinatesLabel.text = TryLocalToWorld(localPosition, out Vector2 worldPosition)
-            ? $"X {worldPosition.x:0.##}  Z {worldPosition.y:0.##}"
-            : "X —  Z —";
+        if (_formationDropdown.choices.Count == FormationChoices.Length &&
+            !_formationDropdown.choices.Where((choice, index) => choice != FormationChoices[index]).Any())
+            return;
+        _formationDropdown.choices = new List<string>(FormationChoices);
+    }
+
+    /// <summary>
+    /// The formation dropdown exposes display labels while the YAML uses short values,
+    /// so the two mappings are explicit and unknown values fall back to the default pair.
+    /// </summary>
+    private static string FormationToDisplay(string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            string formation = value.Trim().ToLowerInvariant();
+            if (formation == "row" || formation == "abreast" || formation == "side-by-side") return "Row";
+            if (formation == "column") return "Column";
+            if (formation == "wedge") return "Wedge";
+            if (formation == "cluster") return "Cluster";
+        }
+
+        return "Pair";
+    }
+
+    private static string FormationFromDisplay(string display)
+    {
+        if (!string.IsNullOrWhiteSpace(display))
+        {
+            string formation = display.Trim().ToLowerInvariant();
+            if (formation == "row" || formation == "abreast" || formation == "side-by-side") return "row";
+            if (formation == "column") return "column";
+            if (formation == "wedge") return "wedge";
+            if (formation == "cluster") return "cluster";
+        }
+
+        return "pair";
+    }
+
+    /// <summary>
+    /// A formation is a property of the group, not of one route: routes sharing a group id keep the
+    /// same layout so the YAML never mixes a wedge with a column inside one walking group.
+    /// </summary>
+    private void ApplyGroupLayoutToPeers(RouteDraft source)
+    {
+        if (source == null || source.IsRobot)
+            return;
+
+        string groupId = source.Group?.Trim();
+        if (string.IsNullOrEmpty(groupId))
+            return;
+
+        foreach (RouteDraft route in _routes)
+        {
+            if (route == null || route.IsRobot || route == source)
+                continue;
+            if (!string.Equals(route.Group?.Trim(), groupId, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            route.Formation = source.Formation;
+            route.GroupSpacing = source.GroupSpacing;
+        }
+    }
+
+    /// <summary>
+    /// The dropdown exposes display labels while the YAML uses short values, so the label is
+    /// mapped explicitly and the shared parser stays the fallback for anything else.
+    /// </summary>
+    private static HumanEndBehavior ParseEndBehaviorChoice(string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            string label = value.Trim();
+            if (string.Equals(label, HumanEndBehaviorParser.ToDisplayName(HumanEndBehavior.Disappear), StringComparison.OrdinalIgnoreCase))
+                return HumanEndBehavior.Disappear;
+            if (string.Equals(label, HumanEndBehaviorParser.ToDisplayName(HumanEndBehavior.Loop), StringComparison.OrdinalIgnoreCase))
+                return HumanEndBehavior.Loop;
+            if (string.Equals(label, HumanEndBehaviorParser.ToDisplayName(HumanEndBehavior.Stay), StringComparison.OrdinalIgnoreCase))
+                return HumanEndBehavior.Stay;
+        }
+
+        return HumanEndBehaviorParser.Parse(value);
+    }
+
+    private void OnMapPointerDown(MapPointerState pointer)
+    {
+        Vector2 localPosition = pointer.LocalPosition;
+        _canvas.Focus();
+        if (!TryLocalToWorld(localPosition, out Vector2 worldPosition))
+            return;
+
+        if (TrySelectPointAt(localPosition))
+            return;
+
+        if (TrySelectRouteAt(localPosition))
+            return;
+
+        RouteDraft active = ActiveRoute;
+        if (active == null || active.Points.Count == 0)
+            return;
+
+        _pendingPointIndex = Mathf.Clamp(_pendingPointIndex, 0, active.Points.Count - 1);
+        Vector2 placed = ApplyPointerConstraints(worldPosition, pointer, active.Points[_pendingPointIndex]);
+        PushUndo();
+        active.Points[_pendingPointIndex] = new Vector2(
+            RoundCoordinate(placed.x),
+            RoundCoordinate(placed.y));
+        active.RouteModified = true;
+        active.HasNonSpatialGoal = false;
+        RebuildPointRows();
+        SetPlacementInstruction();
+        RefreshOverlay();
+
+        BeginPointDrag(_activeRouteIndex, _pendingPointIndex, localPosition);
+        _skipNextDragUndo = true;
+    }
+
+    private void OnMapPointerMove(MapPointerState pointer)
+    {
+        Vector2 localPosition = pointer.LocalPosition;
+        bool onMap = TryLocalToWorld(localPosition, out Vector2 worldPosition);
+        if (!onMap)
+            _cursorCoordinatesLabel.text = "X —  Z —";
+        else
+        {
+            Vector2 shown = _dragActive ? ApplyPointerConstraints(worldPosition, pointer) : worldPosition;
+            _cursorCoordinatesLabel.text =
+                $"X {shown.x:0.##}  Z {shown.y:0.##}{DescribeModifiers(pointer)}";
+        }
+
+        if (!_dragging)
+            return;
+        if (!_dragActive)
+        {
+            if (Vector2.Distance(localPosition, _dragOrigin) < DragThreshold)
+                return;
+            _dragActive = true;
+            if (_skipNextDragUndo)
+                _skipNextDragUndo = false;
+            else
+                _dragUndoSnapshot = PushUndo();
+        }
+        if (onMap)
+            MoveDraggedPoint(ApplyPointerConstraints(worldPosition, pointer));
+    }
+
+    private void OnMapPointerUp(MapPointerState pointer)
+    {
+        EndPointDrag();
+    }
+
+    private void OnMapPointerLeave()
+    {
+        if (!_dragging)
+            _cursorCoordinatesLabel.text = "X —  Z —";
+    }
+
+    private void OnCanvasKeyDown(KeyDownEvent evt)
+    {
+        if (_mapTexture == null)
+            return;
+
+        bool control = evt.ctrlKey || evt.commandKey;
+        if (control && evt.keyCode == KeyCode.Z)
+        {
+            if (evt.shiftKey) Redo();
+            else Undo();
+            evt.StopPropagation();
+            return;
+        }
+        if (control && evt.keyCode == KeyCode.Y)
+        {
+            Redo();
+            evt.StopPropagation();
+            return;
+        }
+        if (evt.keyCode == KeyCode.Delete || evt.keyCode == KeyCode.Backspace)
+        {
+            RemovePoint(_pendingPointIndex);
+            evt.StopPropagation();
+            return;
+        }
+        if (evt.keyCode == KeyCode.Escape)
+        {
+            CancelPointDrag();
+            evt.StopPropagation();
+            return;
+        }
+
+        float delta = evt.shiftKey ? 1f : 0.1f;
+        Vector2 offset = evt.keyCode switch
+        {
+            KeyCode.LeftArrow => new Vector2(-delta, 0f),
+            KeyCode.RightArrow => new Vector2(delta, 0f),
+            KeyCode.UpArrow => new Vector2(0f, -delta),
+            KeyCode.DownArrow => new Vector2(0f, delta),
+            _ => Vector2.zero
+        };
+        if (offset != Vector2.zero)
+        {
+            NudgeSelectedPoint(offset);
+            evt.StopPropagation();
+        }
+    }
+
+    private void NudgeSelectedPoint(Vector2 offset)
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null || _pendingPointIndex < 0 || _pendingPointIndex >= active.Points.Count)
+            return;
+        PushUndo("nudge");
+        Vector2 point = active.Points[_pendingPointIndex];
+        Vector2 moved = new(
+            RoundCoordinate(point.x + offset.x),
+            RoundCoordinate(point.y + offset.y));
+        active.Points[_pendingPointIndex] = moved;
+        active.RouteModified = true;
+        active.HasNonSpatialGoal = false;
+        if (_pointFields.TryGetValue(_pendingPointIndex, out CoordinateFields fields))
+        {
+            fields.X?.SetValueWithoutNotify(moved.x);
+            fields.Z?.SetValueWithoutNotify(moved.y);
+        }
+        RefreshOverlay();
+        SetPlacementInstruction();
+    }
+
+    private bool TrySelectPointAt(Vector2 localPosition)
+    {
+        for (int routeIndex = 0; routeIndex < _routes.Count; routeIndex++)
+        {
+            RouteDraft route = _routes[routeIndex];
+            if (route.Points.Count == 0)
+                continue;
+            int pointIndex = RouteMapHitTesting.FindPoint(ToCanvasPoints(route.Points), localPosition, PointHitRadius);
+            if (pointIndex < 0)
+                continue;
+
+            bool routeChanged = routeIndex != _activeRouteIndex;
+            _activeRouteIndex = routeIndex;
+            _pendingPointIndex = pointIndex;
+            if (routeChanged)
+                RefreshActiveRoute();
+            else
+            {
+                UpdatePointSelectionHighlight();
+                SetPlacementInstruction();
+                RefreshOverlay();
+            }
+            BeginPointDrag(routeIndex, pointIndex, localPosition);
+            return true;
+        }
+        return false;
+    }
+
+    private bool TrySelectRouteAt(Vector2 localPosition)
+    {
+        for (int routeIndex = 0; routeIndex < _routes.Count; routeIndex++)
+        {
+            if (routeIndex == _activeRouteIndex)
+                continue;
+            RouteDraft route = _routes[routeIndex];
+            if (route.Points.Count < 2)
+                continue;
+            if (RouteMapHitTesting.FindSegment(ToCanvasPoints(route.Points), localPosition, RouteHitRadius) < 0)
+                continue;
+            SelectRoute(routeIndex);
+            return true;
+        }
+        return false;
+    }
+
+    private void BeginPointDrag(int routeIndex, int pointIndex, Vector2 localPosition)
+    {
+        _dragging = true;
+        _dragActive = false;
+        _dragRouteIndex = routeIndex;
+        _dragPointIndex = pointIndex;
+        _dragOrigin = localPosition;
+        _dragStartWorld = routeIndex >= 0 && routeIndex < _routes.Count &&
+                          pointIndex >= 0 && pointIndex < _routes[routeIndex].Points.Count
+            ? _routes[routeIndex].Points[pointIndex]
+            : Vector2.zero;
+        _dragUndoSnapshot = null;
+        _skipNextDragUndo = false;
+    }
+
+    /// <summary>
+    /// Blender/Photoshop style helpers while placing or dragging a point:
+    /// Ctrl snaps to the visible grid, Shift locks the movement on the dominant axis.
+    /// </summary>
+    private Vector2 ApplyPointerConstraints(Vector2 worldPosition, MapPointerState pointer, Vector2? reference = null)
+    {
+        Vector2 origin = reference ?? _dragStartWorld;
+        bool lockAxis = pointer.Shift;
+        bool freeAxisIsX = true;
+        if (lockAxis)
+        {
+            Vector2 delta = worldPosition - origin;
+            freeAxisIsX = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y);
+        }
+
+        Vector2 result = worldPosition;
+        if (lockAxis)
+        {
+            if (freeAxisIsX) result.y = origin.y;
+            else result.x = origin.x;
+        }
+
+        if (pointer.Control)
+        {
+            float step = GridSnapStep();
+            result.x = Mathf.Round(result.x / step) * step;
+            result.y = Mathf.Round(result.y / step) * step;
+            if (lockAxis)
+            {
+                if (freeAxisIsX) result.y = origin.y;
+                else result.x = origin.x;
+            }
+        }
+
+        return result;
+    }
+
+    private float GridSnapStep() => Mathf.Max(0.05f, _overlay.GridStep);
+
+    private string DescribeModifiers(MapPointerState pointer)
+    {
+        string hint = string.Empty;
+        if (pointer.Control) hint += $"  snap {GridSnapStep():0.##} m";
+        if (pointer.Shift) hint += "  axis lock";
+        return hint;
+    }
+
+    private void EndPointDrag()
+    {
+        _dragging = false;
+        _dragActive = false;
+        _dragRouteIndex = -1;
+        _dragPointIndex = -1;
+        _dragUndoSnapshot = null;
+        _skipNextDragUndo = false;
+    }
+
+    private void CancelPointDrag()
+    {
+        if (!_dragging)
+            return;
+        if (_dragActive && _dragUndoSnapshot != null)
+        {
+            int index = _undoStack.IndexOf(_dragUndoSnapshot);
+            if (index >= 0)
+                _undoStack.RemoveAt(index);
+            RestoreSnapshot(_dragUndoSnapshot);
+            _instructionLabel.text = "Move cancelled.";
+        }
+        EndPointDrag();
+    }
+
+    private void MoveDraggedPoint(Vector2 worldPosition)
+    {
+        RouteDraft route = _dragRouteIndex >= 0 && _dragRouteIndex < _routes.Count ? _routes[_dragRouteIndex] : null;
+        if (route == null || _dragPointIndex < 0 || _dragPointIndex >= route.Points.Count)
+            return;
+
+        float x = RoundCoordinate(worldPosition.x);
+        float z = RoundCoordinate(worldPosition.y);
+        route.Points[_dragPointIndex] = new Vector2(x, z);
+        route.RouteModified = true;
+        route.HasNonSpatialGoal = false;
+
+        if (_pointFields.TryGetValue(_dragPointIndex, out CoordinateFields fields))
+        {
+            fields.X?.SetValueWithoutNotify(x);
+            fields.Z?.SetValueWithoutNotify(z);
+        }
+        RefreshOverlay();
+        SetPlacementInstruction();
+    }
+
+    private List<Vector2> ToCanvasPoints(IReadOnlyList<Vector2> worldPoints)
+    {
+        var canvasPoints = new List<Vector2>(worldPoints.Count);
+        foreach (Vector2 point in worldPoints)
+            canvasPoints.Add(WorldToCanvas(point));
+        return canvasPoints;
     }
 
     private bool TryLocalToWorld(Vector2 localPosition, out Vector2 worldPosition)
@@ -581,6 +1203,15 @@ public sealed class ScenarioRouteEditor
         return true;
     }
 
+    private Vector2 WorldToCanvas(Vector2 worldPosition)
+    {
+        Rect imageRect = GetDisplayedMapRect();
+        Vector2 imagePosition = OccupancyMapCoordinates.WorldToImageNormalized(worldPosition, _mapBounds);
+        return new Vector2(
+            imageRect.xMin + imagePosition.x * imageRect.width,
+            imageRect.yMin + imagePosition.y * imageRect.height);
+    }
+
     private void RefreshOverlay()
     {
         Rect imageRect = GetDisplayedMapRect();
@@ -589,32 +1220,50 @@ public sealed class ScenarioRouteEditor
         _overlay.SetRoutes(_routes.Select((route, index) =>
             new OccupancyMapRouteOverlay.RouteVisual(
                 route.Points,
-                route.IsRobot ? RobotColor : HumanColors[Mathf.Max(0, index - 1) % HumanColors.Length],
+                RouteColor(index),
                 index == _activeRouteIndex)));
         UpdateGridScaleLabel();
+        RefreshPointLabels();
+    }
+
+    private void RefreshPointLabels()
+    {
+        _pointLabelLayer.Clear();
+        RouteDraft active = ActiveRoute;
+        if (active == null || _mapTexture == null || GetDisplayedMapRect().width <= 0f)
+            return;
+
+        for (int index = 0; index < active.Points.Count; index++)
+        {
+            Vector2 canvasPosition = WorldToCanvas(active.Points[index]);
+            var label = new Label(RouteMapHitTesting.PointLabel(index));
+            label.AddToClassList("map-point-label");
+            label.EnableInClassList("active", index == _pendingPointIndex);
+            label.pickingMode = PickingMode.Ignore;
+            // Labels sit above the map: their offsets depend on the live pointer mapping.
+            label.style.left = canvasPosition.x - PointLabelWidth * 0.5f;
+            label.style.top = canvasPosition.y - 30f;
+            _pointLabelLayer.Add(label);
+        }
     }
 
     private Rect GetDisplayedMapRect()
     {
-        Rect canvasRect = _canvas.contentRect;
-        if (_mapTexture == null || canvasRect.width <= 0f || canvasRect.height <= 0f)
-            return Rect.zero;
-        float imageAspect = (float)_mapTexture.width / _mapTexture.height;
-        float canvasAspect = canvasRect.width / canvasRect.height;
-        if (imageAspect > canvasAspect)
-        {
-            float height = canvasRect.width / imageAspect;
-            return new Rect(0f, (canvasRect.height - height) * 0.5f, canvasRect.width, height);
-        }
-        float width = canvasRect.height * imageAspect;
-        return new Rect((canvasRect.width - width) * 0.5f, 0f, width, canvasRect.height);
+        return _mapTexture == null
+            ? Rect.zero
+            : OccupancyMapLayout.FitRect(_canvas.contentRect, _mapTexture.width, _mapTexture.height);
     }
 
     private void UpdateGridScaleLabel()
     {
-        _gridScaleLabel.text = _showGrid && _mapTexture != null
-            ? $"Grid and scale: {_overlay.GridStep:0.##} m"
-            : "Grid hidden";
+        if (!_showGrid || _mapTexture == null)
+        {
+            _gridScaleLabel.text = "Grid hidden";
+            return;
+        }
+
+        _gridScaleLabel.text =
+            $"Grid step {_overlay.GridStep:0.##} m · map {_mapBounds.size.x:0.#} × {_mapBounds.size.z:0.#} m";
     }
 
     private void SetPlacementInstruction()
@@ -622,13 +1271,138 @@ public sealed class ScenarioRouteEditor
         RouteDraft active = ActiveRoute;
         if (active == null)
             return;
-        string pointName = _pendingPointIndex == 0 ? "start point" : $"objective {_pendingPointIndex}";
-        _instructionLabel.text = $"Click the map to place the {pointName} for {active.Id}.";
+        _instructionLabel.text =
+            $"{active.Id}: {RouteMapHitTesting.PointLabel(_pendingPointIndex)} selected. Click the map or drag the point.";
+    }
+
+    private Color RouteColor(int index)
+    {
+        if (index < 0 || index >= _routes.Count)
+            return HumanColors[0];
+        return _routes[index].IsRobot
+            ? RobotColor
+            : HumanColors[Mathf.Max(0, index - 1) % HumanColors.Length];
     }
 
     private RouteDraft ActiveRoute => _activeRouteIndex >= 0 && _activeRouteIndex < _routes.Count
         ? _routes[_activeRouteIndex]
         : null;
+
+    private void ResetHistory()
+    {
+        _undoStack.Clear();
+        _redoStack.Clear();
+        _lastEditKey = null;
+        _lastEditTime = float.NegativeInfinity;
+        EndPointDrag();
+    }
+
+    private EditorSnapshot PushUndo(string coalesceKey = null)
+    {
+        if (coalesceKey != null && coalesceKey == _lastEditKey &&
+            Time.realtimeSinceStartup - _lastEditTime < FieldEditCoalesceSeconds)
+        {
+            _lastEditTime = Time.realtimeSinceStartup;
+            return null;
+        }
+
+        EditorSnapshot snapshot = CaptureSnapshot();
+        _lastEditKey = coalesceKey;
+        _lastEditTime = Time.realtimeSinceStartup;
+        _undoStack.Add(snapshot);
+        if (_undoStack.Count > UndoLimit)
+            _undoStack.RemoveAt(0);
+        _redoStack.Clear();
+        return snapshot;
+    }
+
+    private void Undo()
+    {
+        if (_undoStack.Count == 0)
+        {
+            _instructionLabel.text = "Nothing left to undo.";
+            return;
+        }
+
+        EditorSnapshot snapshot = _undoStack[^1];
+        _undoStack.RemoveAt(_undoStack.Count - 1);
+        _redoStack.Add(CaptureSnapshot());
+        RestoreSnapshot(snapshot);
+        _instructionLabel.text = "Undone.";
+    }
+
+    private void Redo()
+    {
+        if (_redoStack.Count == 0)
+        {
+            _instructionLabel.text = "Nothing left to redo.";
+            return;
+        }
+
+        EditorSnapshot snapshot = _redoStack[^1];
+        _redoStack.RemoveAt(_redoStack.Count - 1);
+        _undoStack.Add(CaptureSnapshot());
+        RestoreSnapshot(snapshot);
+        _instructionLabel.text = "Redone.";
+    }
+
+    private EditorSnapshot CaptureSnapshot()
+    {
+        return new EditorSnapshot
+        {
+            Routes = _routes.Select(route => new RouteSnapshot
+            {
+                Id = route.Id,
+                IsRobot = route.IsRobot,
+                Count = route.Count,
+                Speed = route.Speed,
+                EndBehavior = route.EndBehavior,
+                Group = route.Group,
+                Formation = route.Formation,
+                GroupSpacing = route.GroupSpacing,
+                Points = new List<Vector2>(route.Points),
+                Source = route.Source,
+                RouteModified = route.RouteModified,
+                HasNonSpatialGoal = route.HasNonSpatialGoal
+            }).ToList(),
+            ActiveRouteIndex = _activeRouteIndex,
+            PendingPointIndex = _pendingPointIndex
+        };
+    }
+
+    private void RestoreSnapshot(EditorSnapshot snapshot)
+    {
+        if (snapshot == null)
+            return;
+
+        _routes.Clear();
+        foreach (RouteSnapshot route in snapshot.Routes)
+        {
+            var draft = new RouteDraft
+            {
+                Id = route.Id,
+                IsRobot = route.IsRobot,
+                Count = route.Count,
+                Speed = route.Speed,
+                EndBehavior = route.EndBehavior,
+                Group = route.Group,
+                Formation = route.Formation,
+                GroupSpacing = route.GroupSpacing,
+                Source = route.Source,
+                RouteModified = route.RouteModified,
+                HasNonSpatialGoal = route.HasNonSpatialGoal
+            };
+            draft.Points.AddRange(route.Points);
+            _routes.Add(draft);
+        }
+
+        _activeRouteIndex = Mathf.Clamp(snapshot.ActiveRouteIndex, 0, Mathf.Max(0, _routes.Count - 1));
+        _pendingPointIndex = Mathf.Max(0, snapshot.PendingPointIndex);
+        _lastEditKey = null;
+        EndPointDrag();
+        RebuildRouteList();
+        RefreshActiveRoute();
+    }
 
     private int NextHumanRouteNumber()
     {
@@ -666,8 +1440,10 @@ public sealed class ScenarioRouteEditor
             Id = string.IsNullOrWhiteSpace(human.Id) ? $"Human route {index}" : human.Id,
             Count = Mathf.Max(0, human.Count),
             Speed = Mathf.Max(0.01f, human.Speed),
-            Behavior = string.IsNullOrWhiteSpace(human.Behavior) ? "normal" : human.Behavior,
-            Controller = string.IsNullOrWhiteSpace(human.MovementController?.Type) ? "SFM" : human.MovementController.Type,
+            EndBehavior = HumanEndBehaviorParser.Parse(human.EndBehavior),
+            Group = human.Group,
+            Formation = string.IsNullOrWhiteSpace(human.Spawn?.Formation) ? "pair" : human.Spawn.Formation.Trim().ToLowerInvariant(),
+            GroupSpacing = human.Spawn != null ? Mathf.Max(0.4f, human.Spawn.Spacing) : 1.5f,
             Source = human,
             RouteModified = false
         };
@@ -709,8 +1485,10 @@ public sealed class ScenarioRouteEditor
     private static Vector2 ResolveGoalPosition(ScenarioData scenario, GoalConfig goal)
     {
         if (goal == null) return Vector2.zero;
+        Debug.Log($"Resolving goal '{goal.Reference}' of type '{goal.Type}' for position.");
         if (TryResolveReference(scenario, goal.Reference, out Vector2 referenced)) return referenced;
         Vector3 position = goal.Position?.ToVector3() ?? goal.Zone?.ToVector3() ?? Vector3.zero;
+        Debug.LogWarning($"Goal '{goal.Reference}' has no spatial reference; using position {position}.");
         return new Vector2(position.x, position.z);
     }
 
@@ -776,8 +1554,15 @@ public sealed class ScenarioRouteEditor
 
     private static void WritePoint(ScenarioData scenario, string reference, Vector2 point)
     {
-        scenario.Points[reference] = new RefPoint { X = point.x, Y = 0f, Z = point.y };
+        scenario.Points[reference] = new RefPoint
+        {
+            X = RoundCoordinate(point.x),
+            Y = 0f,
+            Z = RoundCoordinate(point.y)
+        };
     }
+
+    private static float RoundCoordinate(float value) => Mathf.Round(value * 100f) / 100f;
 
     private static void SetSpawnReference(SpawnConfig spawn, string fallbackReference)
     {
@@ -802,13 +1587,5 @@ public sealed class ScenarioRouteEditor
         return new string(value.Trim().ToLowerInvariant()
             .Select(character => char.IsLetterOrDigit(character) ? character : '_')
             .ToArray()).Trim('_');
-    }
-
-    private static void EnsureChoice(DropdownField dropdown, string value, string fallback)
-    {
-        string selected = string.IsNullOrWhiteSpace(value) ? fallback : value;
-        if (!dropdown.choices.Contains(selected))
-            dropdown.choices = dropdown.choices.Concat(new[] { selected }).ToList();
-        dropdown.SetValueWithoutNotify(selected);
     }
 }

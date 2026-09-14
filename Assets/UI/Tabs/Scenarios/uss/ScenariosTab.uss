@@ -86,13 +86,13 @@
 .scenario-modal-description {
     margin-bottom: 7px;
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: 13px;
     white-space: normal;
 }
 
 .scenario-modal-hint {
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: 12px;
     white-space: normal;
 }
 

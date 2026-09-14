@@ -227,6 +227,19 @@ namespace RobotSNAP.Core.Scenario
         [YamlMember("goals")]
         public List<GoalConfig> Goals { get; set; }
 
+        /// <summary>
+        /// What the agents do once the last point of their route is reached:
+        /// "stay" (default), "disappear" or "loop".
+        /// </summary>
+        [YamlMember("end_behavior")]
+        public string EndBehavior { get; set; } = "stay";
+
+        /// <summary>
+        /// Optional group id. Every entry sharing the same group id walks together in formation.
+        /// </summary>
+        [YamlMember("group")]
+        public string Group { get; set; }
+
         [YamlMember("movement_controller")]
         public MovementControllerConfig MovementController { get; set; } 
         

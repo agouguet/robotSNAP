@@ -18,6 +18,9 @@
     --dropdown-bg: rgb(255, 255, 255);
     --dropdown-text: rgb(15, 23, 42);
     --icon-tint: rgb(22, 26, 31);
+    --scrollbar-track: rgba(15, 23, 42, 0.05);
+    --scrollbar-dragger: rgba(100, 116, 139, 0.45);
+    --scrollbar-dragger-hover: rgba(71, 85, 105, 0.75);
 }
 
 .dark-mode * {
@@ -40,6 +43,9 @@
     --dropdown-bg: rgb(30, 41, 59);
     --dropdown-text: rgb(241, 245, 249);
     --icon-tint: rgb(241, 245, 249);
+    --scrollbar-track: rgba(148, 163, 184, 0.08);
+    --scrollbar-dragger: rgba(148, 163, 184, 0.45);
+    --scrollbar-dragger-hover: rgba(203, 213, 225, 0.7);
 }
 
 /* ===== GLOBAL ROOT ===== */
@@ -354,6 +360,7 @@
     background-color: var(--bg-secondary);
     border-color: var(--border-color);
     border-radius: 4px;
+    --unity-cursor-color: var(--text-primary);
 }
 
 .unity-base-popup-field__arrow {
@@ -363,6 +370,7 @@
 .unity-base-field__label {
     color: var(--text-secondary);
     font-size: 28px;
+    --unity-cursor-color: var(--text-primary);
 }
 
 .unity-base-dropdown .unity-scroll-view {
@@ -387,4 +395,68 @@
 .unity-base-dropdown__container-outer {
     border-color: var(--border-color);
     border-radius: 4px;
+}
+
+/* ================================================================
+   SCROLLBARS
+   Thin, quiet scrollbars so they stay readable without competing
+   with the panels they belong to.
+   ================================================================ */
+
+.unity-scroller {
+    background-color: transparent;
+}
+
+.unity-scroller--vertical {
+    width: 10px;
+    min-width: 10px;
+    margin-left: 2px;
+    margin-right: 2px;
+}
+
+.unity-scroller--horizontal {
+    height: 10px;
+    min-height: 10px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+}
+
+.unity-scroller .unity-scroller__slider {
+    margin: 0;
+}
+
+.unity-scroller .unity-scroller__low-button,
+.unity-scroller .unity-scroller__high-button,
+.unity-scroller .unity-repeat-button {
+    display: none;
+}
+
+.unity-scroller .unity-base-slider__tracker,
+.unity-scroller .unity-base-slider__tracker:hover {
+    background-color: var(--scrollbar-track);
+    border-width: 0;
+    border-radius: 5px;
+}
+
+.unity-scroller .unity-base-slider__dragger {
+    background-color: var(--scrollbar-dragger);
+    border-width: 0;
+    border-radius: 5px;
+}
+
+.unity-scroller--vertical .unity-base-slider__dragger {
+    width: 8px;
+    left: 1px;
+    min-height: 30px;
+}
+
+.unity-scroller--horizontal .unity-base-slider__dragger {
+    height: 8px;
+    top: 1px;
+    min-width: 30px;
+}
+
+.unity-scroller .unity-base-slider__dragger:hover:enabled,
+.unity-scroller .unity-base-slider__dragger:active:enabled {
+    background-color: var(--scrollbar-dragger-hover);
 }

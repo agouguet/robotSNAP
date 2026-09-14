@@ -1291,20 +1291,20 @@
 }
 
 .validation-layout > .validation-map-panel {
-    flex-grow: 3.1;
+    flex-grow: 1.7;
     flex-basis: 0;
-    min-width: 320px;
+    min-width: 260px;
 }
 
 .validation-map-canvas {
-    min-height: 300px;
+    min-height: 240px;
 }
 
 .validation-panel {
-    flex-grow: 0.85;
+    flex-grow: 1.6;
     flex-basis: 0;
-    min-width: 0;
-    max-width: 300px;
+    min-width: 300px;
+    max-width: 440px;
     overflow: hidden;
 }
 

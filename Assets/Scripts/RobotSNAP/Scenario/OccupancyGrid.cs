@@ -104,13 +104,42 @@ namespace RobotSNAP.Core.Scenario
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
-                    walkable[y * width + x] = IsBlockWalkable(pixels, texture.width, texture.height, x, y, cellPixels, darkThreshold);
+                    walkable[y * width + x] = IsBlockWalkable(
+                        pixels,
+                        texture.width,
+                        texture.height,
+                        x,
+                        y,
+                        cellPixels,
+                        darkThreshold);
             }
 
             var grid = new OccupancyGrid(width, height, cellPixels, worldBounds, walkable);
             grid.InflateWalls(agentRadius);
             return grid;
         }
+
+        /// <summary>
+        /// Same grid with every wall grown by <paramref name="agentRadius"/>. Used to derive the planning grid
+        /// from the raw occupancy grid, so the image is sampled once instead of once per clearance.
+        /// </summary>
+        public OccupancyGrid WithObstaclesInflatedBy(float agentRadius)
+        {
+            if (!IsValid)
+                return null;
+
+            var copy = new OccupancyGrid(Width, Height, CellPixels, WorldBounds, (bool[])_walkable.Clone());
+            copy.InflateWalls(agentRadius);
+            return copy;
+        }
+
+        /// <summary>True when the two grids cover the same area with the same sampling.</summary>
+        public bool HasSameSampling(OccupancyGrid other) =>
+            other != null &&
+            other.Width == Width &&
+            other.Height == Height &&
+            other.CellPixels == CellPixels &&
+            other.WorldBounds == WorldBounds;
 
         /// <summary>Grows every wall by the agent radius, so a path keeps a body width of clearance.</summary>
         private void InflateWalls(float agentRadius)
@@ -162,8 +191,9 @@ namespace RobotSNAP.Core.Scenario
         }
 
         /// <summary>
-        /// A cell is walkable when its four corners and its centre are clear: enough to catch a thin wall
-        /// crossing the cell without erasing the narrow corridors of an indoor map.
+        /// A cell is walkable only when every pixel it covers is clear. Sampling a handful of points let a
+        /// thin wall slip between them, which drew paths that crossed the dark pixels of the image: the
+        /// occupancy grid has to be conservative, because the map it comes from is a hard floor plan.
         /// </summary>
         private static bool IsBlockWalkable(
             Color32[] pixels,
@@ -178,14 +208,17 @@ namespace RobotSNAP.Core.Scenario
             int originY = cellY * cellPixels;
             int lastX = Mathf.Min(originX + cellPixels - 1, textureWidth - 1);
             int lastY = Mathf.Min(originY + cellPixels - 1, textureHeight - 1);
-            int middleX = (originX + lastX) / 2;
-            int middleY = (originY + lastY) / 2;
 
-            return IsPixelWalkable(pixels, textureWidth, textureHeight, originX, originY, darkThreshold) &&
-                   IsPixelWalkable(pixels, textureWidth, textureHeight, lastX, originY, darkThreshold) &&
-                   IsPixelWalkable(pixels, textureWidth, textureHeight, originX, lastY, darkThreshold) &&
-                   IsPixelWalkable(pixels, textureWidth, textureHeight, lastX, lastY, darkThreshold) &&
-                   IsPixelWalkable(pixels, textureWidth, textureHeight, middleX, middleY, darkThreshold);
+            for (int y = originY; y <= lastY; y++)
+            {
+                for (int x = originX; x <= lastX; x++)
+                {
+                    if (!IsPixelWalkable(pixels, textureWidth, textureHeight, x, y, darkThreshold))
+                        return false;
+                }
+            }
+
+            return true;
         }
 
         private static bool IsPixelWalkable(

@@ -360,6 +360,7 @@ namespace RobotSNAP.Core.Scenario
             // Humans sharing a group id are collected so they can walk together afterwards.
             int humanIndex = 0;
             var groups = new Dictionary<string, HumanGroup>();
+            var groupsWithRoute = new HashSet<string>();
             Dictionary<string, SpawnPlanner.GroupLayout> groupLayouts =
                 SpawnPlanner.ResolveGroupLayouts(_currentScenario.Humans);
             foreach (var config in _currentScenario.Humans)
@@ -387,6 +388,17 @@ namespace RobotSNAP.Core.Scenario
                                     layout.Parameter);
                                 groups[groupId] = group;
                             }
+
+                            // The group walks one shared route: the first entry of the group defines it, and
+                            // every member holds a slot around its reference point instead of walking alone.
+                            if (groupsWithRoute.Add(groupId))
+                            {
+                                group.SetRoute(
+                                    human.RoutePoints.Select(point => new Vector2(point.x, point.z)).ToList(),
+                                    config.Speed,
+                                    HumanEndBehaviorParser.Parse(config.EndBehavior));
+                            }
+
                             group.Add(human);
                         }
                         _spawnedHumans[$"{config.Id}_{_humanCounter++}"] = human;
@@ -397,7 +409,7 @@ namespace RobotSNAP.Core.Scenario
 
             // Lay every group out around its leader, facing the direction it is about to walk.
             foreach (HumanGroup group in groups.Values)
-                group.PlaceMembersAtSpawn(ResolveGroupHeading(group.Leader));
+                group.PlaceMembersAtSpawn();
 
             var robot = FindRobot();
             if (robot != null)
@@ -555,23 +567,6 @@ namespace RobotSNAP.Core.Scenario
             UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
             bounds.center.y,
             UnityEngine.Random.Range(bounds.min.z, bounds.max.z));
-
-        /// <summary>Heading of a group: the direction from its spawn point to its first objective.</summary>
-        private static float ResolveGroupHeading(HumanAgent leader)
-        {
-            if (leader == null)
-                return 0f;
-
-            IReadOnlyList<Vector3> route = leader.RoutePoints;
-            for (int index = 1; index < route.Count; index++)
-            {
-                Vector2 direction = new Vector2(route[index].x - route[0].x, route[index].z - route[0].z);
-                if (direction.sqrMagnitude > 0.0001f)
-                    return Mathf.Atan2(direction.x, direction.y);
-            }
-
-            return 0f;
-        }
 
         /// <summary>
         /// Resolves a goal position from a GoalConfig.

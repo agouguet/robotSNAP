@@ -37,9 +37,8 @@ namespace RobotSNAP.Agents
         // What happens once the last point of the route is reached.
         public HumanEndBehavior endBehavior = HumanEndBehavior.Stay;
 
-        // Group walking: the leader owns the route, the others follow a formation slot.
+        // Group walking: the group owns the route and everybody holds a slot around its reference point.
         private HumanGroup _group;
-        private bool _isGroupLeader;
         private Vector2 _formationOffset;
         private HumanPoolManager _poolManager;
 
@@ -64,8 +63,8 @@ namespace RobotSNAP.Agents
         public string CurrentBehavior => _currentBehavior;
         public HumanEndBehavior EndBehavior => endBehavior;
         public IReadOnlyList<Vector3> RoutePoints => _walker.Points;
-        public bool IsGroupLeader => _group != null && _isGroupLeader;
-        public bool IsGroupFollower => _group != null && !_isGroupLeader;
+        /// <summary>True while the agent walks as part of a group. Nobody in the group is a leader.</summary>
+        public bool IsGroupMember => _group != null;
 
         /// <summary>
         /// Speed the movement controller regulates in open space. Group following needs it to aim ahead
@@ -112,8 +111,8 @@ namespace RobotSNAP.Agents
                     _animator.speed = 1f;
             }
 
-            if (_group != null && _isGroupLeader)
-                _group.UpdateMemberDestinations();
+            // Any member may advance the group; the group keeps that to once per frame.
+            _group?.UpdateGroup();
 
             AdvanceRouteIfReached();
 
@@ -215,7 +214,8 @@ namespace RobotSNAP.Agents
             _walker.EndBehavior = endBehavior;
             _walker.SetRoute(goals);
             _stalledTime = 0f;
-            _followingRoute = _walker.HasCurrent && !IsGroupFollower;
+            // A group member never walks a route of its own: the group owns the route.
+            _followingRoute = _walker.HasCurrent && !IsGroupMember;
             if (_followingRoute)
                 SetRouteGoal(_walker.Current);
             else if (_walker.Points.Count == 0)
@@ -349,41 +349,36 @@ namespace RobotSNAP.Agents
                 Destroy(_scenarioConfig);
         }
 
-        /// <summary>Joins a walking group. The leader keeps its route, followers follow a slot.</summary>
-        public void JoinGroup(HumanGroup group, Vector2 formationOffset, bool isLeader)
+        /// <summary>
+        /// Joins a walking group. Nobody leads: the group carries the route and every member, this one
+        /// included, holds a slot around its reference point. The layout itself is applied by
+        /// <see cref="HumanGroup.PlaceMembersAtSpawn"/> once the whole group exists.
+        /// </summary>
+        public void JoinGroup(HumanGroup group, Vector2 formationOffset)
         {
             _group = group;
             _formationOffset = formationOffset;
-            _isGroupLeader = isLeader;
 
-            if (isLeader)
-                return;
-
-            // Followers do not advance a route of their own: the leader drives the group.
-            _walker.Clear();
-            _followingRoute = false;
-            _stalledTime = 0f;
-            HumanAgent leader = group != null ? group.Leader : null;
-            if (leader == null)
+            // The route belongs to the group now, so this agent stops walking one of its own. A group without
+            // a shared route is left alone: its members keep the route they were configured with.
+            if (group != null && group.IsRouteActive)
             {
-                SetGroupDestination(Position2D);
-                return;
+                _walker.Clear();
+                _followingRoute = false;
+                _stalledTime = 0f;
             }
 
-            // Spawn directly on the slot so the group starts already formed.
-            Vector2 slotPosition = leader.Position2D + formationOffset;
-            float tolerance = formationOffset.magnitude + Mathf.Max(0.5f, (group?.Spacing ?? 1.5f) * 0.5f);
-            slotPosition = SpawnPlacement.ProjectWithin(slotPosition, leader.Position2D, tolerance);
-            transform.position = new Vector3(slotPosition.x, transform.position.y, slotPosition.y);
-            SetGroupDestination(slotPosition);
+            SetGroupDestination(Position2D);
         }
 
         public void SetFormationOffset(Vector2 offset) => _formationOffset = offset;
 
+        /// <summary>Slot this member holds in its group's frame, relative to the group reference.</summary>
+        public Vector2 FormationOffset => _formationOffset;
+
         public void LeaveGroup()
         {
             _group = null;
-            _isGroupLeader = false;
             _formationOffset = Vector2.zero;
             _movement?.SetCruiseSpeedOverride(0f);
         }
@@ -407,9 +402,6 @@ namespace RobotSNAP.Agents
         /// <summary>End behavior propagated by the group leader to its followers.</summary>
         public void SetGroupEndBehavior(HumanEndBehavior behavior)
         {
-            if (_isGroupLeader)
-                return;
-
             endBehavior = behavior;
             if (behavior == HumanEndBehavior.Disappear)
                 Disappear();

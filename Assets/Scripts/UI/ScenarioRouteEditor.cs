@@ -25,6 +25,12 @@ public sealed class ScenarioRouteEditor
     private const int NavigationResolution = 320;
 
     /// <summary>
+    /// Coarser grid used while a point is dragged: replanning every mouse move has to stay cheap, and the
+    /// exact geometry is rebuilt on the fine grid as soon as the point is released.
+    /// </summary>
+    private const int InteractiveNavigationResolution = 150;
+
+    /// <summary>
     /// Body radius kept clear from walls, matched to the pedestrian radius of the simulation
     /// (<see cref="RobotSNAP.Agents.HumanConfig.agentRadius"/>), so the drawn path is one an agent walks.
     /// </summary>
@@ -78,8 +84,10 @@ public sealed class ScenarioRouteEditor
     {
         public int Epoch;
         public int Signature;
+        public bool Interactive;
         public List<Vector2> Points;
         public int FallbackSegments;
+        public int CrossingSegments;
     }
 
     private struct CoordinateFields
@@ -166,6 +174,7 @@ public sealed class ScenarioRouteEditor
     private Texture2D _mapTexture;
     private Bounds _mapBounds;
     private OccupancyGrid _navigationGrid;
+    private OccupancyGrid _interactiveGrid;
     private OccupancyGrid _occupancyGrid;
     private int _navigationGridEpoch;
     private int _activeRouteIndex;
@@ -464,23 +473,12 @@ public sealed class ScenarioRouteEditor
 
     public void SetMap(Texture2D texture, Bounds bounds)
     {
-        if (_mapTexture != texture || _mapBounds != bounds)
-            InvalidateNavigationGrid();
-
+        bool changed = _mapTexture != texture || _mapBounds != bounds;
         _mapTexture = texture;
         _mapBounds = bounds;
-        _navigationGrid = texture == null
-            ? null
-            : OccupancyGrid.FromTexture(
-                texture,
-                bounds,
-                NavigationResolution,
-                NavigationAgentRadius);
-        // Walls are validated on the raw pixels: only a point really standing on an obstacle is refused,
-        // while the planning grid above also keeps a body radius of clearance.
-        _occupancyGrid = texture == null
-            ? null
-            : OccupancyGrid.FromTexture(texture, bounds, NavigationResolution);
+        if (changed)
+            RebuildNavigationGrids();
+
         _mapImage.image = texture;
         _mapPlaceholder.EnableInClassList(HiddenClass, texture != null);
         RefreshOverlay();
@@ -494,7 +492,31 @@ public sealed class ScenarioRouteEditor
         _navigationGridEpoch++;
         _plannedGeometry.Clear();
         _navigationGrid = null;
+        _interactiveGrid = null;
         _occupancyGrid = null;
+    }
+
+    /// <summary>
+    /// Samples the occupancy image once into the raw grid (walls, used to validate authored points), then
+    /// derives the fine planning grid and the coarse one used during a drag from it.
+    /// </summary>
+    private void RebuildNavigationGrids()
+    {
+        InvalidateNavigationGrid();
+        if (_mapTexture == null)
+            return;
+
+        _occupancyGrid = OccupancyGrid.FromTexture(_mapTexture, _mapBounds, NavigationResolution);
+        if (_occupancyGrid == null)
+            return;
+
+        _navigationGrid = _occupancyGrid.WithObstaclesInflatedBy(NavigationAgentRadius);
+
+        OccupancyGrid coarse = OccupancyGrid.FromTexture(
+            _mapTexture,
+            _mapBounds,
+            InteractiveNavigationResolution);
+        _interactiveGrid = coarse?.WithObstaclesInflatedBy(NavigationAgentRadius);
     }
 
     /// <summary>
@@ -510,29 +532,54 @@ public sealed class ScenarioRouteEditor
             return new List<Vector2>();
 
         RouteDraft route = _routes[routeIndex];
-        if (_navigationGrid == null || !_navigationGrid.IsValid)
-            return route.Points;
-        if (_dragActive && routeIndex == _dragRouteIndex)
+        // While a point is dragged the coarse grid is used, so the trajectory follows the mouse instead of
+        // staying frozen until the point is released; the exact geometry is rebuilt on the fine grid then.
+        bool interactive = _dragActive && routeIndex == _dragRouteIndex && _interactiveGrid != null;
+        OccupancyGrid grid = interactive ? _interactiveGrid : _navigationGrid;
+        if (grid == null || !grid.IsValid)
             return route.Points;
 
         int signature = PointsSignature(route.Points);
         if (_plannedGeometry.TryGetValue(routeIndex, out PlannedGeometry cached) &&
             cached.Epoch == _navigationGridEpoch &&
-            cached.Signature == signature)
+            cached.Signature == signature &&
+            cached.Interactive == interactive)
             return cached.Points;
 
         List<Vector2> planned = OccupancyPathPlanner.PlanRoute(
-            _navigationGrid,
+            grid,
             route.Points,
             out int fallbackSegments);
         _plannedGeometry[routeIndex] = new PlannedGeometry
         {
             Epoch = _navigationGridEpoch,
             Signature = signature,
+            Interactive = interactive,
             Points = planned,
-            FallbackSegments = fallbackSegments
+            FallbackSegments = fallbackSegments,
+            CrossingSegments = CountWallsCrossed(planned)
         };
         return planned;
+    }
+
+    /// <summary>
+    /// How many drawn segments cross a dark pixel of the occupancy image. The clearance grid keeps agents off
+    /// the walls while planning, but a leg the planner could not solve is drawn straight, and an authored
+    /// point standing on an obstacle starts its leg inside one: both have to be visible to the author.
+    /// </summary>
+    private int CountWallsCrossed(IReadOnlyList<Vector2> points)
+    {
+        if (_occupancyGrid == null || !_occupancyGrid.IsValid || points == null || points.Count < 2)
+            return 0;
+
+        int crossings = 0;
+        for (int index = 1; index < points.Count; index++)
+        {
+            if (!OccupancyPathPlanner.HasLineOfSight(_occupancyGrid, points[index - 1], points[index]))
+                crossings++;
+        }
+
+        return crossings;
     }
 
     private static int PointsSignature(IReadOnlyList<Vector2> points)
@@ -1658,25 +1705,35 @@ public sealed class ScenarioRouteEditor
         }
 
         int blocked = 0;
+        int crossing = 0;
         for (int index = 0; index < _routes.Count; index++)
         {
             if (_routes[index].Points.Count < 2)
                 continue;
-            if (_plannedGeometry.TryGetValue(index, out PlannedGeometry geometry) &&
-                geometry.Epoch == _navigationGridEpoch &&
-                geometry.FallbackSegments > 0)
+            if (!_plannedGeometry.TryGetValue(index, out PlannedGeometry geometry) ||
+                geometry.Epoch != _navigationGridEpoch)
+                continue;
+
+            if (geometry.FallbackSegments > 0)
                 blocked++;
+            if (geometry.CrossingSegments > 0)
+                crossing++;
         }
 
         int onWalls = CountPointsOffWalkableGround();
         string wallNote = onWalls == 0
             ? string.Empty
             : $" · {onWalls} point{(onWalls == 1 ? string.Empty : "s")} on a wall";
-        string pathNote = blocked == 0
-            ? "Paths: shortest walkable route (walls avoided)"
-            : $"Paths: {blocked} route(s) cannot reach a point on the walkable grid";
+        string pathNote;
+        if (blocked > 0)
+            pathNote = $"Paths: {blocked} route(s) cannot reach a point on the walkable grid";
+        else if (crossing > 0)
+            pathNote = $"Paths: {crossing} route(s) cross a wall";
+        else
+            pathNote = "Paths: shortest walkable route (walls avoided)";
+
         _mapPathStatusLabel.text = pathNote + wallNote;
-        _mapPathStatusLabel.EnableInClassList("warning", blocked > 0 || onWalls > 0);
+        _mapPathStatusLabel.EnableInClassList("warning", blocked > 0 || crossing > 0 || onWalls > 0);
     }
 
     private int CountPointsOffWalkableGround()

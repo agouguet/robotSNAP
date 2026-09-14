@@ -171,5 +171,146 @@ namespace RobotSNAP.Tests.Editor
             Assert.That(GroupFormation.SteadyHeading(0.5f, 1.5f, 0f, 0.1f), Is.EqualTo(0.5f));
             Assert.That(GroupFormation.SteadyHeading(0.5f, 1.5f, 1f, 0f), Is.EqualTo(0.5f));
         }
+
+        [Test]
+        public void CohesionFactor_FullSpeedWhenTightAndStopAtTheFullError()
+        {
+            Assert.That(GroupProgress.CohesionFactor(0f), Is.EqualTo(1f));
+            Assert.That(GroupProgress.CohesionFactor(1f), Is.EqualTo(0.5f).Within(0.0001f));
+            Assert.That(GroupProgress.CohesionFactor(GroupProgress.FullErrorDistance), Is.EqualTo(0f));
+            Assert.That(
+                GroupProgress.CohesionFactor(GroupProgress.FullErrorDistance * 3f),
+                Is.EqualTo(0f),
+                "Past the full error the group stays stopped instead of reversing.");
+        }
+
+        [Test]
+        public void AdvanceSpeed_KeepsCruiseSpeedWhileTheGroupIsTight()
+        {
+            // A tight group walks at its cruise speed even if one member happens to be standing still.
+            Assert.That(
+                GroupProgress.AdvanceSpeed(1.2f, 0f, 0f),
+                Is.EqualTo(1.2f).Within(0.0001f));
+        }
+
+        [Test]
+        public void AdvanceSpeed_SlowsDownWithTheWorstFormationError()
+        {
+            Assert.That(
+                GroupProgress.AdvanceSpeed(1f, 1f, 5f),
+                Is.EqualTo(0.5f).Within(0.0001f),
+                "One metre behind means half the cruise speed.");
+            Assert.That(
+                GroupProgress.AdvanceSpeed(1f, GroupProgress.FullErrorDistance, 5f),
+                Is.EqualTo(0f),
+                "The group waits once a member is two metres out of place.");
+        }
+
+        [Test]
+        public void AdvanceSpeed_WaitsForTheSlowestMemberButKeepsInching()
+        {
+            // The laggard is stopped: the reference drops to its pace, never below the floor, so the group
+            // re-forms instead of either stretching out or freezing for good.
+            float speed = GroupProgress.AdvanceSpeed(1.5f, 1.5f, 0f);
+
+            Assert.That(speed, Is.EqualTo(1.5f * GroupProgress.MinimumFactor).Within(0.0001f));
+
+            // A slow (not stopped) member sets the pace exactly, as long as the cohesion term alone is still
+            // asking for more than its own speed.
+            Assert.That(
+                GroupProgress.AdvanceSpeed(1.5f, 1f, 0.4f),
+                Is.EqualTo(0.4f).Within(0.0001f),
+                "Cohesion alone would ask for 0.75 m/s, so the laggard caps the group at its own pace.");
+        }
+
+        [Test]
+        public void AdvanceSpeed_IgnoresTheLaggardBrakeBeforeTheGroupHasStarted()
+        {
+            // At spawn every member is still standing; braking there would keep the group parked forever.
+            Assert.That(
+                GroupProgress.AdvanceSpeed(1.2f, GroupProgress.LagStartDistance * 0.5f, 0f),
+                Is.GreaterThan(0f));
+        }
+
+        [Test]
+        public void TurnFactor_SlowsTheGroupIntoACornerWithoutStoppingIt()
+        {
+            Assert.That(GroupProgress.TurnFactor(0f), Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(
+                GroupProgress.TurnFactor(GroupProgress.FullTurnErrorDegrees),
+                Is.EqualTo(GroupProgress.MinimumTurnFactor).Within(0.0001f));
+            Assert.That(
+                GroupProgress.TurnFactor(180f),
+                Is.EqualTo(GroupProgress.MinimumTurnFactor).Within(0.0001f),
+                "Even a U-turn keeps a floor of forward speed.");
+        }
+
+        [Test]
+        public void AdvanceAlong_LandsExactlyOnAWaypointInsteadOfOvershootingIt()
+        {
+            var route = new List<Vector2> { Vector2.zero, new Vector2(10f, 0f), new Vector2(10f, 10f) };
+            int leg = 1;
+
+            // The step is larger than the whole leg: the reference must stop on the waypoint, not run past it.
+            Vector2 position = GroupProgress.AdvanceAlong(route, ref leg, Vector2.zero, 25f, 0.2f, out bool completed);
+
+            Assert.That(completed, Is.False);
+            Assert.That(position, Is.EqualTo(new Vector2(10f, 0f)));
+            Assert.That(leg, Is.EqualTo(2), "The waypoint was reached, so the next leg is already selected.");
+        }
+
+        [Test]
+        public void AdvanceAlong_ConsumesEveryWaypointInsideTheArrivalRadius()
+        {
+            var route = new List<Vector2> { new(0f, 0f), new(0.1f, 0f), new(0.2f, 0f), new(5f, 0f) };
+            int leg = 1;
+
+            Vector2 position = GroupProgress.AdvanceAlong(route, ref leg, Vector2.zero, 0f, 0.25f, out bool completed);
+
+            Assert.That(completed, Is.False);
+            Assert.That(position, Is.EqualTo(new Vector2(0.2f, 0f)));
+            Assert.That(leg, Is.EqualTo(3), "Three points were inside the arrival radius.");
+        }
+
+        [Test]
+        public void AdvanceAlong_ReportsTheEndOfTheRoute()
+        {
+            var route = new List<Vector2> { Vector2.zero, new Vector2(1f, 0f) };
+            int leg = 1;
+
+            GroupProgress.AdvanceAlong(route, ref leg, new Vector2(0.5f, 0f), 5f, 0.2f, out bool completed);
+
+            Assert.That(completed, Is.True);
+            Assert.That(leg, Is.EqualTo(route.Count));
+        }
+
+        [Test]
+        public void AdvanceAlong_WalksBackToTheFirstPointWhenTheRouteLoops()
+        {
+            var route = new List<Vector2> { new(0f, 0f), new(10f, 0f) };
+            // Index 0 is the return leg of a looping route.
+            int leg = 0;
+
+            Vector2 position = GroupProgress.AdvanceAlong(route, ref leg, new Vector2(10f, 0f), 4f, 0.2f, out bool completed);
+
+            Assert.That(completed, Is.False, "Coming home is not the end of a looping route.");
+            Assert.That(position, Is.EqualTo(new Vector2(6f, 0f)));
+            Assert.That(leg, Is.EqualTo(0));
+
+            // Arriving home puts the group back on the ordinary legs.
+            GroupProgress.AdvanceAlong(route, ref leg, new Vector2(0.1f, 0f), 0f, 0.2f, out completed);
+            Assert.That(leg, Is.EqualTo(1));
+            Assert.That(completed, Is.False);
+        }
+
+        [Test]
+        public void AdvanceAlong_TreatsAnEmptyRouteAsFinished()
+        {
+            int leg = 1;
+
+            GroupProgress.AdvanceAlong(new List<Vector2>(), ref leg, Vector2.one, 1f, 0.2f, out bool completed);
+
+            Assert.That(completed, Is.True);
+        }
     }
 }

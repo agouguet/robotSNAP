@@ -276,4 +276,129 @@ namespace RobotSNAP.Agents
             return currentHeading + Mathf.Clamp(delta, -maxStep, maxStep);
         }
     }
+
+    /// <summary>
+    /// Progress law of a walking group: how fast the shared reference point moves along the route.
+    ///
+    /// A real group of two or three friends has no leader, and nothing slows the front walker down when the
+    /// others fall behind a corner. The fix used in formation control is a <b>virtual structure</b>: a
+    /// reference point carries the formation and its progress is coupled to the worst formation error
+    /// (Leonard &amp; Fiorelli 2001; Egerstedt &amp; Hu 2001). The further the worst-placed member is from its
+    /// slot, the slower that reference advances, and it stops once the error reaches
+    /// <see cref="FullErrorDistance"/>. This reproduces what is measured on real pedestrian groups, which
+    /// walk at the speed of their slowest member instead of stretching out (Moussaïd et al. 2010).
+    ///
+    /// Every law is pure: the group keeps the state, this class only decides the speed, so the behaviour can
+    /// be reasoned about and tested without a scene.
+    /// </summary>
+    public static class GroupProgress
+    {
+        /// <summary>Formation error, in metres, at which the group stops advancing.</summary>
+        public const float FullErrorDistance = 2f;
+
+        /// <summary>
+        /// Under this error the laggard brake is ignored. Without that floor a group whose members have not
+        /// started walking yet would never leave its spawn point.
+        /// </summary>
+        public const float LagStartDistance = 0.5f;
+
+        /// <summary>The group never freezes: it keeps inching forward while it re-forms.</summary>
+        public const float MinimumFactor = 0.1f;
+
+        /// <summary>Heading error, in degrees, at which a turn slows the group to <see cref="MinimumTurnFactor"/>.</summary>
+        public const float FullTurnErrorDegrees = 120f;
+
+        /// <summary>Floor of the turn factor: a sharp corner slows the group but never stops it.</summary>
+        public const float MinimumTurnFactor = 0.35f;
+
+        /// <summary>Share of its cruise speed the group keeps when the formation is perfectly tight.</summary>
+        public static float CohesionFactor(float worstErrorMetres) =>
+            Mathf.Clamp01(1f - Mathf.Max(0f, worstErrorMetres) / FullErrorDistance);
+
+        /// <summary>
+        /// Share of its cruise speed the group keeps while turning. A group entering a corner lowers its
+        /// speed before the followers have to cut it, which is what stops them from being thrown wide.
+        /// </summary>
+        public static float TurnFactor(float headingErrorDegrees) =>
+            Mathf.Lerp(
+                MinimumTurnFactor,
+                1f,
+                Mathf.Clamp01(1f - Mathf.Abs(headingErrorDegrees) / FullTurnErrorDegrees));
+
+        /// <summary>
+        /// Speed of the reference point: the requested speed, reduced by the two cohesion terms, and capped
+        /// by the slowest member as soon as somebody is genuinely behind. Members that are still tight around
+        /// their slot never throttle the group, so a group does not crawl just because one of them paused.
+        /// </summary>
+        public static float AdvanceSpeed(
+            float desiredSpeed,
+            float worstErrorMetres,
+            float slowestMemberSpeed,
+            float headingErrorDegrees = 0f)
+        {
+            float speed = Mathf.Max(0f, desiredSpeed) *
+                          CohesionFactor(worstErrorMetres) *
+                          TurnFactor(headingErrorDegrees);
+
+            if (worstErrorMetres > LagStartDistance && slowestMemberSpeed < speed)
+                speed = Mathf.Max(slowestMemberSpeed, Mathf.Max(0f, desiredSpeed) * MinimumFactor);
+
+            return Mathf.Max(0f, speed);
+        }
+
+        /// <summary>
+        /// Moves the reference one step along a route. <paramref name="legIndex"/> is the index of the waypoint
+        /// being walked towards, so it starts at 1; index 0 is the return leg of a looping route and wraps back
+        /// to the ordinary legs once the reference is home. Pure, so the route following of a leaderless group
+        /// can be tested without a scene.
+        /// </summary>
+        public static Vector2 AdvanceAlong(
+            IReadOnlyList<Vector2> route,
+            ref int legIndex,
+            Vector2 anchor,
+            float step,
+            float arriveRadius,
+            out bool completed)
+        {
+            completed = false;
+            if (route == null || route.Count == 0)
+            {
+                completed = true;
+                return anchor;
+            }
+
+            if (legIndex < 0)
+                legIndex = 0;
+
+            Vector2 position = anchor;
+            bool moved = false;
+            while (true)
+            {
+                if (legIndex >= route.Count)
+                {
+                    completed = true;
+                    return position;
+                }
+
+                Vector2 target = route[legIndex];
+                Vector2 toTarget = target - position;
+                float distance = toTarget.magnitude;
+                if (distance <= arriveRadius)
+                {
+                    // Land exactly on the waypoint, then aim for the next one.
+                    position = target;
+                    legIndex = legIndex == 0 ? 1 : legIndex + 1;
+                    continue;
+                }
+
+                // One movement per call: a reached waypoint is consumed on the next turn of the loop, which is
+                // also where the end of the route is reported, without the leftover step being spent twice.
+                if (moved || step <= 0f)
+                    return position;
+
+                position += toTarget / distance * Mathf.Min(step, distance);
+                moved = true;
+            }
+        }
+    }
 }

@@ -250,5 +250,51 @@ namespace RobotSNAP.Tests.Editor
                 OccupancyPathPlanner.Plan(grid, deepInTheWall, grid.CellCenter(2, 2)),
                 Is.Null);
         }
+
+        [Test]
+        public void FromTexture_DoesNotSampleAwayAOnePixelWall()
+        {
+            // 40 px sampled at 8 cells means 5 px per cell: the dark line sits on row 21, which used to fall
+            // between the sampled corners and the centre of its cell. Sampling five points let a path cross it.
+            const int Pixels = 40;
+            var texture = new Texture2D(Pixels, Pixels, TextureFormat.RGBA32, false);
+            var colors = new Color32[Pixels * Pixels];
+            for (int index = 0; index < colors.Length; index++)
+                colors[index] = new Color32(255, 255, 255, 255);
+            for (int x = 0; x < Pixels; x++)
+                colors[21 * Pixels + x] = new Color32(0, 0, 0, 255);
+            texture.SetPixels32(colors);
+            texture.Apply();
+
+            var bounds = new Bounds(Vector3.zero, new Vector3(10f, 0f, 10f));
+            OccupancyGrid grid = OccupancyGrid.FromTexture(texture, bounds, 8, 0f, 0.5f);
+            Object.DestroyImmediate(texture);
+
+            Assert.That(grid, Is.Not.Null);
+            Assert.That(grid.IsWorldWalkable(new Vector2(0f, 2f)), Is.True, "Above the wall.");
+            Assert.That(grid.IsWorldWalkable(new Vector2(0f, -2f)), Is.True, "Below the wall.");
+            Assert.That(
+                OccupancyPathPlanner.Plan(grid, new Vector2(0f, 2f), new Vector2(0f, -2f)),
+                Is.Null,
+                "A one pixel wall must block the path instead of being sampled away.");
+        }
+
+        [Test]
+        public void WithObstaclesInflatedBy_KeepsTheSamplingAndEatsClearance()
+        {
+            OccupancyGrid raw = BuildRoom(withWall: true);
+            OccupancyGrid inflated = raw.WithObstaclesInflatedBy(1f);
+
+            Assert.That(inflated.HasSameSampling(raw), Is.True);
+            // Row 2 sits behind a solid part of the wall, so the clearance has to cover the neighbour cell.
+            Assert.That(raw.IsWorldWalkable(raw.CellCenter(9, 2)), Is.True);
+            Assert.That(
+                inflated.IsWorldWalkable(raw.CellCenter(9, 2)),
+                Is.False,
+                "One metre of clearance must cover the cell next to the wall.");
+
+            // The raw grid itself is untouched: it is the one that validates the authored points.
+            Assert.That(raw.IsWalkable(9, 2), Is.True);
+        }
     }
 }

@@ -285,7 +285,11 @@ namespace RobotSNAP.Agents
         /// Describes the robot for the movement controller so humans yield to it.
         /// The lookup is cached because finding it every physics step would be wasteful.
         /// </summary>
-        private RobotObservation ObserveRobot()
+        /// <summary>
+        /// Snapshot of the robot for the movement controller. Public because the group also needs it: a member
+        /// steps out of its slot for the robot the same way it does for a stranger.
+        /// </summary>
+        public RobotObservation ObserveRobot()
         {
             if (_robot == null && Time.time >= _nextRobotLookup)
             {

@@ -85,9 +85,13 @@ public sealed class ScenarioRouteEditor
         public int Epoch;
         public int Signature;
         public bool Interactive;
+        public bool Looping;
         public List<Vector2> Points;
         public int FallbackSegments;
         public int CrossingSegments;
+
+        /// <summary>Index in <see cref="Points"/> where the loop return leg starts, or -1 when there is none.</summary>
+        public int LoopReturnStart = -1;
     }
 
     private struct CoordinateFields
@@ -377,17 +381,59 @@ public sealed class ScenarioRouteEditor
     /// All routes are marked active so the recap draws them with the full opacity used while editing.
     /// </summary>
     public List<OccupancyMapRouteOverlay.RouteVisual> BuildRoutePreviews()
+        => BuildRouteVisuals(markAllActive: true);
+
+    /// <summary>
+    /// One drawable line per route, plus a dimmed second line for the return leg of a looping route: the author
+    /// sees that the agents walk back to their start, and that it is not another route.
+    /// </summary>
+    private List<OccupancyMapRouteOverlay.RouteVisual> BuildRouteVisuals(bool markAllActive)
     {
-        var previews = new List<OccupancyMapRouteOverlay.RouteVisual>(_routes.Count);
+        var visuals = new List<OccupancyMapRouteOverlay.RouteVisual>(_routes.Count);
         for (int index = 0; index < _routes.Count; index++)
-            previews.Add(new OccupancyMapRouteOverlay.RouteVisual(
-                GetDisplayPoints(index),
-                RouteColor(index),
-                true,
-                _routes[index].Id,
+        {
+            RouteDraft route = _routes[index];
+            List<Vector2> points = GetDisplayPoints(index);
+            Color color = RouteColor(index);
+            bool active = markAllActive || index == _activeRouteIndex;
+            int loopStart = LoopReturnStartOf(index);
+
+            if (loopStart <= 0 || loopStart >= points.Count)
+            {
+                visuals.Add(new OccupancyMapRouteOverlay.RouteVisual(
+                    points,
+                    color,
+                    active,
+                    route.Id,
+                    IsPathPlanningActive));
+                continue;
+            }
+
+            visuals.Add(new OccupancyMapRouteOverlay.RouteVisual(
+                points.GetRange(0, loopStart),
+                color,
+                active,
+                route.Id,
                 IsPathPlanningActive));
-        return previews;
+
+            Color faded = color;
+            faded.a *= 0.5f;
+            visuals.Add(new OccupancyMapRouteOverlay.RouteVisual(
+                points.GetRange(loopStart - 1, points.Count - loopStart + 1),
+                faded,
+                active,
+                $"{route.Id} · loop back",
+                IsPathPlanningActive));
+        }
+
+        return visuals;
     }
+
+    private int LoopReturnStartOf(int routeIndex) =>
+        _plannedGeometry.TryGetValue(routeIndex, out PlannedGeometry geometry) &&
+        geometry.Epoch == _navigationGridEpoch
+            ? geometry.LoopReturnStart
+            : -1;
 
     /// <summary>
     /// Every route as plain data, for the dry run of the validation step.
@@ -536,30 +582,102 @@ public sealed class ScenarioRouteEditor
         // staying frozen until the point is released; the exact geometry is rebuilt on the fine grid then.
         bool interactive = _dragActive && routeIndex == _dragRouteIndex && _interactiveGrid != null;
         OccupancyGrid grid = interactive ? _interactiveGrid : _navigationGrid;
+        bool looping = IsLooping(route);
         if (grid == null || !grid.IsValid)
-            return route.Points;
+            return BuildUnplannedGeometry(route, routeIndex, looping);
 
         int signature = PointsSignature(route.Points);
         if (_plannedGeometry.TryGetValue(routeIndex, out PlannedGeometry cached) &&
             cached.Epoch == _navigationGridEpoch &&
             cached.Signature == signature &&
-            cached.Interactive == interactive)
+            cached.Interactive == interactive &&
+            cached.Looping == looping)
             return cached.Points;
 
         List<Vector2> planned = OccupancyPathPlanner.PlanRoute(
             grid,
             route.Points,
             out int fallbackSegments);
+        int loopReturnStart = AppendLoopReturn(grid, route, planned, looping);
         _plannedGeometry[routeIndex] = new PlannedGeometry
         {
             Epoch = _navigationGridEpoch,
             Signature = signature,
             Interactive = interactive,
+            Looping = looping,
             Points = planned,
             FallbackSegments = fallbackSegments,
-            CrossingSegments = CountWallsCrossed(planned)
+            CrossingSegments = CountWallsCrossed(planned),
+            LoopReturnStart = loopReturnStart
         };
         return planned;
+    }
+
+    /// <summary>True when the route walks back to its first point once it reached the last one.</summary>
+    private static bool IsLooping(RouteDraft route) =>
+        route != null && route.EndBehavior == HumanEndBehavior.Loop && route.Points.Count >= 2;
+
+    /// <summary>
+    /// Adds the leg that brings a looping route back to its start, planned on the same grid as the rest, so the
+    /// editor shows the whole trip the agents will walk instead of stopping at the last objective.
+    /// Returns the index in <paramref name="points"/> where that leg begins, or -1 when there is none.
+    /// </summary>
+    private static int AppendLoopReturn(
+        OccupancyGrid grid,
+        RouteDraft route,
+        List<Vector2> points,
+        bool looping)
+    {
+        if (!looping || points.Count < 2)
+            return -1;
+
+        Vector2 start = route.Points[0];
+        Vector2 end = route.Points[^1];
+        if ((start - end).sqrMagnitude < 0.0001f)
+            return -1;
+
+        int loopStart = points.Count - 1;
+        List<Vector2> back = OccupancyPathPlanner.Plan(grid, end, start);
+        if (back == null || back.Count < 2)
+        {
+            AppendPoint(points, start);
+            return loopStart;
+        }
+
+        for (int index = 1; index < back.Count; index++)
+            AppendPoint(points, back[index]);
+
+        return loopStart;
+    }
+
+    /// <summary>Geometry of a route when no walkable grid is available: straight legs, plus the loop return.</summary>
+    private List<Vector2> BuildUnplannedGeometry(RouteDraft route, int routeIndex, bool looping)
+    {
+        var points = new List<Vector2>(route.Points);
+        int loopStart = -1;
+        if (looping && (route.Points[0] - route.Points[^1]).sqrMagnitude > 0.0001f)
+        {
+            loopStart = points.Count - 1;
+            points.Add(route.Points[0]);
+        }
+
+        _plannedGeometry[routeIndex] = new PlannedGeometry
+        {
+            Epoch = _navigationGridEpoch,
+            Signature = PointsSignature(route.Points),
+            Points = points,
+            Looping = looping,
+            LoopReturnStart = loopStart
+        };
+        return points;
+    }
+
+    private static void AppendPoint(List<Vector2> points, Vector2 point)
+    {
+        if (points.Count > 0 && (points[^1] - point).sqrMagnitude < 0.000001f)
+            return;
+
+        points.Add(point);
     }
 
     /// <summary>
@@ -1677,13 +1795,7 @@ public sealed class ScenarioRouteEditor
         Rect imageRect = GetDisplayedMapRect();
         _overlay.SetMap(_mapBounds, imageRect);
         _overlay.ShowGrid = _showGrid;
-        _overlay.SetRoutes(_routes.Select((route, index) =>
-            new OccupancyMapRouteOverlay.RouteVisual(
-                GetDisplayPoints(index),
-                RouteColor(index),
-                index == _activeRouteIndex,
-                route.Id,
-                IsPathPlanningActive)));
+        _overlay.SetRoutes(BuildRouteVisuals(markAllActive: false));
         _overlay.SetFormations(BuildFormationPreviews());
         UpdateGridScaleLabel();
         UpdatePathStatusLabel();

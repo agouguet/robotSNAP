@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 using RobotSNAP.Core;
+using RobotSNAP.Agents.Movement.Interfaces;
 
 namespace RobotSNAP.Agents
 {
@@ -452,6 +453,23 @@ namespace RobotSNAP.Agents
                     _yieldNeighbourPositions[index],
                     _yieldNeighbourVelocities[index],
                     radius,
+                    heading);
+                if (prediction.IsConflict && prediction.Urgency > worst.Urgency)
+                    worst = prediction;
+            }
+
+            // The robot is not one of the neighbours the manager tracks, but it is the one obstacle a member
+            // must never stand in front of: it gets the same yield decision, with its own radius.
+            RobotObservation robot = _movement != null ? _movement.ObserveRobot() : RobotObservation.None;
+            if (robot.IsVisible)
+            {
+                HumanAvoidance.Prediction prediction = HumanAvoidance.Predict(
+                    Position2D,
+                    Velocity2D,
+                    radius,
+                    robot.Position,
+                    robot.Velocity,
+                    robot.Radius,
                     heading);
                 if (prediction.IsConflict && prediction.Urgency > worst.Urgency)
                     worst = prediction;

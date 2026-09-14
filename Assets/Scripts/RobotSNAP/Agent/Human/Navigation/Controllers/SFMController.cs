@@ -51,6 +51,13 @@ namespace RobotSNAP.Agents.Movement.Controllers
         private float _robotForceDistance;
         private float _robotDampeningMin;
         private float _robotDampeningMax;
+        private float _robotAnticipationStrength;
+
+        /// <summary>
+        /// Range in which the robot is anticipated, well outside <c>robotPerceptionRadius</c>: the robot covers
+        /// several metres during the anticipation horizon, and the repulsion alone only reacts under three.
+        /// </summary>
+        private const float RobotAnticipationRadius = 6f;
 
         // Numerical stability
         private const float MAX_ACCELERATION = 20f;
@@ -92,6 +99,8 @@ namespace RobotSNAP.Agents.Movement.Controllers
             _robotForceDistance = Mathf.Max(0.05f, config.robotForceDistance);
             _robotDampeningMin = config.robotRepulsionDampeningMin;
             _robotDampeningMax = config.robotRepulsionDampeningMax;
+            // A robot is heavier and closes faster than a pedestrian: humans give way to it earlier and harder.
+            _robotAnticipationStrength = 3.6f;
         }
 
         public Vector2 ComputeVelocity(
@@ -223,37 +232,70 @@ namespace RobotSNAP.Agents.Movement.Controllers
                 }
             }
 
-            // ---- 3b. Robot repulsion ----
-            // The robot is not a wall nor a regular pedestrian: it gets its own force so humans
-            // step aside instead of walking through it.
+            // ---- 3b. Robot: repulsion close up, anticipation from further out ----
+            // The robot is not a wall nor a regular pedestrian: it gets its own force so humans step aside
+            // instead of walking through it. It is also heavier and closes faster than a pedestrian, so the
+            // avoidance starts outside the repulsion radius.
             Vector2 robotAccel = Vector2.zero;
             if (robot.IsVisible)
             {
                 Vector2 toRobot = robot.Position - currentPosition;
                 float distance = toRobot.magnitude;
-                if (distance > 0.001f && distance < _robotPerceptionRadius)
+                if (distance > 0.001f && distance < RobotAnticipationRadius)
                 {
                     Vector2 dirToRobot = toRobot / distance;
-                    float combinedRadius = _agentRadius + robot.Radius;
-                    float forceMagnitude = _robotRepulsionStrength *
-                                           Mathf.Exp((combinedRadius - distance) / _robotForceDistance);
-                    float proximity = Mathf.Clamp01(1f - distance / _robotPerceptionRadius);
-                    float dampening = Mathf.Lerp(_robotDampeningMin, _robotDampeningMax, proximity);
-                    float effectiveForce = forceMagnitude * dampening;
 
-                    robotAccel += (-dirToRobot * effectiveForce) / _mass;
+                    // Same anticipation as between pedestrians: the robot is heavy, cannot dodge, and closing
+                    // speeds are high, so waiting for the repulsion to bite means being walked into.
+                    HumanAvoidance.Prediction prediction = HumanAvoidance.Predict(
+                        currentPosition,
+                        currentVelocity,
+                        _agentRadius,
+                        robot.Position,
+                        robot.Velocity,
+                        robot.Radius,
+                        desiredDir,
+                        _anticipationHorizon,
+                        _anticipationMargin);
 
-                    // If the robot drives towards us, slide sideways out of its path. The side is
-                    // chosen from the current relative position so the agent does not dither.
-                    Vector2 robotHeading = robot.Velocity.sqrMagnitude > 0.01f
-                        ? robot.Velocity.normalized
-                        : dirToRobot;
-                    Vector2 lateral = new Vector2(-robotHeading.y, robotHeading.x);
-                    if (Vector2.Dot(currentPosition - robot.Position, lateral) < 0f)
-                        lateral = -lateral;
-                    float closingSpeed = Vector2.Dot(robot.Velocity - currentVelocity, dirToRobot);
-                    if (closingSpeed > 0.05f)
-                        robotAccel += lateral * effectiveForce * 0.4f / _mass;
+                    if (prediction.IsConflict)
+                    {
+                        // Step out of the path the robot is about to drive through, and do it early.
+                        robotAccel += HumanAvoidance.RightOf(desiredDir) *
+                                      (prediction.Side * _robotAnticipationStrength * prediction.Urgency) /
+                                      _mass;
+                    }
+
+                    if (distance < _robotPerceptionRadius)
+                    {
+                        float combinedRadius = _agentRadius + robot.Radius;
+                        float forceMagnitude = _robotRepulsionStrength *
+                                               Mathf.Exp((combinedRadius - distance) / _robotForceDistance);
+                        float proximity = Mathf.Clamp01(1f - distance / _robotPerceptionRadius);
+                        float dampening = Mathf.Lerp(_robotDampeningMin, _robotDampeningMax, proximity);
+                        float effectiveForce = forceMagnitude * dampening;
+
+                        // The repulsion is what stops a pedestrian dead in front of the robot, so it is relaxed
+                        // while the agent is already stepping aside for it.
+                        float repulsionScale = prediction.IsConflict
+                            ? Mathf.Lerp(1f, 0.5f, prediction.Urgency)
+                            : 1f;
+                        robotAccel += (-dirToRobot * effectiveForce * repulsionScale) / _mass;
+
+                        if (!prediction.IsConflict)
+                        {
+                            // No conflict predicted: keep the reactive slide for a robot alongside us.
+                            Vector2 robotHeading = robot.Velocity.sqrMagnitude > 0.01f
+                                ? robot.Velocity.normalized
+                                : dirToRobot;
+                            Vector2 lateral = new Vector2(-robotHeading.y, robotHeading.x);
+                            if (Vector2.Dot(currentPosition - robot.Position, lateral) < 0f)
+                                lateral = -lateral;
+                            float closingSpeed = Vector2.Dot(robot.Velocity - currentVelocity, dirToRobot);
+                            if (closingSpeed > 0.05f)
+                                robotAccel += lateral * effectiveForce * 0.4f / _mass;
+                        }
+                    }
                 }
             }
 

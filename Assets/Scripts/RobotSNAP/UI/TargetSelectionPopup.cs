@@ -61,7 +61,7 @@ namespace RobotSNAP.UI
         
         private void FindReferences()
         {
-            _cameraController = FindObjectOfType<CameraController>();
+            _cameraController = FindAnyObjectByType<CameraController>();
             
             if (_cameraController != null)
             {

@@ -2222,6 +2222,106 @@
     border-radius: 3px;
 }
 
+/* Explains the formation markers drawn around the start point of a route. */
+.formation-preview-label {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--accent);
+}
+
+/* Dry run of the validation step: what each route will actually walk. */
+.dry-run-list {
+    margin-top: 10px;
+}
+
+.dry-run-summary {
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.dry-run-finding {
+    margin-top: 3px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.dry-run-finding.ok {
+    color: rgb(75, 200, 130);
+}
+
+.dry-run-finding.warning {
+    color: rgb(235, 170, 70);
+}
+
+.dry-run-finding.error {
+    color: rgb(230, 100, 100);
+}
+
+/* Group overview of the agent panel: one row per group id used by the routes. */
+.group-list {
+    margin-top: 4px;
+}
+
+.group-row {
+    flex-direction: row;
+    align-items: center;
+    min-height: 34px;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    background-color: var(--bg-primary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 5px;
+}
+
+.group-row:hover {
+    border-color: var(--accent);
+}
+
+.group-row.selected {
+    border-color: var(--accent);
+    background-color: rgba(0, 110, 255, 0.12);
+}
+
+.group-row-main {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.group-row-name {
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.group-row-detail {
+    margin-top: 1px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.group-row-ungroup {
+    width: 22px;
+    height: 22px;
+    margin-left: 6px;
+    padding: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background-color: transparent;
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 4px;
+}
+
+.group-row-ungroup:hover {
+    color: var(--text-primary);
+    border-color: rgb(220, 75, 75);
+}
+
+.group-empty-hint {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
 /* Read-only recap shown on the validation step. */
 .map-legend-list {
     flex-direction: row;

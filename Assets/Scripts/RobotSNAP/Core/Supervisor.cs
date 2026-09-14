@@ -22,7 +22,7 @@ namespace RobotSNAP
             get
             {
                 if (_instance == null)
-                    _instance = FindObjectOfType<Supervisor>();
+                    _instance = FindAnyObjectByType<Supervisor>();
                 return _instance;
             }
         }
@@ -134,7 +134,7 @@ namespace RobotSNAP
         {
             if (_clock == null)
             {
-                _clock = FindObjectOfType<Clock>();
+                _clock = FindAnyObjectByType<Clock>();
                 if (_clock == null)
                 {
                     var clockGO = new GameObject("Clock");

@@ -79,7 +79,7 @@
 //         public void Initialize()
 //         {
 //             // Find EnvROS
-//             _envROS = FindObjectOfType<EnvROS>();
+//             _envROS = FindAnyObjectByType<EnvROS>();
             
 //             if (_envROS == null)
 //             {
@@ -95,7 +95,7 @@
 //             // Find EnvironmentBuilder if not assigned
 //             if (environmentBuilder == null)
 //             {
-//                 environmentBuilder = FindObjectOfType<EnvironmentBuilder>();
+//                 environmentBuilder = FindAnyObjectByType<EnvironmentBuilder>();
 //             }
             
 //             // Generate initial map
@@ -404,7 +404,7 @@
 
 //         private float GetFloorRadiusFromEnvironment()
 //         {
-//             var envCreator = FindObjectOfType<EnvironmentCreator>();
+//             var envCreator = FindAnyObjectByType<EnvironmentCreator>();
 //             if (envCreator != null)
 //             {
 //                 return envCreator.GetFloorRadius();

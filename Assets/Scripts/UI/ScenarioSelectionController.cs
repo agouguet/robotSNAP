@@ -39,7 +39,7 @@ public class ScenarioSelectionController : MonoBehaviour
     private void Start()
     {
         if (_dataService == null)
-            _dataService = FindObjectOfType<ScenarioDataService>();
+            _dataService = FindAnyObjectByType<ScenarioDataService>();
         if (_dataService == null)
             Debug.LogError("[ScenarioSelectionController] ScenarioDataService not found!");
 

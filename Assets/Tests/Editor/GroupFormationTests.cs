@@ -86,10 +86,32 @@ namespace RobotSNAP.Tests.Editor
         [Test]
         public void Rotate_TurnsOffsetsWithTheLeaderYaw()
         {
+            // A quarter turn puts the leader's forward (local +y) on world +x...
             Vector2 rotated = GroupFormation.Rotate(new Vector2(1f, 0f), Mathf.PI * 0.5f);
 
             Assert.That(rotated.x, Is.EqualTo(0f).Within(0.001f));
-            Assert.That(rotated.y, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(rotated.y, Is.EqualTo(-1f).Within(0.001f));
+
+            // ... so its right (local +x) points down world -z, and its forward matches (sin, cos).
+            Vector2 forward = GroupFormation.Rotate(new Vector2(0f, 1f), Mathf.PI * 0.5f);
+            Assert.That(forward.x, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(forward.y, Is.EqualTo(0f).Within(0.001f));
+        }
+
+        [Test]
+        public void Rotate_KeepsTrailingSlotsBehindTheLeaderWhenItTurns()
+        {
+            // Column slot: one metre behind the leader in its local frame.
+            Vector2 behind = new(0f, -1f);
+
+            Vector2 straight = GroupFormation.Rotate(behind, 0f);
+            Assert.That(straight.x, Is.EqualTo(0f).Within(0.001f));
+            Assert.That(straight.y, Is.EqualTo(-1f).Within(0.001f));
+
+            // Leader now walks towards world +x: the slot must trail on -x, not lead on +x.
+            Vector2 turned = GroupFormation.Rotate(behind, Mathf.PI * 0.5f);
+            Assert.That(turned.x, Is.EqualTo(-1f).Within(0.001f));
+            Assert.That(turned.y, Is.EqualTo(0f).Within(0.001f));
         }
 
         [Test]
@@ -103,6 +125,51 @@ namespace RobotSNAP.Tests.Editor
             Assert.That(GroupFormation.Normalize("wedge"), Is.EqualTo(GroupFormation.WedgeFormation));
             Assert.That(GroupFormation.Normalize("abreast"), Is.EqualTo(GroupFormation.RowFormation));
             Assert.That(GroupFormation.Normalize("shoulder"), Is.EqualTo(GroupFormation.RowFormation));
+        }
+
+        [Test]
+        public void RequiredGoalDistance_MatchesTheControllersSpeedRamp()
+        {
+            // Full cruise speed: the goal must sit a whole slow-down distance ahead of the slot.
+            Assert.That(
+                GroupFormation.RequiredGoalDistance(0.8f, 0.8f, 1.5f),
+                Is.EqualTo(1.5f).Within(0.001f));
+
+            // Half speed lands halfway up the 20%..100% ramp of the controller.
+            Assert.That(
+                GroupFormation.RequiredGoalDistance(0.4f, 0.8f, 1.5f),
+                Is.EqualTo(1.5f * 0.375f).Within(0.001f));
+
+            // Below the ramp floor the agent would creep: aim straight at the slot instead.
+            Assert.That(GroupFormation.RequiredGoalDistance(0.1f, 0.8f, 1.5f), Is.EqualTo(0f));
+            Assert.That(GroupFormation.RequiredGoalDistance(0f, 0.8f, 1.5f), Is.EqualTo(0f));
+
+            // A faster leader than the follower's cruise speed cannot ask for more than full ramp.
+            Assert.That(
+                GroupFormation.RequiredGoalDistance(2f, 0.8f, 1.5f),
+                Is.EqualTo(1.5f).Within(0.001f));
+        }
+
+        [Test]
+        public void SteadyHeading_TurnsAtABoundedRateAndTakesTheShortWay()
+        {
+            float quarterTurn = Mathf.PI * 0.5f;
+            const float step = 0.1f;
+
+            // 90° per second for 0.1 s: the heading advances by exactly 9°.
+            float heading = GroupFormation.SteadyHeading(0f, quarterTurn, quarterTurn, step);
+            Assert.That(heading, Is.EqualTo(quarterTurn * step).Within(0.0001f));
+
+            // Crossing ±π must turn by 20°, not by 340°.
+            float almostPi = Mathf.PI - 0.1f;
+            float minusAlmostPi = -Mathf.PI + 0.1f;
+            float crossed = GroupFormation.SteadyHeading(almostPi, minusAlmostPi, quarterTurn, step);
+            float turned = Mathf.DeltaAngle(almostPi * Mathf.Rad2Deg, crossed * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+            Assert.That(turned, Is.EqualTo(quarterTurn * step).Within(0.001f));
+
+            // No time or no rate means no movement.
+            Assert.That(GroupFormation.SteadyHeading(0.5f, 1.5f, 0f, 0.1f), Is.EqualTo(0.5f));
+            Assert.That(GroupFormation.SteadyHeading(0.5f, 1.5f, 1f, 0f), Is.EqualTo(0.5f));
         }
     }
 }

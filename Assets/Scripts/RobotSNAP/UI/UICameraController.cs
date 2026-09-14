@@ -20,7 +20,7 @@ public class UICameraController : MonoBehaviour
     private void Start()
     {
         if (uiDocument == null) uiDocument = GetComponent<UIDocument>();
-        if (cameraController == null) cameraController = FindObjectOfType<CameraController>();
+        if (cameraController == null) cameraController = FindAnyObjectByType<CameraController>();
         if (cameraController == null) { Debug.LogError("CameraController missing"); return; }
 
         var root = uiDocument.rootVisualElement;

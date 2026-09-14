@@ -39,7 +39,8 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2[] neighborVelocities,
             Vector2[] staticObstacles,
             RobotObservation robot,
-            float deltaTime)
+            float deltaTime,
+            float cruiseSpeedOverride = 0f)
         {
             // Mise à jour du buffer de trajectoire (historique)
             _trajectoryBuffer[_bufferIndex] = currentPosition;
@@ -71,8 +72,12 @@ namespace RobotSNAP.Agents.Movement.Controllers
                 predictedDirection.Normalize();
             }
 
-            // Vitesse adaptée à la confiance (plus confiant → plus rapide)
-            float speed = _config.maxSpeed * (0.6f + _confidence * 0.4f);
+            // Vitesse adaptée à la confiance (plus confiant → plus rapide).
+            // A group follower may be asked for a higher cruise speed so it can close the gap.
+            float cruiseSpeed = cruiseSpeedOverride > 0.01f
+                ? Mathf.Min(cruiseSpeedOverride, _config.maxSpeed)
+                : _config.maxSpeed;
+            float speed = cruiseSpeed * (0.6f + _confidence * 0.4f);
             return predictedDirection * speed;
         }
 

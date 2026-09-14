@@ -64,6 +64,18 @@ namespace RobotSNAP.Agents
         public bool IsGroupLeader => _group != null && _isGroupLeader;
         public bool IsGroupFollower => _group != null && !_isGroupLeader;
 
+        /// <summary>
+        /// Speed the movement controller regulates in open space. Group following needs it to aim ahead
+        /// of a formation slot by the exact distance the controller uses to ramp its speed up.
+        /// </summary>
+        public float CruiseSpeed => humanConfig != null ? Mathf.Max(0.1f, humanConfig.desiredSpeed) : 1f;
+
+        /// <summary>Distance before its goal at which the controller starts slowing this agent down.</summary>
+        public float SlowDownDistance => humanConfig != null ? Mathf.Max(0.2f, humanConfig.slowDownDistance) : 1.5f;
+
+        /// <summary>Physical ceiling of the movement controller, used to bound a catch-up speed.</summary>
+        public float MaxSpeed => humanConfig != null ? Mathf.Max(CruiseSpeed, humanConfig.maxSpeed) : 1.5f;
+
         // ==================== Unity Lifecycle ====================
         private void Awake()
         {
@@ -318,6 +330,7 @@ namespace RobotSNAP.Agents
             _group = null;
             _isGroupLeader = false;
             _formationOffset = Vector2.zero;
+            _movement?.SetCruiseSpeedOverride(0f);
         }
 
         /// <summary>Steering target imposed by the group leader; does not touch the route.</summary>
@@ -329,6 +342,12 @@ namespace RobotSNAP.Agents
             _currentGoal = new Vector3(destination.x, 0f, destination.y);
             _movement?.SetGoal(destination);
         }
+
+        /// <summary>
+        /// Cruise speed imposed by the group for this frame, so a follower can close the gap on its
+        /// leader instead of being capped at exactly the leader's speed.
+        /// </summary>
+        public void SetGroupCruiseSpeed(float speed) => _movement?.SetCruiseSpeedOverride(speed);
 
         /// <summary>End behavior propagated by the group leader to its followers.</summary>
         public void SetGroupEndBehavior(HumanEndBehavior behavior)

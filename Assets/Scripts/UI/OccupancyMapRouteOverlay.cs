@@ -26,7 +26,26 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
         public string Name { get; }
     }
 
+    /// <summary>
+    /// Where the members of one route will stand at spawn, in world space.
+    /// The first slot belongs to the leader, who owns the route.
+    /// </summary>
+    public readonly struct FormationPreview
+    {
+        public FormationPreview(IReadOnlyList<Vector2> slots, Color color, bool active)
+        {
+            Slots = slots;
+            Color = color;
+            Active = active;
+        }
+
+        public IReadOnlyList<Vector2> Slots { get; }
+        public Color Color { get; }
+        public bool Active { get; }
+    }
+
     private readonly List<RouteVisual> _routes = new();
+    private readonly List<FormationPreview> _formations = new();
     private readonly Label _scaleValueLabel;
     private Bounds _worldBounds;
     private Rect _imageRect;
@@ -78,6 +97,15 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
         MarkDirtyRepaint();
     }
 
+    /// <summary>Sets the spawn layout of every grouped route drawn on the map.</summary>
+    public void SetFormations(IEnumerable<FormationPreview> formations)
+    {
+        _formations.Clear();
+        if (formations != null)
+            _formations.AddRange(formations.Where(formation => formation.Slots != null));
+        MarkDirtyRepaint();
+    }
+
     private void GenerateRouteVisuals(MeshGenerationContext context)
     {
         if (contentRect.width < 1f || contentRect.height < 1f ||
@@ -93,6 +121,46 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
             DrawRoute(painter, route);
         foreach (RouteVisual route in _routes.Where(route => route.Active))
             DrawRoute(painter, route);
+
+        // Formations are drawn last so their members stay readable above the route lines.
+        foreach (FormationPreview formation in _formations.Where(formation => !formation.Active))
+            DrawFormation(painter, formation);
+        foreach (FormationPreview formation in _formations.Where(formation => formation.Active))
+            DrawFormation(painter, formation);
+    }
+
+    /// <summary>
+    /// Draws the spawn slots of a route: hollow markers for the followers, a filled one for the leader.
+    /// Seeing the group before running the scenario avoids discovering the formation only in Play Mode.
+    /// </summary>
+    private void DrawFormation(Painter2D painter, FormationPreview formation)
+    {
+        IReadOnlyList<Vector2> slots = formation.Slots;
+        float alpha = formation.Active ? 0.95f : 0.35f;
+        float lineWidth = formation.Active ? 2f : 1.25f;
+
+        for (int index = 0; index < slots.Count; index++)
+        {
+            Vector2 center = WorldToLocal(slots[index]);
+            bool isLeader = index == 0;
+            float radius = isLeader ? 5f : 4.5f;
+
+            Color outer = formation.Color;
+            outer.a = alpha;
+            painter.strokeColor = outer;
+            painter.lineWidth = lineWidth;
+            painter.BeginPath();
+            painter.Arc(center, radius, Angle.Degrees(0f), Angle.Degrees(360f), ArcDirection.Clockwise);
+            painter.Stroke();
+
+            if (!isLeader)
+                continue;
+
+            painter.fillColor = outer;
+            painter.BeginPath();
+            painter.Arc(center, 2.5f, Angle.Degrees(0f), Angle.Degrees(360f), ArcDirection.Clockwise);
+            painter.Fill();
+        }
     }
 
     private void DrawGrid(Painter2D painter)

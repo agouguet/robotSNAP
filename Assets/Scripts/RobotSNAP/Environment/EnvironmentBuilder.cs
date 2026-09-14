@@ -242,7 +242,7 @@ namespace RobotSNAP.Environment
 
             _loader = GetComponent<ScenarioLoader>();
             if (_loader == null)
-                _loader = FindObjectOfType<ScenarioLoader>();
+                _loader = FindAnyObjectByType<ScenarioLoader>();
         }
 
         /// <summary>
@@ -256,7 +256,7 @@ namespace RobotSNAP.Environment
             if (string.IsNullOrEmpty(mapName)) yield break;
 
             if (_loader == null)
-                _loader = FindObjectOfType<ScenarioLoader>();
+                _loader = FindAnyObjectByType<ScenarioLoader>();
 
             var asset = _loader.LoadMap(mapName);
 

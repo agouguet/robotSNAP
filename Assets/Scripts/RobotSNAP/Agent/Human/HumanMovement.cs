@@ -39,6 +39,7 @@ namespace RobotSNAP.Agents
         private Vector2 _currentPosition;
         private bool _isPlaying = true;
         private MovementControllerType _currentControllerType;
+        private float _cruiseSpeedOverride;
 
         // Neighbors
         private readonly List<Vector2> _neighborPositions = new List<Vector2>();
@@ -228,7 +229,8 @@ namespace RobotSNAP.Agents
                 _neighborVelocities.ToArray(),
                 _tempObstacles.ToArray(),
                 ObserveRobot(),
-                Time.fixedDeltaTime
+                Time.fixedDeltaTime,
+                _cruiseSpeedOverride
             );
 
             // Application de la vélocité via le Rigidbody
@@ -369,6 +371,12 @@ namespace RobotSNAP.Agents
             _avatar?.SetVelocity(Vector3.zero);
         }
 
+        /// <summary>
+        /// Imposes a cruise speed for the next frames (0 restores the configured one).
+        /// Used by group followers that have to close a gap on their leader.
+        /// </summary>
+        public void SetCruiseSpeedOverride(float speed) => _cruiseSpeedOverride = Mathf.Max(0f, speed);
+
         public void SetGoal(Vector2 goal)
         {
             if (_avatar != null)
@@ -384,6 +392,7 @@ namespace RobotSNAP.Agents
         public void Reset()
         {
             _controller?.Reset();
+            _cruiseSpeedOverride = 0f;
             _rb.linearVelocity = Vector3.zero;
             _currentVelocity = Vector2.zero;
             _avatar?.SetVelocity(Vector3.zero);

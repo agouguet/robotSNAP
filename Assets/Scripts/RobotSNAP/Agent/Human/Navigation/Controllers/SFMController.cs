@@ -99,7 +99,8 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2[] neighborVelocities,
             Vector2[] staticObstacles,
             RobotObservation robot,
-            float deltaTime)
+            float deltaTime,
+            float cruiseSpeedOverride = 0f)
         {
             // ---- 1. Goal attraction ----
             Vector2 toGoal = goalPosition - currentPosition;
@@ -110,7 +111,13 @@ namespace RobotSNAP.Agents.Movement.Controllers
 
             Vector2 desiredDir = toGoal / distToGoal;
 
-            float desiredSpeed = _desiredSpeed;
+            // A group follower may be asked for a higher cruise speed so it can close the gap;
+            // the physical ceiling of the agent still applies.
+            float cruiseSpeed = cruiseSpeedOverride > 0.01f
+                ? Mathf.Min(cruiseSpeedOverride, _maxSpeed)
+                : _desiredSpeed;
+
+            float desiredSpeed = cruiseSpeed;
             if (distToGoal < _slowDownDistance)
             {
                 float t = distToGoal / _slowDownDistance;

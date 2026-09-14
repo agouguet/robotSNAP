@@ -76,7 +76,7 @@ public class SidebarController : MonoBehaviour
         EventBus.Instance.Subscribe<SimulationStateChangedEvent>(OnSimulationStateChanged);
 
         if (_scenarioDataService == null)
-            _scenarioDataService = FindObjectOfType<ScenarioDataService>();
+            _scenarioDataService = FindAnyObjectByType<ScenarioDataService>();
 
         if (_scenarioDataService != null)
         {
@@ -109,7 +109,7 @@ public class SidebarController : MonoBehaviour
         Debug.Log($"[SidebarController] UpdateScenarioInfo called with scenarioId: {scenarioId}");
         if (string.IsNullOrEmpty(scenarioId))
         {
-            var manager = FindObjectOfType<ScenarioManager>();
+            var manager = FindAnyObjectByType<ScenarioManager>();
             if (manager != null && manager.HasScenarioLoaded)
             {
                 scenarioId = manager.CurrentScenarioId;

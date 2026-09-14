@@ -98,6 +98,7 @@ public sealed class ScenarioRouteEditor
     private readonly List<VisualElement> _pointRows = new();
     private readonly Dictionary<int, CoordinateFields> _pointFields = new();
     private readonly VisualElement _routeList;
+    private readonly VisualElement _groupList;
     private readonly Button _addHumanRouteButton;
     private readonly Button _removeHumanRouteButton;
     private readonly Button _setRouteStartButton;
@@ -111,6 +112,7 @@ public sealed class ScenarioRouteEditor
     private readonly TextField _groupField;
     private readonly DropdownField _formationDropdown;
     private readonly FloatField _groupSpacingField;
+    private readonly Label _formationPreviewLabel;
     private readonly VisualElement _routePointsContainer;
     private readonly VisualElement _canvas;
     private readonly Image _mapImage;
@@ -121,6 +123,7 @@ public sealed class ScenarioRouteEditor
     private readonly Label _gridScaleLabel;
     private readonly OccupancyMapRouteOverlay _overlay;
     private readonly VisualElement _pointLabelLayer;
+    private readonly List<OccupancyMapRouteOverlay.FormationPreview> _formationPreviews = new();
 
     private Texture2D _mapTexture;
     private Bounds _mapBounds;
@@ -144,6 +147,7 @@ public sealed class ScenarioRouteEditor
     public ScenarioRouteEditor(VisualElement root)
     {
         _routeList = root.Q<VisualElement>("RouteSelectorList");
+        _groupList = root.Q<VisualElement>("GroupList");
         _addHumanRouteButton = root.Q<Button>("AddHumanRouteButton");
         _removeHumanRouteButton = root.Q<Button>("RemoveHumanRouteButton");
         _setRouteStartButton = root.Q<Button>("SetRouteStartButton");
@@ -157,6 +161,7 @@ public sealed class ScenarioRouteEditor
         _groupField = root.Q<TextField>("GroupField");
         _formationDropdown = root.Q<DropdownField>("FormationDropdown");
         _groupSpacingField = root.Q<FloatField>("GroupSpacingField");
+        _formationPreviewLabel = root.Q<Label>("FormationPreviewLabel");
         _routePointsContainer = root.Q<VisualElement>("RoutePointsContainer");
         _canvas = root.Q<VisualElement>("AgentsEnvironmentCanvas");
         _mapImage = root.Q<Image>("AgentsEnvironmentImage");
@@ -169,10 +174,11 @@ public sealed class ScenarioRouteEditor
 
         if (new VisualElement[]
             {
-                _routeList, _addHumanRouteButton, _removeHumanRouteButton,
+                _routeList, _groupList, _addHumanRouteButton, _removeHumanRouteButton,
                 _setRouteStartButton, _addRouteObjectiveButton, _toggleMapGridButton,
                 _robotRouteSettings, _humanRouteSettings, _humanCountField, _humanSpeedField,
                 _endBehaviorDropdown, _groupField, _formationDropdown, _groupSpacingField,
+                _formationPreviewLabel,
                 _routePointsContainer, _canvas, _mapImage, _mapPlaceholder, _instructionLabel,
                 _cursorCoordinatesLabel, _activeRouteLabel, _gridScaleLabel, overlayHost
             }.Any(element => element == null))
@@ -232,6 +238,7 @@ public sealed class ScenarioRouteEditor
             PushUndo($"human-group:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.Group = evt.newValue);
             ApplyGroupLayoutToPeers(ActiveRoute);
+            RefreshGroupList();
         });
         _formationDropdown.RegisterValueChangedCallback(evt =>
         {
@@ -239,6 +246,7 @@ public sealed class ScenarioRouteEditor
             PushUndo($"human-formation:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.Formation = FormationFromDisplay(evt.newValue));
             ApplyGroupLayoutToPeers(ActiveRoute);
+            RefreshGroupList();
         });
         _groupSpacingField.RegisterValueChangedCallback(evt =>
         {
@@ -248,6 +256,7 @@ public sealed class ScenarioRouteEditor
             PushUndo($"human-group-spacing:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.GroupSpacing = value);
             ApplyGroupLayoutToPeers(ActiveRoute);
+            RefreshGroupList();
         });
     }
 
@@ -291,6 +300,26 @@ public sealed class ScenarioRouteEditor
                 true,
                 _routes[index].Id));
         return previews;
+    }
+
+    /// <summary>
+    /// Every route as plain data, for the dry run of the validation step.
+    /// The robot speed lives in the tab controller, so it is passed in for the robot route.
+    /// </summary>
+    public List<ScenarioDryRun.Route> BuildDryRunRoutes(float robotSpeed)
+    {
+        var routes = new List<ScenarioDryRun.Route>(_routes.Count);
+        foreach (RouteDraft draft in _routes)
+        {
+            bool skipped = !draft.IsRobot && draft.Count <= 0;
+            if (skipped)
+                continue;
+            routes.Add(new ScenarioDryRun.Route(
+                draft.Id,
+                draft.Points,
+                draft.IsRobot ? robotSpeed : draft.Speed));
+        }
+        return routes;
     }
 
     public void Reset()
@@ -622,6 +651,14 @@ public sealed class ScenarioRouteEditor
             });
             _routeList.Add(row);
         }
+        RebuildGroupList();
+    }
+
+    /// <summary>Recomputes the group rows, then the sentence describing the active formation.</summary>
+    private void RefreshGroupList()
+    {
+        RebuildGroupList();
+        UpdateFormationPreviewLabel();
     }
 
     private void RefreshRouteList()
@@ -634,12 +671,133 @@ public sealed class ScenarioRouteEditor
             if (name != null)
                 name.text = DescribeRoute(_routes[index]);
         }
+        RebuildGroupList();
     }
 
     private void RefreshRouteListSelection()
     {
         for (int index = 0; index < _routeList.childCount && index < _routes.Count; index++)
             _routeList[index].EnableInClassList("selected", index == _activeRouteIndex);
+        RefreshGroupListSelection();
+    }
+
+    /// <summary>
+    /// One row per group id used by the human routes. The group is where formation and spacing really
+    /// live, so it gets its own list instead of being buried in each route's settings.
+    /// </summary>
+    private void RebuildGroupList()
+    {
+        _groupList.Clear();
+        List<string> groups = CollectGroupIds();
+        if (groups.Count == 0)
+        {
+            var hint = new Label("No group yet. Set a group id on a human route to make agents walk together.");
+            hint.AddToClassList("group-empty-hint");
+            _groupList.Add(hint);
+            return;
+        }
+
+        foreach (string groupId in groups)
+        {
+            string capturedId = groupId;
+            var row = new VisualElement();
+            row.AddToClassList("group-row");
+            row.EnableInClassList("selected", IsActiveRouteInGroup(groupId));
+
+            var main = new VisualElement();
+            main.AddToClassList("group-row-main");
+            var name = new Label(groupId);
+            name.AddToClassList("group-row-name");
+            var detail = new Label(DescribeGroup(groupId));
+            detail.AddToClassList("group-row-detail");
+            main.Add(name);
+            main.Add(detail);
+
+            var ungroup = new Button(() => UngroupAll(capturedId)) { text = "×" };
+            ungroup.AddToClassList("group-row-ungroup");
+            ungroup.tooltip = "Remove this group id from every route";
+
+            row.Add(main);
+            row.Add(ungroup);
+            row.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                SelectFirstRouteOfGroup(capturedId);
+                evt.StopPropagation();
+            });
+            _groupList.Add(row);
+        }
+    }
+
+    private void RefreshGroupListSelection()
+    {
+        List<string> groups = CollectGroupIds();
+        for (int index = 0; index < _groupList.childCount && index < groups.Count; index++)
+            _groupList[index].EnableInClassList("selected", IsActiveRouteInGroup(groups[index]));
+    }
+
+    /// <summary>Group ids in first-seen route order, so the list stays stable while editing.</summary>
+    private List<string> CollectGroupIds()
+    {
+        var groups = new List<string>();
+        foreach (RouteDraft route in _routes)
+        {
+            string groupId = route.IsRobot ? null : route.Group?.Trim();
+            if (string.IsNullOrEmpty(groupId) || groups.Contains(groupId))
+                continue;
+            groups.Add(groupId);
+        }
+        return groups;
+    }
+
+    private List<RouteDraft> RoutesOfGroup(string groupId) => _routes
+        .Where(route => !route.IsRobot &&
+                        string.Equals(route.Group?.Trim(), groupId, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private bool IsActiveRouteInGroup(string groupId)
+    {
+        RouteDraft active = ActiveRoute;
+        return active != null && !active.IsRobot &&
+               string.Equals(active.Group?.Trim(), groupId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string DescribeGroup(string groupId)
+    {
+        List<RouteDraft> routes = RoutesOfGroup(groupId);
+        int agents = routes.Sum(route => Mathf.Max(0, route.Count));
+        RouteDraft reference = routes.Count > 0 ? routes[0] : null;
+        string formation = reference != null
+            ? FormationToDisplay(reference.Formation).ToLowerInvariant()
+            : "pair";
+        float spacing = reference != null ? reference.GroupSpacing : 1.5f;
+        return $"{agents} agent{(agents == 1 ? string.Empty : "s")} · {routes.Count} route" +
+               $"{(routes.Count == 1 ? string.Empty : "s")} · {formation} · {spacing:0.##} m";
+    }
+
+    private void SelectFirstRouteOfGroup(string groupId)
+    {
+        int index = _routes.FindIndex(route =>
+            !route.IsRobot &&
+            string.Equals(route.Group?.Trim(), groupId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || index == _activeRouteIndex)
+            return;
+
+        SelectRoute(index);
+    }
+
+    /// <summary>Detaches every route of a group, which is how a group is removed.</summary>
+    private void UngroupAll(string groupId)
+    {
+        List<RouteDraft> routes = RoutesOfGroup(groupId);
+        if (routes.Count == 0)
+            return;
+
+        PushUndo();
+        foreach (RouteDraft route in routes)
+            route.Group = null;
+
+        RefreshActiveRoute();
+        _instructionLabel.text = $"Group '{groupId}' removed from every route.";
     }
 
     private static string DescribeRoute(RouteDraft route)
@@ -1222,8 +1380,60 @@ public sealed class ScenarioRouteEditor
                 route.Points,
                 RouteColor(index),
                 index == _activeRouteIndex)));
+        _overlay.SetFormations(BuildFormationPreviews());
         UpdateGridScaleLabel();
+        UpdateFormationPreviewLabel();
         RefreshPointLabels();
+    }
+
+    /// <summary>
+    /// Spawn layout of every route that fills more than one agent. It reuses the runtime slot maths
+    /// (route start, first objective as heading, formation and spacing) so the map shows exactly where
+    /// the group will stand when the scenario starts.
+    /// </summary>
+    private List<OccupancyMapRouteOverlay.FormationPreview> BuildFormationPreviews()
+    {
+        _formationPreviews.Clear();
+        for (int index = 0; index < _routes.Count; index++)
+        {
+            RouteDraft route = _routes[index];
+            if (route.IsRobot || route.Count <= 1 || route.Points.Count < 2)
+                continue;
+
+            List<Vector2> slots = GroupFormation.CreateSlots(route.Count, route.GroupSpacing, route.Formation);
+            Vector2 origin = route.Points[0];
+            Vector2 direction = route.Points[1] - route.Points[0];
+            float heading = direction.sqrMagnitude > 0.0001f
+                ? Mathf.Atan2(direction.x, direction.y)
+                : 0f;
+
+            var worldSlots = new List<Vector2>(slots.Count);
+            foreach (Vector2 slot in slots)
+                worldSlots.Add(origin + GroupFormation.Rotate(slot, heading));
+
+            _formationPreviews.Add(new OccupancyMapRouteOverlay.FormationPreview(
+                worldSlots,
+                RouteColor(index),
+                index == _activeRouteIndex));
+        }
+
+        return _formationPreviews;
+    }
+
+    /// <summary>Explains what the markers drawn around the route start mean.</summary>
+    private void UpdateFormationPreviewLabel()
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null || active.IsRobot)
+        {
+            _formationPreviewLabel.text = string.Empty;
+            return;
+        }
+
+        _formationPreviewLabel.text = active.Count <= 1
+            ? "One agent: no formation to lay out."
+            : $"{active.Count} agents · {FormationToDisplay(active.Formation).ToLowerInvariant()} · " +
+              $"{active.GroupSpacing:0.##} m — slots shown on the start point.";
     }
 
     private void RefreshPointLabels()

@@ -33,14 +33,15 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2[] neighborVelocities,
             Vector2[] staticObstacles,
             RobotObservation robot,
-            float deltaTime)
+            float deltaTime,
+            float cruiseSpeedOverride = 0f)
         {
             // Calcul des vélocités des deux contrôleurs
             Vector2 sfmVelocity = _sfmController.ComputeVelocity(
-                currentPosition, currentVelocity, goalPosition, neighbors, neighborVelocities, staticObstacles, robot, deltaTime);
+                currentPosition, currentVelocity, goalPosition, neighbors, neighborVelocities, staticObstacles, robot, deltaTime, cruiseSpeedOverride);
             
             Vector2 onnxVelocity = _onnxController.ComputeVelocity(
-                currentPosition, currentVelocity, goalPosition, neighbors, neighborVelocities, staticObstacles, robot, deltaTime);
+                currentPosition, currentVelocity, goalPosition, neighbors, neighborVelocities, staticObstacles, robot, deltaTime, cruiseSpeedOverride);
             
             // Adaptation dynamique des poids si activée
             if (_config.useAdaptiveWeighting)

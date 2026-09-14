@@ -38,7 +38,7 @@ namespace RobotSNAP
 
         void SetupSurveillanceClones()
         {
-            Camera[] allCams = FindObjectsOfType<Camera>();
+            Camera[] allCams = FindObjectsByType<Camera>(FindObjectsSortMode.None);
             int offset = 0;
             foreach (Camera cam in allCams)
             {

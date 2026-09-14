@@ -129,6 +129,11 @@
                         <ui:Button name="AddHumanRouteButton" text="+ Human route" class="route-management-button"/>
                         <ui:Button name="RemoveHumanRouteButton" text="Remove" class="route-management-button danger-subtle"/>
                     </ui:VisualElement>
+                    <ui:VisualElement class="creation-field">
+                        <ui:Label text="Groups" class="creation-field-label"/>
+                        <ui:Label text="Routes sharing a group id walk together. Select a group to open one of its routes." class="config-panel-subtitle"/>
+                        <ui:VisualElement name="GroupList" class="group-list"/>
+                    </ui:VisualElement>
                     <ui:VisualElement name="RobotRouteSettings" class="route-editor-hidden">
                         <ui:VisualElement class="agent-panel-divider"/>
                         <ui:VisualElement class="config-panel-heading">
@@ -189,6 +194,7 @@
                             <ui:Label text="Group spacing (m)" class="creation-field-label"/>
                             <ui:FloatField name="GroupSpacingField" class="creation-text-field"/>
                             <ui:Label text="Distance kept between members of the same formation." class="field-help"/>
+                            <ui:Label name="FormationPreviewLabel" text="" class="formation-preview-label"/>
                         </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:ScrollView>
@@ -216,6 +222,7 @@
                     <ui:Label text="Click a point to select it, drag to move it." class="map-pointer-hint"/>
                     <ui:Label name="ActiveRouteLabel" text="Robot route" class="active-route-label"/>
                     <ui:Label name="GridScaleLabel" text="Grid and scale: 1 m" class="grid-scale-label"/>
+                    <ui:Label text="◎ spawn slot of a group" class="map-pointer-hint"/>
                 </ui:VisualElement>
                 <ui:VisualElement class="map-shortcut-row">
                     <ui:Label name="MapShortcutSnap" text="Ctrl  Snap to grid" class="map-shortcut-chip"/>
@@ -336,6 +343,7 @@
                     <ui:Label name="CheckRoute" text="✓ Agent routes valid" class="validation-check"/>
                     <ui:Label name="CheckHumans" text="✓ Human route configuration valid" class="validation-check"/>
                 </ui:VisualElement>
+                <ui:VisualElement name="DryRunFindings" class="dry-run-list"/>
             </ui:VisualElement>
         </ui:VisualElement>
 

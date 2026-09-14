@@ -245,13 +245,13 @@ namespace RobotSNAP.UI
         private void UpdatePositionHistory()
         {
             // Update robot history
-            Robot robot = FindObjectOfType<Robot>();
+            Robot robot = FindAnyObjectByType<Robot>();
             if (robot != null)
             {
                 AddPositionToHistory(robot.GetInstanceID(), robot.Position);
             }
             // Update humans history
-            HumanAgent[] humans = FindObjectsOfType<HumanAgent>();
+            HumanAgent[] humans = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
             foreach (var human in humans)
             {
                 AddPositionToHistory(human.GetInstanceID(), human.transform.position);
@@ -299,7 +299,7 @@ namespace RobotSNAP.UI
             if (_currentState == SimulationState.Idle || _currentState == SimulationState.Ready)
                 return;
 
-            Robot robot = FindObjectOfType<Robot>();
+            Robot robot = FindAnyObjectByType<Robot>();
             if (robot == null) return;
             
             int id = robot.GetInstanceID();
@@ -360,7 +360,7 @@ namespace RobotSNAP.UI
         
         private void UpdateHumanVisualizations()
         {
-            HumanAgent[] humans = FindObjectsOfType<HumanAgent>();
+            HumanAgent[] humans = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
             foreach (var human in humans)
             {
                 int id = human.GetInstanceID();
@@ -441,7 +441,7 @@ namespace RobotSNAP.UI
         {
             if (wireframeMode)
             {
-                foreach (var renderer in FindObjectsOfType<Renderer>())
+                foreach (var renderer in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
                 {
                     if (!_originalMaterials.ContainsKey(renderer))
                     {
@@ -629,7 +629,7 @@ namespace RobotSNAP.UI
         {
             if (!colorHumansByState) return humanDefaultColor;
             // simple distance to robot
-            Robot robot = FindObjectOfType<Robot>();
+            Robot robot = FindAnyObjectByType<Robot>();
             if (robot != null)
             {
                 float dist = Vector3.Distance(human.transform.position, robot.Position);
@@ -687,7 +687,7 @@ namespace RobotSNAP.UI
         
         private void DrawBoundingBoxes()
         {
-            var agents = FindObjectsOfType<HumanAgent>();
+            var agents = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
             foreach (var a in agents)
             {
                 Vector3 center = a.transform.position;
@@ -725,9 +725,9 @@ namespace RobotSNAP.UI
         private void UpdateDistanceLabels()
         {
             // optional: distance between robot and each human
-            Robot robot = FindObjectOfType<Robot>();
+            Robot robot = FindAnyObjectByType<Robot>();
             if (robot == null) return;
-            var humans = FindObjectsOfType<HumanAgent>();
+            var humans = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
             foreach (var h in humans)
             {
                 float dist = Vector3.Distance(robot.Position, h.transform.position);

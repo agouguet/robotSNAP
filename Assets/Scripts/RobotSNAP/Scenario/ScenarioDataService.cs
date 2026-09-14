@@ -32,7 +32,7 @@ public class ScenarioDataService : MonoBehaviour
     private void Awake()
     {
         if (_scenarioManager == null)
-            _scenarioManager = FindObjectOfType<ScenarioManager>();
+            _scenarioManager = FindAnyObjectByType<ScenarioManager>();
     }
 
     private void Start()

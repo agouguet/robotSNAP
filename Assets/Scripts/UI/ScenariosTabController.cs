@@ -20,6 +20,9 @@ public class ScenariosTabController : MonoBehaviour
     private const string MapPlaceholder = "No environment selected";
     private const string PreviewPlaceholder = "Default cover";
 
+    /// <summary>Room for the worst findings only; the panel is narrow, and the summary line counts them.</summary>
+    private const int MaxDryRunFindings = 3;
+
     [Header("References")]
     [SerializeField] private UIDocument uiDocument;
     [SerializeField, FormerlySerializedAs("_dataService")] private ScenarioDataService dataService;
@@ -126,6 +129,7 @@ public class ScenariosTabController : MonoBehaviour
     private Label _checkEnvironment;
     private Label _checkRoute;
     private Label _checkHumans;
+    private VisualElement _dryRunFindings;
 
     private readonly HashSet<string> _selectedTags = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _availableMaps = new();
@@ -288,6 +292,7 @@ public class ScenariosTabController : MonoBehaviour
         _checkEnvironment = Require<Label>(root, "CheckEnvironment", missing);
         _checkRoute = Require<Label>(root, "CheckRoute", missing);
         _checkHumans = Require<Label>(root, "CheckHumans", missing);
+        _dryRunFindings = Require<VisualElement>(root, "DryRunFindings", missing);
 
         if (missing.Count > 0)
         {
@@ -656,10 +661,56 @@ public class ScenariosTabController : MonoBehaviour
         SetCheck(_checkEnvironment, environmentValid, "Environment selected", "Environment is missing");
         SetCheck(_checkRoute, routeValid, "Agent routes valid", "At least one route is invalid");
         SetCheck(_checkHumans, humansValid, "Human routes valid", "Human route configuration is invalid");
+        RefreshDryRunDiscoveries();
         _validationStatusIcon.EnableInClassList(ErrorClass, !allValid);
         _validationLabel.EnableInClassList(ErrorClass, !allValid);
         _validationLabel.text = allValid ? "The scenario is valid and ready to be saved." : "Fix the highlighted settings before saving.";
         _saveButton.SetEnabled(allValid);
+    }
+
+    /// <summary>
+    /// Estimates what the scenario will actually do before it is saved: path lengths, walking times and
+    /// the routes that would not move. Only the problems are listed, healthy routes stay silent.
+    /// </summary>
+    private void RefreshDryRunDiscoveries()
+    {
+        if (_dryRunFindings == null || _routeEditor == null)
+            return;
+
+        _dryRunFindings.Clear();
+        List<ScenarioDryRun.Route> routes = _routeEditor.BuildDryRunRoutes(_robotSpeedField.value);
+        List<DryRunFinding> findings = ScenarioDryRun.Analyse(routes);
+
+        var summary = new Label(ScenarioDryRun.Describe(routes));
+        summary.AddToClassList("dry-run-summary");
+        _dryRunFindings.Add(summary);
+
+        int shown = 0;
+        int healthy = 0;
+        foreach (DryRunFinding finding in findings)
+        {
+            if (finding.Severity == DryRunSeverity.Ok)
+            {
+                healthy++;
+                continue;
+            }
+            if (shown >= MaxDryRunFindings)
+                continue;
+
+            var line = new Label(finding.Message);
+            line.AddToClassList("dry-run-finding");
+            line.AddToClassList(finding.Severity == DryRunSeverity.Error ? "error" : "warning");
+            _dryRunFindings.Add(line);
+            shown++;
+        }
+
+        if (shown > 0 || healthy == 0)
+            return;
+
+        var allGood = new Label($"{healthy} route(s) walk without a warning.");
+        allGood.AddToClassList("dry-run-finding");
+        allGood.AddToClassList("ok");
+        _dryRunFindings.Add(allGood);
     }
 
     private void RefreshMapRecap()

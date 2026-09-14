@@ -33,7 +33,7 @@ namespace RobotSNAP.UI
         private void Start()
         {
             _supervisor = Supervisor.Instance;
-            _scenarioSupervisor = FindObjectOfType<ScenarioManager>();
+            _scenarioSupervisor = FindAnyObjectByType<ScenarioManager>();
 
             if (settingsPanel != null)
                 settingsPanel.SetActive(false);

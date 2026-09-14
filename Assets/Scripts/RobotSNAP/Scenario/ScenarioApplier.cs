@@ -35,15 +35,6 @@ namespace RobotSNAP.Core.Scenario
         private readonly Dictionary<string, HumanAgent> _spawnedHumans = new();
         private int _humanCounter;
 
-        /// <summary>Formation shared by every human config that declares the same group id.</summary>
-        private struct GroupLayout
-        {
-            public string Formation;
-            public float Spacing;
-            public bool HasFormation;
-            public bool HasSpacing;
-        }
-
         public ScenarioData CurrentScenario => _currentScenario;
         public bool IsApplying { get; private set; }
 
@@ -191,7 +182,7 @@ namespace RobotSNAP.Core.Scenario
             }
             else
             {
-                var humans = FindObjectsOfType<HumanAgent>();
+                var humans = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
                 foreach (var h in humans)
                     Destroy(h.gameObject);
                 if (_logEvents) Debug.Log($"[ScenarioApplier] Destroyed {humans.Length} humans directly.");
@@ -369,7 +360,8 @@ namespace RobotSNAP.Core.Scenario
             // Humans sharing a group id are collected so they can walk together afterwards.
             int humanIndex = 0;
             var groups = new Dictionary<string, HumanGroup>();
-            Dictionary<string, GroupLayout> groupLayouts = ResolveGroupLayouts();
+            Dictionary<string, SpawnPlanner.GroupLayout> groupLayouts =
+                SpawnPlanner.ResolveGroupLayouts(_currentScenario.Humans);
             foreach (var config in _currentScenario.Humans)
             {
                 for (int i = 0; i < config.Count && humanIndex < allHumans.Count; i++)
@@ -383,9 +375,11 @@ namespace RobotSNAP.Core.Scenario
                             string groupId = config.Group.Trim();
                             if (!groups.TryGetValue(groupId, out HumanGroup group))
                             {
-                                GroupLayout layout = groupLayouts.TryGetValue(groupId, out GroupLayout found)
+                                SpawnPlanner.GroupLayout layout = groupLayouts.TryGetValue(
+                                    groupId,
+                                    out SpawnPlanner.GroupLayout found)
                                     ? found
-                                    : new GroupLayout { Spacing = 1.5f };
+                                    : new SpawnPlanner.GroupLayout(null, SpawnPlanner.DefaultSpacing, hasFormation: false);
                                 group = new HumanGroup(
                                     groupId,
                                     layout.Spacing,
@@ -506,63 +500,19 @@ namespace RobotSNAP.Core.Scenario
 
             // Group members share the leader's anchor; the formation is applied after the whole group is built.
             if (!string.IsNullOrWhiteSpace(config.Group))
-                return SpawnPlacement.SnapToNavMesh(ResolveSpawnAnchor(spawn));
+                return SpawnPlanner.PlaceAnchor(ResolveSpawnAnchor(spawn));
 
             if (string.Equals(spawn.Type, "random", StringComparison.OrdinalIgnoreCase))
+                // A random point sits anywhere in its zone: allow a wider search to reach walkable ground.
                 return SpawnPlacement.SnapToNavMesh(ResolveRandomSpawn(spawn), 1.5f, 5f);
 
-            Vector3 anchor = SpawnPlacement.SnapToNavMesh(ResolveSpawnAnchor(spawn));
+            Vector3 anchor = SpawnPlanner.PlaceAnchor(ResolveSpawnAnchor(spawn));
             if (total <= 1)
                 return anchor;
 
-            float heading = ResolveHeading(anchor, goals);
-            float spacing = Mathf.Clamp(spawn.Spacing, 0.4f, 3f);
-            List<Vector2> slots = GroupFormation.CreateSlots(total, spacing, spawn.Formation);
-            Vector2 offset = GroupFormation.Rotate(slots[Mathf.Clamp(index, 0, slots.Count - 1)], heading);
-            Vector2 anchor2D = new Vector2(anchor.x, anchor.z);
-            Vector2 projected = SpawnPlacement.ProjectWithin(
-                anchor2D + offset,
-                anchor2D,
-                offset.magnitude + Mathf.Max(0.5f, spacing * 0.5f));
-            return new Vector3(projected.x, anchor.y, projected.y);
-        }
-
-        /// <summary>
-        /// Formation and spacing shared by all the human configs that declare the same group id.
-        /// The first config that sets a formation or a spacing wins, so hand-written YAML stays valid
-        /// even when only one entry of the group carries the layout.
-        /// </summary>
-        private Dictionary<string, GroupLayout> ResolveGroupLayouts()
-        {
-            var layouts = new Dictionary<string, GroupLayout>();
-            if (_currentScenario?.Humans == null)
-                return layouts;
-
-            foreach (HumanScenarioConfig config in _currentScenario.Humans)
-            {
-                if (config == null || string.IsNullOrWhiteSpace(config.Group))
-                    continue;
-
-                string id = config.Group.Trim();
-                if (!layouts.TryGetValue(id, out GroupLayout layout))
-                    layout = new GroupLayout { Spacing = 1.5f };
-
-                if (!layout.HasFormation && !string.IsNullOrWhiteSpace(config.Spawn?.Formation))
-                {
-                    layout.Formation = config.Spawn.Formation;
-                    layout.HasFormation = true;
-                }
-
-                if (!layout.HasSpacing && config.Spawn != null)
-                {
-                    layout.Spacing = config.Spawn.Spacing;
-                    layout.HasSpacing = true;
-                }
-
-                layouts[id] = layout;
-            }
-
-            return layouts;
+            float heading = SpawnPlanner.HeadingTowards(new Vector2(anchor.x, anchor.z), goals);
+            Vector2 offset = SpawnPlanner.SlotOffset(index, total, spawn.Spacing, spawn.Formation, heading);
+            return SpawnPlanner.PlaceSlot(anchor, offset, spawn.Spacing);
         }
 
         /// <summary>Single anchor of a spawn definition: named reference, direct position or zone center.</summary>
@@ -596,20 +546,6 @@ namespace RobotSNAP.Core.Scenario
             UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
             bounds.center.y,
             UnityEngine.Random.Range(bounds.min.z, bounds.max.z));
-
-        /// <summary>Direction the agent will walk at spawn, used to orient its formation slot.</summary>
-        private static float ResolveHeading(Vector3 anchor, IList<Vector3> goals)
-        {
-            if (goals != null && goals.Count > 0)
-            {
-                Vector2 direction = new Vector2(goals[0].x - anchor.x, goals[0].z - anchor.z);
-                if (direction.sqrMagnitude < 0.0001f && goals.Count > 1)
-                    direction = new Vector2(goals[1].x - goals[0].x, goals[1].z - goals[0].z);
-                if (direction.sqrMagnitude > 0.0001f)
-                    return Mathf.Atan2(direction.x, direction.y);
-            }
-            return 0f;
-        }
 
         /// <summary>Heading of a group: the direction from its spawn point to its first objective.</summary>
         private static float ResolveGroupHeading(HumanAgent leader)

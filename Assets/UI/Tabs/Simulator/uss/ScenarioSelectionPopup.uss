@@ -22,14 +22,12 @@
     padding: 28px 32px;
     flex-direction: column;
     border-width: 1px;
-    border-style: solid;
     border-color: var(--accent-glow);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 .popup-title {
     font-size: 22px;
-    font-weight: bold;
+    -unity-font-style: bold;
     color: var(--text-primary);
     margin-bottom: 4px;
 }
@@ -57,11 +55,9 @@
     background-color: var(--bg-secondary);
     border-radius: 8px;
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
     padding: 0 12px;
     margin-right: 12px;
-    transition: border-color 0.2s;
 }
 
 .scenario-search-container:focus {
@@ -97,7 +93,6 @@
 
 .scenario-search-field.unity-text-field__input{
     color: var(--text-secondary);
-    font-weight: normal;
 }
 
 .scenario-search-field:focus {
@@ -132,7 +127,6 @@
     background-color: var(--bg-primary);
     border-radius: 8px;
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
 
     padding: 4px;
@@ -173,7 +167,6 @@
 .popup-footer .action-button.secondary {
     background-color: transparent;
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
 }
 .popup-footer .action-button.secondary:hover {

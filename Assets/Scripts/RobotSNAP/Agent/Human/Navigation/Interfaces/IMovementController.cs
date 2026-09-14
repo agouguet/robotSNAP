@@ -35,6 +35,11 @@ namespace RobotSNAP.Agents.Movement.Interfaces
         /// <summary>
         /// Calcule la vélocité désirée en fonction de l'état courant
         /// </summary>
+        /// <param name="cruiseSpeedOverride">
+        /// Vitesse de croisière imposée pour cette frame (0 = celle de la configuration).
+        /// Un suiveur de groupe en a besoin : plafonné à sa vitesse de croisière, il ne peut
+        /// jamais rattraper le leader, donc l'écart de formation ne se referme jamais.
+        /// </param>
         Vector2 ComputeVelocity(
             Vector2 currentPosition,
             Vector2 currentVelocity,
@@ -43,7 +48,8 @@ namespace RobotSNAP.Agents.Movement.Interfaces
             Vector2[] neighborVelocities,
             Vector2[] staticObstacles,
             RobotObservation robot,
-            float deltaTime
+            float deltaTime,
+            float cruiseSpeedOverride = 0f
         );
         
         /// <summary>

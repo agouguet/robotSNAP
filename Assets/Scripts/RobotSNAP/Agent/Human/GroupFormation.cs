@@ -41,6 +41,13 @@ namespace RobotSNAP.Agents
         /// <summary>Trailing stagger of the outermost members of an abreast row.</summary>
         private const float RowStaggerFactor = 0.25f;
 
+        /// <summary>
+        /// Floor of the SFM speed ramp (see <c>SFMController.ComputeVelocity</c>):
+        /// below <c>slowDownDistance</c> the desired speed is lerped from 20% to 100%.
+        /// Mirrored here so the formation can invert that curve.
+        /// </summary>
+        public const float SlowDownFloor = 0.2f;
+
         /// <summary>Golden angle, used to spread a cluster without visible rows.</summary>
         private const float GoldenAngle = 2.399963f;
 
@@ -137,12 +144,53 @@ namespace RobotSNAP.Agents
             return slots;
         }
 
-        /// <summary>Rotates a leader-local offset into world space for the given yaw (radians around Y).</summary>
+        /// <summary>
+        /// Rotates a leader-local offset into world space for the given yaw (radians around Y).
+        /// Local axes are +x to the leader's right and +y along the leader's forward, and the heading
+        /// is <c>atan2(forward.x, forward.z)</c>, so the forward axis maps to <c>(sin, cos)</c> and the
+        /// right axis to <c>(cos, -sin)</c>. Rotating the other way mirrors every asymmetric formation.
+        /// </summary>
         public static Vector2 Rotate(Vector2 offset, float yawRadians)
         {
             float sin = Mathf.Sin(yawRadians);
             float cos = Mathf.Cos(yawRadians);
-            return new Vector2(offset.x * cos - offset.y * sin, offset.x * sin + offset.y * cos);
+            return new Vector2(offset.x * cos + offset.y * sin, -offset.x * sin + offset.y * cos);
+        }
+
+        /// <summary>
+        /// Distance at which a follower must aim, ahead of its slot, to hold the formation.
+        /// The SFM regulates its speed from the distance left to the goal, so aiming straight at the
+        /// slot makes every follower creep and settle roughly one <paramref name="slowDownDistance"/>
+        /// behind it — the visible gap between the leader and the rest of the group. Aiming the same
+        /// distance ahead of the slot inverts the curve: the follower slows down exactly onto its slot.
+        /// </summary>
+        public static float RequiredGoalDistance(float formationSpeed, float cruiseSpeed, float slowDownDistance)
+        {
+            if (slowDownDistance <= 0f || cruiseSpeed <= 0.01f)
+                return 0f;
+
+            float ratio = Mathf.Clamp01(formationSpeed / cruiseSpeed);
+            if (ratio <= SlowDownFloor)
+                return 0f;
+
+            return slowDownDistance * Mathf.Clamp01((ratio - SlowDownFloor) / (1f - SlowDownFloor));
+        }
+
+        /// <summary>
+        /// Turns <paramref name="currentHeading"/> towards <paramref name="targetHeading"/> by at most
+        /// <paramref name="maxTurnRate"/> radians per second, taking the short way around ±π.
+        /// A group whose frame snaps to the leader's instantaneous heading swings every follower across
+        /// a wide arc as soon as the leader turns; a bounded turn rate keeps that pivot readable.
+        /// </summary>
+        public static float SteadyHeading(float currentHeading, float targetHeading, float maxTurnRate, float deltaTime)
+        {
+            if (maxTurnRate <= 0f || deltaTime <= 0f)
+                return currentHeading;
+
+            const float twoPi = 2f * Mathf.PI;
+            float delta = Mathf.Repeat(targetHeading - currentHeading + Mathf.PI, twoPi) - Mathf.PI;
+            float maxStep = maxTurnRate * deltaTime;
+            return currentHeading + Mathf.Clamp(delta, -maxStep, maxStep);
         }
     }
 }

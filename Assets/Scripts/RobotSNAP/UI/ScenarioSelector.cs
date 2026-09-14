@@ -55,7 +55,7 @@ namespace RobotSNAP.UI
 
         private void FindReferences()
         {
-            _scenarioSupervisor = FindObjectOfType<ScenarioManager>();
+            _scenarioSupervisor = FindAnyObjectByType<ScenarioManager>();
             if (_scenarioSupervisor != null)
                 _scenarioSupervisor.OnScenarioLoaded += OnScenarioLoaded;
         }

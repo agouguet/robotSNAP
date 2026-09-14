@@ -90,7 +90,7 @@ public class SimulationTabController : MonoBehaviour
         }
 
         if (scenarioManager == null)
-            scenarioManager = FindObjectOfType<ScenarioManager>();
+            scenarioManager = FindAnyObjectByType<ScenarioManager>();
         if (scenarioManager == null)
         {
             Debug.LogError("ScenarioManager introuvable.");
@@ -100,10 +100,10 @@ public class SimulationTabController : MonoBehaviour
         if (scenarioSelectionController == null)
             scenarioSelectionController = GetComponent<ScenarioSelectionController>();
         if (scenarioSelectionController == null)
-            scenarioSelectionController = FindObjectOfType<ScenarioSelectionController>();
+            scenarioSelectionController = FindAnyObjectByType<ScenarioSelectionController>();
         
         if (cameraController == null)
-            cameraController = FindObjectOfType<CameraController>();
+            cameraController = FindAnyObjectByType<CameraController>();
         if (cameraController == null)
             Debug.LogWarning("CameraController non trouvé dans la scène.");
 

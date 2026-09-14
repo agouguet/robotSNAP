@@ -21,8 +21,11 @@ public sealed class ScenarioRouteEditor
     private const float PointLabelWidth = 78f;
     private const int UndoLimit = 60;
 
-    /// <summary>Cell budget of the walkable grid sampled from the occupancy image.</summary>
-    private const int NavigationResolution = 320;
+    /// <summary>
+    /// Cell budget of the walkable grid sampled from the occupancy image. Taken from the runtime planner, so
+    /// the editor and the simulation can never drift apart on the sampling of the map.
+    /// </summary>
+    private const int NavigationResolution = ScenarioNavigation.Resolution;
 
     /// <summary>
     /// Coarser grid used while a point is dragged: replanning every mouse move has to stay cheap, and the
@@ -31,10 +34,10 @@ public sealed class ScenarioRouteEditor
     private const int InteractiveNavigationResolution = 150;
 
     /// <summary>
-    /// Body radius kept clear from walls, matched to the pedestrian radius of the simulation
-    /// (<see cref="RobotSNAP.Agents.HumanConfig.agentRadius"/>), so the drawn path is one an agent walks.
+    /// Body radius kept clear from walls, taken from the runtime planner, so the drawn path is exactly one the
+    /// simulated agent walks.
     /// </summary>
-    private const float NavigationAgentRadius = 0.25f;
+    private const float NavigationAgentRadius = ScenarioNavigation.DefaultAgentRadius;
 
     private sealed class RouteDraft
     {
@@ -552,7 +555,13 @@ public sealed class ScenarioRouteEditor
         if (_mapTexture == null)
             return;
 
-        _occupancyGrid = OccupancyGrid.FromTexture(_mapTexture, _mapBounds, NavigationResolution);
+        // The pixel mask makes the validation exact: a point five centimetres from a wall is valid, even though
+        // the coarse planning cell that contains it is marked as an obstacle.
+        _occupancyGrid = OccupancyGrid.FromTexture(
+            _mapTexture,
+            _mapBounds,
+            NavigationResolution,
+            keepPixelMask: true);
         if (_occupancyGrid == null)
             return;
 
@@ -749,7 +758,103 @@ public sealed class ScenarioRouteEditor
         // the occupancy grid can catch it before the scenario is saved.
         error ??= FindPointOffWalkableGround();
 
+        // Checking only the anchor is not enough: a five-agent wedge around a valid anchor can put three of
+        // them inside the wall next to it.
+        error ??= FindSpawnSlotOnWall();
+
         return error == null;
+    }
+
+    /// <summary>
+    /// Every spawn slot the scenario will lay out, in world space, exactly as the runtime computes them: one
+    /// formation per ungrouped route, and one shared formation for all the routes of a group.
+    /// </summary>
+    private List<(string Label, Vector2 Point)> BuildSpawnSlots()
+    {
+        var slots = new List<(string Label, Vector2 Point)>();
+        var groupsDone = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (int index = 0; index < _routes.Count; index++)
+        {
+            RouteDraft route = _routes[index];
+            if (route.IsRobot || route.Count <= 0 || route.Points.Count < 2)
+                continue;
+
+            string groupId = route.Group?.Trim();
+            if (string.IsNullOrEmpty(groupId))
+            {
+                AppendSlots(slots, route.Id, route.Points[0], route, index, route.Count, 1);
+                continue;
+            }
+
+            if (!groupsDone.Add(groupId))
+                continue;
+
+            // A group walks as one formation, so its members share the layout of the first route declaring it.
+            int total = RoutesOfGroup(groupId).Sum(member => Mathf.Max(0, member.Count));
+            AppendSlots(slots, $"group {groupId}", route.Points[0], route, index, total, 1);
+        }
+
+        return slots;
+    }
+
+    /// <summary>Adds the slots of one formation, including the anchor itself, to the validation list.</summary>
+    private void AppendSlots(
+        List<(string Label, Vector2 Point)> slots,
+        string label,
+        Vector2 origin,
+        RouteDraft route,
+        int routeIndex,
+        int total,
+        int firstAgentNumber)
+    {
+        if (total <= 1)
+        {
+            slots.Add(($"{label} agent {firstAgentNumber}", origin));
+            return;
+        }
+
+        List<Vector2> offsets = GroupFormation.CreateSlots(
+            total,
+            route.GroupSpacing,
+            route.Formation,
+            route.FormationParameter);
+        Vector2 heading = InitialDirection(GetDisplayPoints(routeIndex), route.Points, origin);
+        float angle = heading.sqrMagnitude > 0.0001f ? Mathf.Atan2(heading.x, heading.y) : 0f;
+
+        for (int index = 0; index < offsets.Count; index++)
+            slots.Add(($"{label} agent {index + 1}", origin + GroupFormation.Rotate(offsets[index], angle)));
+    }
+
+    /// <summary>First spawn slot standing on an obstacle, as a message, or null when the formations fit.</summary>
+    private string FindSpawnSlotOnWall()
+    {
+        if (_occupancyGrid == null || !_occupancyGrid.IsValid)
+            return null;
+
+        foreach ((string label, Vector2 point) in BuildSpawnSlots())
+        {
+            if (GroundAt(point) != PointGround.Wall)
+                continue;
+
+            return $"{label} spawns on a wall ({point.x:0.##}, {point.y:0.##}). " +
+                   "Move the start of the route or pick a tighter formation.";
+        }
+
+        return null;
+    }
+
+    private int CountSpawnSlotsOffWalkableGround()
+    {
+        if (_occupancyGrid == null || !_occupancyGrid.IsValid)
+            return 0;
+
+        int count = 0;
+        foreach ((string _, Vector2 point) in BuildSpawnSlots())
+            if (GroundAt(point) != PointGround.Walkable)
+                count++;
+
+        return count;
     }
 
     /// <summary>
@@ -768,16 +873,38 @@ public sealed class ScenarioRouteEditor
             for (int index = 0; index < route.Points.Count; index++)
             {
                 Vector2 point = route.Points[index];
-                if (_occupancyGrid.IsWorldWalkable(point))
+                PointGround ground = GroundAt(point);
+                if (ground == PointGround.Walkable)
                     continue;
 
                 string label = RouteMapHitTesting.PointLabel(index);
-                return $"{route.Id}: {label} ({point.x:0.##}, {point.y:0.##}) is on a wall. " +
+                string place = ground == PointGround.Wall ? "is on a wall" : "is outside the map";
+                return $"{route.Id}: {label} ({point.x:0.##}, {point.y:0.##}) {place}. " +
                        "Move it onto the walkable area.";
             }
         }
 
         return null;
+    }
+
+    /// <summary>How a world point sits on the map, judged on the exact pixels of the occupancy image.</summary>
+    private enum PointGround
+    {
+        Walkable,
+        Wall,
+        OutsideMap
+    }
+
+    private PointGround GroundAt(Vector2 point)
+    {
+        if (_occupancyGrid == null || !_occupancyGrid.IsValid)
+            return PointGround.Walkable;
+        if (_occupancyGrid.IsPixelWalkable(point))
+            return PointGround.Walkable;
+
+        return _occupancyGrid.TryWorldToCell(point, out _, out _)
+            ? PointGround.Wall
+            : PointGround.OutsideMap;
     }
 
     public void WriteToScenario(ScenarioData scenario)
@@ -1833,9 +1960,13 @@ public sealed class ScenarioRouteEditor
         }
 
         int onWalls = CountPointsOffWalkableGround();
-        string wallNote = onWalls == 0
-            ? string.Empty
-            : $" · {onWalls} point{(onWalls == 1 ? string.Empty : "s")} on a wall";
+        int wallSlots = CountSpawnSlotsOffWalkableGround();
+        var notes = new List<string>(2);
+        if (onWalls > 0)
+            notes.Add($"{onWalls} point{(onWalls == 1 ? string.Empty : "s")} on a wall");
+        if (wallSlots > 0)
+            notes.Add($"{wallSlots} spawn slot{(wallSlots == 1 ? string.Empty : "s")} off walkable space");
+        string wallNote = notes.Count == 0 ? string.Empty : " · " + string.Join(" · ", notes);
         string pathNote;
         if (blocked > 0)
             pathNote = $"Paths: {blocked} route(s) cannot reach a point on the walkable grid";
@@ -1845,7 +1976,9 @@ public sealed class ScenarioRouteEditor
             pathNote = "Paths: shortest walkable route (walls avoided)";
 
         _mapPathStatusLabel.text = pathNote + wallNote;
-        _mapPathStatusLabel.EnableInClassList("warning", blocked > 0 || crossing > 0 || onWalls > 0);
+        _mapPathStatusLabel.EnableInClassList(
+            "warning",
+            blocked > 0 || crossing > 0 || onWalls > 0 || wallSlots > 0);
     }
 
     private int CountPointsOffWalkableGround()
@@ -1859,7 +1992,7 @@ public sealed class ScenarioRouteEditor
             if (!route.IsRobot && route.Count <= 0)
                 continue;
             foreach (Vector2 point in route.Points)
-                if (!_occupancyGrid.IsWorldWalkable(point))
+                if (GroundAt(point) != PointGround.Walkable)
                     count++;
         }
 

@@ -34,6 +34,37 @@ namespace RobotSNAP.Core.Scenario
             bool simplify = true,
             bool snapToWalkable = true,
             float snapRadius = DefaultSnapRadius)
+            => Plan(grid, start, goal, null, simplify, snapToWalkable, snapRadius);
+
+        /// <summary>
+        /// Reusable search buffers. A runtime agent replans every few hundred milliseconds, and allocating the
+        /// four cell arrays of a 300×300 grid each time would produce megabytes of garbage per second.
+        /// </summary>
+        public sealed class Scratch
+        {
+            internal float[] G = System.Array.Empty<float>();
+            internal float[] F = System.Array.Empty<float>();
+            internal int[] CameFrom = System.Array.Empty<int>();
+            internal byte[] State = System.Array.Empty<byte>();
+            internal int Capacity;
+            // Private: only the enclosing planner touches the search heap.
+            private readonly MinHeap _open = new MinHeap();
+
+            internal MinHeap Open => _open;
+
+            /// <summary>Number of cells the buffers can hold: they grow once and are then reused.</summary>
+            public int BufferCapacity => Capacity;
+        }
+
+        /// <summary>Same search as <see cref="Plan(OccupancyGrid,Vector2,Vector2,bool,bool,float)"/>, reusing buffers.</summary>
+        public static List<Vector2> Plan(
+            OccupancyGrid grid,
+            Vector2 start,
+            Vector2 goal,
+            Scratch scratch,
+            bool simplify = true,
+            bool snapToWalkable = true,
+            float snapRadius = DefaultSnapRadius)
         {
             if (grid == null || !grid.IsValid)
                 return null;
@@ -56,10 +87,21 @@ namespace RobotSNAP.Core.Scenario
 
             int width = grid.Width;
             int count = width * grid.Height;
-            var gScore = new float[count];
-            var fScore = new float[count];
-            var cameFrom = new int[count];
-            var state = new byte[count]; // 0 unseen, 1 open, 2 closed
+            scratch ??= new Scratch();
+            if (scratch.Capacity < count)
+            {
+                scratch.G = new float[count];
+                scratch.F = new float[count];
+                scratch.CameFrom = new int[count];
+                scratch.State = new byte[count];
+                scratch.Capacity = count;
+            }
+
+            float[] gScore = scratch.G;
+            float[] fScore = scratch.F;
+            int[] cameFrom = scratch.CameFrom;
+            byte[] state = scratch.State; // 0 unseen, 1 open, 2 closed
+            System.Array.Clear(state, 0, count);
             for (int index = 0; index < count; index++)
             {
                 gScore[index] = float.PositiveInfinity;
@@ -69,7 +111,8 @@ namespace RobotSNAP.Core.Scenario
 
             int startIndex = startY * width + startX;
             int goalIndex = goalY * width + goalX;
-            var open = new MinHeap();
+            MinHeap open = scratch.Open;
+            open.Reset();
             gScore[startIndex] = 0f;
             fScore[startIndex] = Heuristic(startX, startY, goalX, goalY);
             open.Push(startIndex, fScore[startIndex]);
@@ -297,39 +340,89 @@ namespace RobotSNAP.Core.Scenario
             return result;
         }
 
-        /// <summary>True when a straight segment stays on walkable cells the whole way.</summary>
+        /// <summary>
+        /// True when a straight segment stays on walkable cells the whole way.
+        ///
+        /// Cells are visited one by one, including both neighbours when the segment runs exactly through the
+        /// corner shared by them. A plain line rasterisation skips that corner cell, which is how a trajectory
+        /// could still shave a diagonal obstacle even though both its ends were walkable.
+        /// </summary>
         public static bool HasLineOfSight(OccupancyGrid grid, Vector2 from, Vector2 to)
         {
-            if (grid == null || !grid.TryWorldToCell(from, out int x0, out int y0))
+            if (grid == null || !grid.TryWorldToCellF(from, out Vector2 startCell))
                 return false;
-            if (!grid.TryWorldToCell(to, out int x1, out int y1))
+            if (!grid.TryWorldToCellF(to, out Vector2 goalCell))
                 return false;
 
-            int dx = Mathf.Abs(x1 - x0);
-            int dy = Mathf.Abs(y1 - y0);
-            int stepX = x0 < x1 ? 1 : -1;
-            int stepY = y0 < y1 ? 1 : -1;
-            int error = dx - dy;
+            int x = Mathf.FloorToInt(startCell.x);
+            int y = Mathf.FloorToInt(startCell.y);
+            int goalX = Mathf.Clamp(Mathf.FloorToInt(goalCell.x), 0, grid.Width - 1);
+            int goalY = Mathf.Clamp(Mathf.FloorToInt(goalCell.y), 0, grid.Height - 1);
+            if (!grid.IsWalkable(x, y) || !grid.IsWalkable(goalX, goalY))
+                return false;
 
-            while (true)
+            float deltaX = goalCell.x - startCell.x;
+            float deltaY = goalCell.y - startCell.y;
+            int stepX = deltaX >= 0f ? 1 : -1;
+            int stepY = deltaY >= 0f ? 1 : -1;
+            float stepDeltaX = Mathf.Approximately(deltaX, 0f) ? float.PositiveInfinity : Mathf.Abs(1f / deltaX);
+            float stepDeltaY = Mathf.Approximately(deltaY, 0f) ? float.PositiveInfinity : Mathf.Abs(1f / deltaY);
+            float nextX = NextBoundary(startCell.x, deltaX);
+            float nextY = NextBoundary(startCell.y, deltaY);
+
+            int guard = grid.CellCount + 4;
+            while (guard-- > 0)
             {
-                if (!grid.IsWalkable(x0, y0))
-                    return false;
-                if (x0 == x1 && y0 == y1)
+                if (x == goalX && y == goalY)
                     return true;
 
-                int doubled = error * 2;
-                if (doubled > -dy)
+                if (!float.IsInfinity(nextX) && Mathf.Abs(nextX - nextY) < 1e-6f)
                 {
-                    error -= dy;
-                    x0 += stepX;
+                    // The segment crosses the corner itself: the two orthogonal neighbours are touched as well
+                    // as the diagonal one, and an agent cannot squeeze through that gap. Same rule as the search,
+                    // which refuses to cut a corner.
+                    if (!grid.IsWalkable(x + stepX, y + stepY) ||
+                        !grid.IsWalkable(x + stepX, y) ||
+                        !grid.IsWalkable(x, y + stepY))
+                        return false;
+
+                    x += stepX;
+                    y += stepY;
+                    nextX += stepDeltaX;
+                    nextY += stepDeltaY;
                 }
-                if (doubled < dx)
+                else if (nextX < nextY)
                 {
-                    error += dx;
-                    y0 += stepY;
+                    x += stepX;
+                    nextX += stepDeltaX;
                 }
+                else
+                {
+                    y += stepY;
+                    nextY += stepDeltaY;
+                }
+
+                if (!grid.IsWalkable(x, y))
+                    return false;
             }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Parameter at which the segment leaves the cell it currently stands in, along one axis. A point
+        /// sitting exactly on a boundary belongs to the next cell, so the following boundary is used.
+        /// </summary>
+        private static float NextBoundary(float coordinate, float delta)
+        {
+            if (Mathf.Approximately(delta, 0f))
+                return float.PositiveInfinity;
+
+            float boundary = delta > 0f ? Mathf.Floor(coordinate) + 1f : Mathf.Floor(coordinate);
+            if (Mathf.Abs(boundary - coordinate) < 1e-6f)
+                boundary += delta > 0f ? 1f : -1f;
+
+            return (boundary - coordinate) / delta;
         }
 
         private static float Heuristic(int x, int y, int goalX, int goalY)
@@ -341,12 +434,19 @@ namespace RobotSNAP.Core.Scenario
         }
 
         /// <summary>Binary min-heap of cell indices keyed by their f-score.</summary>
-        private sealed class MinHeap
+        internal sealed class MinHeap
         {
             private readonly List<int> _nodes = new();
             private readonly List<float> _priorities = new();
 
             public int Count => _nodes.Count;
+
+            /// <summary>Empties the heap for the next search without releasing its buffers.</summary>
+            public void Reset()
+            {
+                _nodes.Clear();
+                _priorities.Clear();
+            }
 
             public void Push(int node, float priority)
             {

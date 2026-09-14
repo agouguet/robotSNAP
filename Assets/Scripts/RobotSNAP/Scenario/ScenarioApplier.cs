@@ -96,6 +96,9 @@ namespace RobotSNAP.Core.Scenario
             foreach (var coroutine in _activeCoroutines)
                 if (coroutine != null) StopCoroutine(coroutine);
             _activeCoroutines.Clear();
+            // The scenario is over: its walkable grid must not outlive it, or the next scenario would plan on
+            // the previous map until its own grid is built.
+            ScenarioNavigation.Clear();
         }
 
         /// <summary>
@@ -106,6 +109,9 @@ namespace RobotSNAP.Core.Scenario
             _spawnedHumans.Clear();
             _humanCounter = 0;
         }
+
+        /// <summary>Drops the walkable grid of the scenario that was just unloaded.</summary>
+        public void ClearNavigationGrid() => ScenarioNavigation.Clear();
 
         // ==========================================
         //          APPLICATION COROUTINE
@@ -129,6 +135,11 @@ namespace RobotSNAP.Core.Scenario
             // 4. Apply simulation configuration (seed, time scale, duration)
             ApplySimulationConfig();
 
+            // 4b. Build the walkable grid of the scenario. The editor plans and validates its trajectories on
+            // that same grid, so loading it before anything spawns is what makes the simulation walk the routes
+            // the author drew — and what lets the spawn policy pull a formation out of a wall.
+            yield return StartCoroutine(LoadNavigationGrid());
+
             // 5. Setup the robot (position, rotation, goal, behavior, speed)
             yield return StartCoroutine(SetupRobot());
 
@@ -136,6 +147,57 @@ namespace RobotSNAP.Core.Scenario
             yield return StartCoroutine(SetupHumans());
 
             if (_logEvents) Debug.Log($"[ScenarioApplier] Scenario application complete: {_currentScenario.Name}");
+        }
+
+        // ==========================================
+        //          NAVIGATION GRID
+        // ==========================================
+
+        /// <summary>
+        /// Loads the occupancy image of the scenario and builds the walkable grid the agents plan on.
+        /// The image is only sampled: the texture is released right away, so a large map does not stay in
+        /// memory for the whole simulation.
+        /// </summary>
+        private IEnumerator LoadNavigationGrid()
+        {
+            ScenarioNavigation.Clear();
+
+            string map = _currentScenario?.MapImage;
+            if (string.IsNullOrEmpty(map))
+            {
+                if (_logEvents)
+                    Debug.Log("[ScenarioApplier] Scenario has no occupancy map: navigation falls back on the scene NavMesh.");
+                yield break;
+            }
+
+            if (_loader == null)
+            {
+                Debug.LogWarning("[ScenarioApplier] No scenario loader: the walkable grid cannot be built.");
+                yield break;
+            }
+
+            if (!_loader.LoadMapData(map, out Texture2D texture, out Bounds bounds) || texture == null)
+            {
+                Debug.LogWarning($"[ScenarioApplier] Occupancy image '{map}' could not be loaded: " +
+                                 "navigation falls back on the scene NavMesh.");
+                yield break;
+            }
+
+            try
+            {
+                ScenarioNavigation.BuildFrom(texture, bounds);
+            }
+            finally
+            {
+                Destroy(texture);
+            }
+
+            if (_logEvents)
+                Debug.Log($"[ScenarioApplier] Navigation grid '{map}' built: " +
+                          $"{ScenarioNavigation.Walkable.Width}×{ScenarioNavigation.Walkable.Height} cells " +
+                          $"({ScenarioNavigation.Resolution} max), clearance {ScenarioNavigation.DefaultAgentRadius} m.");
+
+            yield return null;
         }
 
         // ==========================================
@@ -164,6 +226,9 @@ namespace RobotSNAP.Core.Scenario
                     yield break;
                 }
                 _environmentBuilder.BuildFromTexture(texture, bounds);
+                // Same image, same sampling, same planner as the editor: the runtime then walks the very
+                // trajectories the scenario author validated on the map.
+                ScenarioNavigation.BuildFrom(texture, bounds);
             }
             yield return null;
         }
@@ -394,7 +459,7 @@ namespace RobotSNAP.Core.Scenario
                             if (groupsWithRoute.Add(groupId))
                             {
                                 group.SetRoute(
-                                    human.RoutePoints.Select(point => new Vector2(point.x, point.z)).ToList(),
+                                    PlanGroupRoute(human, groupId),
                                     config.Speed,
                                     HumanEndBehaviorParser.Parse(config.EndBehavior));
                             }
@@ -411,6 +476,9 @@ namespace RobotSNAP.Core.Scenario
             foreach (HumanGroup group in groups.Values)
                 group.PlaceMembersAtSpawn();
 
+            // The anchor being on walkable ground does not mean the formation is: check every member.
+            VerifySpawnedFormation(allHumans);
+
             var robot = FindRobot();
             if (robot != null)
             {
@@ -423,6 +491,80 @@ namespace RobotSNAP.Core.Scenario
 
             if (_logEvents)
                 Debug.Log($"[ScenarioApplier] Configured {humanIndex} humans across {groups.Count} group(s)");
+        }
+
+        /// <summary>
+        /// Shared route of a group, planned on the walkable grid of the scenario with the very planner the
+        /// editor drew it with: the group walks around walls instead of through them, and it walks exactly the
+        /// polyline the author validated.
+        /// </summary>
+        private List<Vector2> PlanGroupRoute(HumanAgent human, string groupId)
+        {
+            var authored = new List<Vector2>(human.RoutePoints.Count);
+            foreach (Vector3 point in human.RoutePoints)
+                authored.Add(new Vector2(point.x, point.z));
+
+            List<Vector2> route = ScenarioNavigation.PlanRoute(authored, out int fallbackSegments);
+            if (fallbackSegments > 0)
+            {
+                Debug.LogWarning(
+                    $"[ScenarioApplier] Group '{groupId}': {fallbackSegments} leg(s) of the route could not be " +
+                    "planned on the walkable grid and are walked in a straight line. " +
+                    "Check the route points and the occupancy image of the scenario.");
+            }
+
+            return route.Count > 0 ? route : authored;
+        }
+
+        /// <summary>
+        /// Checks every spawned agent, not just the formation anchor: a five-agent wedge laid out around a
+        /// valid anchor can put three of them inside the wall next to it, especially on a map with no NavMesh
+        /// for the projection to fall back on. Anybody still off walkable ground is pulled back onto it and
+        /// reported, instead of silently walking into a wall.
+        /// </summary>
+        private void VerifySpawnedFormation(List<HumanAgent> humans)
+        {
+            if (!ScenarioNavigation.IsAvailable || humans == null)
+                return;
+
+            int offWalkable = 0;
+            string firstOffender = string.Empty;
+            foreach (HumanAgent human in humans)
+            {
+                if (human == null)
+                    continue;
+
+                Vector2 position = human.Position2D;
+                if (ScenarioNavigation.IsWalkable(position))
+                    continue;
+
+                offWalkable++;
+                if (firstOffender.Length == 0)
+                    firstOffender = $"({position.x:0.##}, {position.y:0.##})";
+
+                if (ScenarioNavigation.TryProjectToWalkable(
+                        position,
+                        ScenarioNavigation.SnapRadius,
+                        out Vector2 walkable))
+                {
+                    human.transform.position = new Vector3(
+                        walkable.x,
+                        human.transform.position.y,
+                        walkable.y);
+                }
+            }
+
+            if (offWalkable == 0)
+            {
+                if (_logEvents)
+                    Debug.Log($"[ScenarioApplier] Spawn check: {humans.Count} agent(s), every formation on walkable ground.");
+                return;
+            }
+
+            Debug.LogWarning(
+                $"[ScenarioApplier] Spawn check: {offWalkable} of {humans.Count} agent(s) spawn off walkable ground, " +
+                $"first at {firstOffender}. They were moved to the nearest walkable cell: move the start of the route " +
+                "or tighten the formation in the scenario editor.");
         }
 
         // ==========================================

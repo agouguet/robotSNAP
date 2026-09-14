@@ -14,30 +14,72 @@ scenario_info:
   duration: 0
 points: 
   robot_start: 
-    x: -5.8
+    x: -6.74
     y: 0
-    z: -0.04
+    z: -0.1
     yaw: 0
     center: null
     size: null
   robot_goal: 
-    x: 6.36
+    x: 6.89
     y: 0
-    z: 0.04
+    z: 0.3
     yaw: null
     center: null
     size: null
   human_route_1_start: 
-    x: 0.11
+    x: 0
     y: 0
-    z: -3.9
+    z: -5
     yaw: null
     center: null
     size: null
   human_route_1_goal_1: 
-    x: -0.08
+    x: 0
     y: 0
-    z: 6.67
+    z: 5
+    yaw: null
+    center: null
+    size: null
+  human_route_2_start: 
+    x: 0
+    y: 0
+    z: 5
+    yaw: null
+    center: null
+    size: null
+  human_route_2_goal_1: 
+    x: 0
+    y: 0
+    z: -5
+    yaw: null
+    center: null
+    size: null
+  human_route_1_goal_2: 
+    x: -5
+    y: 0
+    z: 5
+    yaw: null
+    center: null
+    size: null
+  human_route_1_goal_3: 
+    x: -5
+    y: 0
+    z: -5
+    yaw: null
+    center: null
+    size: null
+  human_route_2_goal_2: 
+    x: 5
+    y: 0
+    z: -5
+    yaw: null
+    center: null
+    size: null
+  human_route_2_goal_3: 
+    x: 5
+    y: 0
+    z: 5
     yaw: null
     center: null
     size: null
@@ -49,14 +91,15 @@ robot:
   speed: 1.2
 humans: 
 - id: human_route_1
-  count: 5
+  count: 2
   spawn: 
     type: point
     ref: human_route_1_start
     position: null
     zone: null
-    formation: null
-    spacing: 1.5
+    formation: row
+    formation_parameter: 1.5
+    spacing: 1
     relative_to: null
   goal: 
     type: point
@@ -65,11 +108,65 @@ humans:
     zone: null
     target: null
     radius: 5
-  goals: null
-  end_behavior: stay
+  goals: 
+  - type: point
+    ref: human_route_1_goal_2
+    position: null
+    zone: null
+    target: null
+    radius: 5
+  - type: point
+    ref: human_route_1_goal_3
+    position: null
+    zone: null
+    target: null
+    radius: 5
+  end_behavior: loop
   group: 1
+  movement_controller: 
+    type: SFM
+    onnx_model: null
+    sfm_params: null
+    hybrid_weights: null
+  behavior: normal
+  speed: 1.2
+  color: null
+  personality: null
+- id: human_route_2
+  count: 3
+  spawn: 
+    type: point
+    ref: human_route_2_start
+    position: null
+    zone: null
+    formation: wedge
+    formation_parameter: 0
+    spacing: 1
+    relative_to: null
+  goal: 
+    type: point
+    ref: human_route_2_goal_1
+    position: null
+    zone: null
+    target: null
+    radius: 5
+  goals: 
+  - type: point
+    ref: human_route_2_goal_2
+    position: null
+    zone: null
+    target: null
+    radius: 5
+  - type: point
+    ref: human_route_2_goal_3
+    position: null
+    zone: null
+    target: null
+    radius: 5
+  end_behavior: loop
+  group: 2
   movement_controller: null
   behavior: normal
-  speed: 1
+  speed: 0.8
   color: null
   personality: null

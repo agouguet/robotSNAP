@@ -13,13 +13,30 @@ namespace RobotSNAP.Core.Scenario
     {
         private readonly bool[] _walkable;
 
-        private OccupancyGrid(int width, int height, int cellPixels, Bounds worldBounds, bool[] walkable)
+        // Optional full-resolution obstacle mask, kept for exact point checks: the coarse grid is the right
+        // structure to plan on, but it is too coarse to decide whether a single authored point stands on a wall.
+        private readonly bool[] _blockedPixels;
+        private readonly int _pixelWidth;
+        private readonly int _pixelHeight;
+
+        private OccupancyGrid(
+            int width,
+            int height,
+            int cellPixels,
+            Bounds worldBounds,
+            bool[] walkable,
+            bool[] blockedPixels = null,
+            int pixelWidth = 0,
+            int pixelHeight = 0)
         {
             Width = width;
             Height = height;
             CellPixels = cellPixels;
             WorldBounds = worldBounds;
             _walkable = walkable;
+            _blockedPixels = blockedPixels;
+            _pixelWidth = pixelWidth;
+            _pixelHeight = pixelHeight;
         }
 
         public int Width { get; }
@@ -39,6 +56,28 @@ namespace RobotSNAP.Core.Scenario
 
         public bool IsWorldWalkable(Vector2 world) =>
             TryWorldToCell(world, out int x, out int y) && IsWalkable(x, y);
+
+        /// <summary>True when the grid keeps a full-resolution obstacle mask for exact point checks.</summary>
+        public bool HasPixelMask => _blockedPixels != null && _pixelWidth > 0 && _pixelHeight > 0;
+
+        /// <summary>
+        /// Exact test of one world point against the pixels of the image, with no cell discretisation. Used to
+        /// validate authored points: the coarse planning grid marks a whole 8-pixel cell as a wall, which would
+        /// wrongly reject a point standing five centimetres from a wall.
+        /// </summary>
+        public bool IsPixelWalkable(Vector2 world)
+        {
+            if (!HasPixelMask)
+                return IsWorldWalkable(world);
+
+            Vector2 pixel = WorldToPixel(world);
+            int x = Mathf.FloorToInt(pixel.x);
+            int y = Mathf.FloorToInt(pixel.y);
+            if (x < 0 || y < 0 || x >= _pixelWidth || y >= _pixelHeight)
+                return false;
+
+            return !_blockedPixels[y * _pixelWidth + x];
+        }
 
         public Vector2 CellCenter(int x, int y)
         {
@@ -60,6 +99,21 @@ namespace RobotSNAP.Core.Scenario
             return x >= 0 && y >= 0 && x < Width && y < Height;
         }
 
+        /// <summary>
+        /// Continuous cell coordinates of a world point: cell (3, 7) runs from (3, 7) to (4, 8) here, so a
+        /// point in its middle answers (3.5, 7.5). Used to follow a segment across the grid cell by cell.
+        /// </summary>
+        public bool TryWorldToCellF(Vector2 world, out Vector2 cell)
+        {
+            cell = default;
+            if (!IsValid)
+                return false;
+
+            Vector2 pixel = WorldToPixel(world);
+            cell = new Vector2(pixel.x / CellPixels, pixel.y / CellPixels);
+            return cell.x >= 0f && cell.y >= 0f && cell.x <= Width && cell.y <= Height;
+        }
+
         /// <summary>Builds a grid straight from a walkability mask, for tests and tooling.</summary>
         public static OccupancyGrid FromMask(int width, int height, Bounds worldBounds, bool[] walkable, int cellPixels = 1)
         {
@@ -78,7 +132,8 @@ namespace RobotSNAP.Core.Scenario
             Bounds worldBounds,
             int maxResolution = 400,
             float agentRadius = 0f,
-            float darkThreshold = 0.5f)
+            float darkThreshold = 0.5f,
+            bool keepPixelMask = false)
         {
             if (texture == null || texture.width <= 0 || texture.height <= 0 ||
                 worldBounds.size.x <= 0f || worldBounds.size.z <= 0f)
@@ -114,7 +169,34 @@ namespace RobotSNAP.Core.Scenario
                         darkThreshold);
             }
 
-            var grid = new OccupancyGrid(width, height, cellPixels, worldBounds, walkable);
+            bool[] blockedPixels = null;
+            if (keepPixelMask)
+            {
+                blockedPixels = new bool[texture.width * texture.height];
+                for (int y = 0; y < texture.height; y++)
+                {
+                    for (int x = 0; x < texture.width; x++)
+                    {
+                        blockedPixels[y * texture.width + x] = !IsPixelWalkable(
+                            pixels,
+                            texture.width,
+                            texture.height,
+                            x,
+                            y,
+                            darkThreshold);
+                    }
+                }
+            }
+
+            var grid = new OccupancyGrid(
+                width,
+                height,
+                cellPixels,
+                worldBounds,
+                walkable,
+                blockedPixels,
+                texture.width,
+                texture.height);
             grid.InflateWalls(agentRadius);
             return grid;
         }
@@ -128,7 +210,15 @@ namespace RobotSNAP.Core.Scenario
             if (!IsValid)
                 return null;
 
-            var copy = new OccupancyGrid(Width, Height, CellPixels, WorldBounds, (bool[])_walkable.Clone());
+            var copy = new OccupancyGrid(
+                Width,
+                Height,
+                CellPixels,
+                WorldBounds,
+                (bool[])_walkable.Clone(),
+                _blockedPixels,
+                _pixelWidth,
+                _pixelHeight);
             copy.InflateWalls(agentRadius);
             return copy;
         }
@@ -250,7 +340,10 @@ namespace RobotSNAP.Core.Scenario
 
             float textureWidth = Width * CellPixels;
             float textureHeight = Height * CellPixels;
-            return new Vector2(imageX * textureWidth, (1f - imageY) * textureHeight);
+            // Rows of the grid are counted from the top of the image, like the preview of the editor and like
+            // <see cref="OccupancyMapCoordinates"/>. The vertical flip of Unity's own pixel buffers is already
+            // handled once, when the walkability masks are read out of the texture.
+            return new Vector2(imageX * textureWidth, imageY * textureHeight);
         }
 
         private Vector2 PixelToWorld(float pixelX, float pixelY)
@@ -258,7 +351,7 @@ namespace RobotSNAP.Core.Scenario
             float textureWidth = Width * CellPixels;
             float textureHeight = Height * CellPixels;
             float imageX = pixelX / textureWidth;
-            float imageY = 1f - pixelY / textureHeight;
+            float imageY = pixelY / textureHeight;
             return new Vector2(
                 WorldBounds.max.x - imageX * WorldBounds.size.x,
                 WorldBounds.min.z + imageY * WorldBounds.size.z);

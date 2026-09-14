@@ -32,6 +32,15 @@ namespace RobotSNAP.Agents
         private List<Vector2> _tempPositions = new List<Vector2>();
         private List<Vector2> _tempVelocities = new List<Vector2>();
 
+        // Uniform spatial hash of the active agents: a neighbour query then visits a handful of buckets
+        // instead of every agent of the crowd.
+        private readonly Dictionary<long, List<int>> _buckets = new Dictionary<long, List<int>>();
+        private int _bucketFrame = -1;
+
+        [Header("Neighbour query")]
+        [Tooltip("Side of a spatial-hash cell, in metres. Around the perception radius works best.")]
+        [SerializeField] private float _bucketCellSize = 4f;
+
         // Pour le debug
         [Header("Debug")]
         [SerializeField] private bool _logEvents = false;
@@ -71,6 +80,7 @@ namespace RobotSNAP.Agents
             };
             _idToIndex[id] = _activeCount;
             _activeCount++;
+            InvalidateSpatialIndex();
 
             if (_logEvents) Debug.Log($"[HumanManager] Agent {id} registered at {initialPosition}. Active count: {_activeCount}");
         }
@@ -118,6 +128,7 @@ namespace RobotSNAP.Agents
             }
 
             _idToIndex.Remove(id);
+            InvalidateSpatialIndex();
 
             if (_logEvents) Debug.Log($"[HumanManager] Agent {id} unregistered. Active count: {_activeCount}");
         }
@@ -143,23 +154,81 @@ namespace RobotSNAP.Agents
             outVelocities.Clear();
             outIds?.Clear();
 
+            if (_activeCount == 0)
+                return;
+
+            // The index is rebuilt at most once per frame: agents refresh their position several times per
+            // frame, and rebuilding it on each call would put the quadratic cost straight back.
+            if (_bucketFrame != Time.frameCount)
+                RebuildSpatialIndex();
+
+            float cellSize = Mathf.Max(1f, _bucketCellSize);
             float radiusSqr = radius * radius;
+            int minX = Mathf.FloorToInt((center.x - radius) / cellSize);
+            int maxX = Mathf.FloorToInt((center.x + radius) / cellSize);
+            int minY = Mathf.FloorToInt((center.y - radius) / cellSize);
+            int maxY = Mathf.FloorToInt((center.y + radius) / cellSize);
 
-            for (int i = 0; i < _activeCount; i++)
+            for (int cellX = minX; cellX <= maxX; cellX++)
             {
-                AgentData data = _agents[i];
-                if (data.Id == selfId || !data.Active)
-                    continue;
-
-                float distSqr = (data.Position - center).sqrMagnitude;
-                if (distSqr < radiusSqr && distSqr > 0.0001f) // ignorer soi-même et positions trop proches
+                for (int cellY = minY; cellY <= maxY; cellY++)
                 {
-                    outPositions.Add(data.Position);
-                    outVelocities.Add(data.Velocity);
-                    outIds?.Add(data.Id);
+                    if (!_buckets.TryGetValue(CellKey(cellX, cellY), out List<int> bucket))
+                        continue;
+
+                    for (int entry = 0; entry < bucket.Count; entry++)
+                    {
+                        AgentData data = _agents[bucket[entry]];
+                        if (data.Id == selfId || !data.Active)
+                            continue;
+
+                        float distSqr = (data.Position - center).sqrMagnitude;
+                        if (distSqr >= radiusSqr || distSqr <= 0.0001f)
+                            continue;
+
+                        outPositions.Add(data.Position);
+                        outVelocities.Add(data.Velocity);
+                        outIds?.Add(data.Id);
+                    }
                 }
             }
         }
+
+        /// <summary>
+        /// Rebuilds the buckets from the active agents. Cheap enough to run once per frame and far cheaper than
+        /// the linear scan it replaces once a crowd grows past a few dozen agents.
+        /// </summary>
+        private void RebuildSpatialIndex()
+        {
+            foreach (List<int> bucket in _buckets.Values)
+                bucket.Clear();
+
+            float cellSize = Mathf.Max(1f, _bucketCellSize);
+            for (int index = 0; index < _activeCount; index++)
+            {
+                AgentData data = _agents[index];
+                if (!data.Active)
+                    continue;
+
+                int cellX = Mathf.FloorToInt(data.Position.x / cellSize);
+                int cellY = Mathf.FloorToInt(data.Position.y / cellSize);
+                long key = CellKey(cellX, cellY);
+                if (!_buckets.TryGetValue(key, out List<int> bucket))
+                {
+                    bucket = new List<int>(8);
+                    _buckets[key] = bucket;
+                }
+
+                bucket.Add(index);
+            }
+
+            _bucketFrame = Time.frameCount;
+        }
+
+        private void InvalidateSpatialIndex() => _bucketFrame = -1;
+
+        /// <summary>Key of a cell in the uniform hash: two signed ints packed side by side.</summary>
+        private static long CellKey(int cellX, int cellY) => ((long)cellX << 32) ^ (uint)cellY;
 
         /// <summary>
         /// Vide complètement le manager (tous les agents sont supprimés).

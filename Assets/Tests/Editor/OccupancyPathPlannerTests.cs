@@ -132,6 +132,43 @@ namespace RobotSNAP.Tests.Editor
                 Is.False, "The wall is solid at y = 2.");
         }
 
+        /// <summary>
+        /// A line crossing exactly through the corner shared with an obstacle is not walkable: a plain
+        /// rasterisation skips that cell, which is how a trajectory could still shave a diagonal wall.
+        /// </summary>
+        [Test]
+        public void HasLineOfSight_RefusesToCutACorner()
+        {
+            const int size = 5;
+            var walkable = new bool[size * size];
+            for (int index = 0; index < walkable.Length; index++)
+                walkable[index] = true;
+            walkable[2 * size + 1] = false; // cell (1, 2) is the obstacle
+
+            OccupancyGrid grid = OccupancyGrid.FromMask(
+                size, size, new Bounds(Vector3.zero, new Vector3(size, 0f, size)), walkable);
+
+            Vector2 from = grid.CellCenter(1, 1);
+            Vector2 to = grid.CellCenter(2, 2);
+            Assert.That(grid.IsWorldWalkable(from), Is.True);
+            Assert.That(grid.IsWorldWalkable(to), Is.True);
+
+            Assert.That(
+                OccupancyPathPlanner.HasLineOfSight(grid, from, to),
+                Is.False,
+                "The diagonal grazes the obstacle corner, an agent of any radius would clip it.");
+
+            Assert.That(
+                OccupancyPathPlanner.HasLineOfSight(grid, from, grid.CellCenter(2, 1)),
+                Is.True,
+                "The other diagonal of the same corner stays clear.");
+
+            List<Vector2> path = OccupancyPathPlanner.Plan(grid, from, to);
+            Assert.That(path, Is.Not.Null, "Both cells stay connected through the free neighbour.");
+            foreach (Vector2 point in path)
+                Assert.That(grid.IsWorldWalkable(point), Is.True, $"Path point {point} is not walkable.");
+        }
+
         [Test]
         public void FromMask_RejectsInconsistentInput()
         {
@@ -251,6 +288,47 @@ namespace RobotSNAP.Tests.Editor
                 Is.Null);
         }
 
+        /// <summary>
+        /// The grid has to share the preview convention of the editor and of the environment builder: an
+        /// asymmetric map validated against a mirrored grid sends every point clicked on a corridor into a wall.
+        /// </summary>
+        [Test]
+        public void FromTexture_KeepsTheOrientationOfTheEditorPreview()
+        {
+            const int Pixels = 16;
+            var texture = new Texture2D(Pixels, Pixels, TextureFormat.RGBA32, false);
+            var colors = new Color32[Pixels * Pixels];
+            var open = new Color32(255, 255, 255, 255);
+            var wall = new Color32(0, 0, 0, 255);
+            for (int row = 0; row < Pixels; row++)
+            {
+                // Row 0 of the buffer is the bottom row of the picture: only its top half is open.
+                bool openRow = row >= Pixels / 2;
+                for (int column = 0; column < Pixels; column++)
+                    colors[row * Pixels + column] = openRow ? open : wall;
+            }
+
+            texture.SetPixels32(colors);
+            texture.Apply();
+            var bounds = new Bounds(Vector3.zero, new Vector3(8f, 0f, 8f));
+            OccupancyGrid grid = OccupancyGrid.FromTexture(texture, bounds, Pixels, keepPixelMask: true);
+
+            // Both probe points are expressed with the convention the editor preview and the scene share.
+            Vector2 inTheOpenHalf = OccupancyMapCoordinates.ImageNormalizedToWorld(new Vector2(0.5f, 0.25f), bounds);
+            Vector2 inTheWallHalf = OccupancyMapCoordinates.ImageNormalizedToWorld(new Vector2(0.5f, 0.75f), bounds);
+
+            Assert.That(grid.IsPixelWalkable(inTheOpenHalf), Is.True,
+                "A point of the open half of the picture is walkable.");
+            Assert.That(grid.IsPixelWalkable(inTheWallHalf), Is.False,
+                "A point of the walled half of the picture is not.");
+            Assert.That(grid.IsWorldWalkable(inTheOpenHalf), Is.True,
+                "The coarse grid must agree with the pixels.");
+            Assert.That(grid.IsWorldWalkable(inTheWallHalf), Is.False);
+
+            Assert.That(grid.TryWorldToCell(inTheOpenHalf, out int x, out int y), Is.True);
+            Assert.That(grid.IsWalkable(x, y), Is.True, "The cell of an open point is open too.");
+        }
+
         [Test]
         public void FromTexture_DoesNotSampleAwayAOnePixelWall()
         {
@@ -295,6 +373,50 @@ namespace RobotSNAP.Tests.Editor
 
             // The raw grid itself is untouched: it is the one that validates the authored points.
             Assert.That(raw.IsWalkable(9, 2), Is.True);
+        }
+
+        [Test]
+        public void Plan_WithReusableBuffers_ReturnsTheSamePathAndKeepsThem()
+        {
+            OccupancyGrid grid = BuildRoom(withWall: true);
+            var scratch = new OccupancyPathPlanner.Scratch();
+            Vector2 start = grid.CellCenter(1, 2);
+            Vector2 goal = grid.CellCenter(19, 2);
+
+            List<Vector2> first = OccupancyPathPlanner.Plan(grid, start, goal, scratch);
+            int capacity = scratch.BufferCapacity;
+            List<Vector2> second = OccupancyPathPlanner.Plan(grid, start, goal, scratch);
+            List<Vector2> direct = OccupancyPathPlanner.Plan(grid, start, goal);
+
+            Assert.That(first, Is.Not.Null);
+            Assert.That(second, Is.EqualTo(first), "A repeated plan must not be polluted by the previous search.");
+            Assert.That(direct, Is.EqualTo(first), "The reusable buffers must not change the result.");
+            Assert.That(capacity, Is.GreaterThanOrEqualTo(grid.Width * grid.Height));
+            Assert.That(scratch.BufferCapacity, Is.EqualTo(capacity), "The search buffers are reused, not reallocated.");
+        }
+
+        [Test]
+        public void Plan_WithReusableBuffers_HandlesTwoDifferentSearchesInARow()
+        {
+            OccupancyGrid grid = BuildRoom(withWall: true);
+            var scratch = new OccupancyPathPlanner.Scratch();
+
+            List<Vector2> across = OccupancyPathPlanner.Plan(
+                grid,
+                grid.CellCenter(1, 2),
+                grid.CellCenter(19, 2),
+                scratch);
+            List<Vector2> shortWalk = OccupancyPathPlanner.Plan(
+                grid,
+                grid.CellCenter(1, 18),
+                grid.CellCenter(4, 18),
+                scratch);
+
+            Assert.That(across, Is.Not.Null);
+            Assert.That(shortWalk, Is.Not.Null);
+            Assert.That(shortWalk.Count, Is.EqualTo(2), "The second search is a short clear walk.");
+            Assert.That(shortWalk[0], Is.EqualTo(grid.CellCenter(1, 18)));
+            Assert.That(shortWalk[^1], Is.EqualTo(grid.CellCenter(4, 18)));
         }
     }
 }

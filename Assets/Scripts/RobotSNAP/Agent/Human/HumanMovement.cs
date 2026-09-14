@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using RobotSNAP.Agents.Movement.Controllers;
 using RobotSNAP.Agents.Movement.Interfaces;
 using RobotSNAP.Core;
+using RobotSNAP.Core.Scenario;
 using UnityEngine.AI;
 
 namespace RobotSNAP.Agents
@@ -33,6 +34,20 @@ namespace RobotSNAP.Agents
         private Vector3[] _pathCorners;
         private float _lastPathUpdate;
         private Vector2 _currentGoalPoint;
+
+        // Scenario grid path (see RobotSNAP.Core.Scenario.ScenarioNavigation)
+        private readonly List<Vector2> _plannedPath = new List<Vector2>();
+        private Vector2 _plannedGoal;
+        private bool _scenarioPathInUse;
+
+        /// <summary>Destination move that makes the current path obsolete, in metres.</summary>
+        private const float GoalChangeTolerance = 0.5f;
+
+        /// <summary>How far the agent may drift from its path before it is replanned, in metres.</summary>
+        private const float PathDeviationTolerance = 0.6f;
+
+        /// <summary>Delay before a plan postponed by the frame budget is asked again, in seconds.</summary>
+        private const float DeferredReplanDelay = 0.03f;
 
         // State
         private Vector2 _currentVelocity;
@@ -315,8 +330,55 @@ namespace RobotSNAP.Agents
             if (Time.time - _lastPathUpdate < _config.pathUpdateInterval) return;
             _lastPathUpdate = Time.time;
 
+            Vector2 destination = _avatar.currentDestination;
+
+            // The scenario's walkable grid is the one the editor drew on: when it is loaded, the agents follow
+            // exactly the trajectories the author validated instead of a NavMesh built from the scene.
+            if (ScenarioNavigation.IsAvailable)
+            {
+                // A path that is still valid is not replanned: in a group walking an open corridor, every member
+                // would otherwise run a full grid search five times a second for a one-metre leg.
+                if (CanKeepScenarioPath(destination))
+                {
+                    RefreshScenarioPathEnd(destination);
+                    return;
+                }
+
+                bool planned = ScenarioNavigation.TryPlan(_currentPosition, destination, _plannedPath);
+
+                // The first path of an agent is never postponed: without one it would steer straight through
+                // the walls until the frame budget lets it through.
+                if (!planned && !_scenarioPathInUse)
+                {
+                    List<Vector2> unbudgeted = ScenarioNavigation.Plan(_currentPosition, destination);
+                    if (unbudgeted != null && unbudgeted.Count >= 2)
+                    {
+                        _plannedPath.Clear();
+                        _plannedPath.AddRange(unbudgeted);
+                        planned = true;
+                    }
+                }
+
+                if (planned)
+                {
+                    ApplyPlannedPath(_plannedPath);
+                    _plannedGoal = destination;
+                    _scenarioPathInUse = true;
+                    return;
+                }
+
+                // The frame's search budget is spent: keep the current path and ask again shortly, instead of
+                // making the whole crowd replan in the same frame.
+                if (_scenarioPathInUse && _pathCorners is { Length: >= 2 })
+                {
+                    _lastPathUpdate = Time.time - _config.pathUpdateInterval + DeferredReplanDelay;
+                    return;
+                }
+            }
+
+            _scenarioPathInUse = false;
             Vector3 start3D = new Vector3(_currentPosition.x, 0, _currentPosition.y);
-            Vector3 goal3D = new Vector3(_avatar.currentDestination.x, 0, _avatar.currentDestination.y);
+            Vector3 goal3D = new Vector3(destination.x, 0, destination.y);
 
             if (NavMesh.CalculatePath(start3D, goal3D, NavMesh.AllAreas, _navMeshPath))
             {
@@ -336,11 +398,65 @@ namespace RobotSNAP.Agents
             }
         }
 
+        /// <summary>
+        /// True while the path already computed still leads where the agent is going: its destination has not
+        /// moved by more than <see cref="GoalChangeTolerance"/>, and the agent has not been pushed off the
+        /// polyline by more than <see cref="PathDeviationTolerance"/>.
+        /// </summary>
+        private bool CanKeepScenarioPath(Vector2 destination)
+        {
+            if (!_scenarioPathInUse || _pathCorners is not { Length: >= 2 })
+                return false;
+
+            if ((destination - _plannedGoal).sqrMagnitude > GoalChangeTolerance * GoalChangeTolerance)
+                return false;
+
+            return ScenarioNavigation.IsPathStillValid(_currentPosition, _pathCorners, PathDeviationTolerance);
+        }
+
+        /// <summary>
+        /// Re-anchors a path that is kept: the current position replaces the stale start and the destination
+        /// replaces the last corner, so a slowly moving goal — a formation slot — is followed without paying
+        /// for a search.
+        /// </summary>
+        private void RefreshScenarioPathEnd(Vector2 destination)
+        {
+            Vector2 target = ScenarioNavigation.TryProjectToWalkable(
+                destination,
+                ScenarioNavigation.SnapRadius,
+                out Vector2 walkable)
+                ? walkable
+                : destination;
+
+            _pathCorners[0] = new Vector3(_currentPosition.x, 0f, _currentPosition.y);
+            _pathCorners[^1] = new Vector3(target.x, 0f, target.y);
+            _plannedGoal = destination;
+            UpdateCurrentGoalPoint();
+        }
+
+        /// <summary>Turns a planned polyline into the corner list the steering target is selected from.</summary>
+        private void ApplyPlannedPath(IReadOnlyList<Vector2> planned)
+        {
+            if (_pathCorners == null || _pathCorners.Length != planned.Count)
+                _pathCorners = new Vector3[planned.Count];
+
+            for (int index = 0; index < planned.Count; index++)
+                _pathCorners[index] = new Vector3(planned[index].x, 0f, planned[index].y);
+
+            UpdateCurrentGoalPoint();
+        }
+
         private void UpdateCurrentGoalPoint()
         {
+            // A scenario plan ends on walkable ground, which is not necessarily the authored point: steering
+            // towards the authored goal would push the agent into the wall the planner routed around.
+            Vector2 destination = _scenarioPathInUse && _pathCorners is { Length: > 0 }
+                ? new Vector2(_pathCorners[^1].x, _pathCorners[^1].z)
+                : _avatar.currentDestination;
+
             if (_pathCorners == null || _pathCorners.Length == 0)
             {
-                _currentGoalPoint = _avatar.currentDestination;
+                _currentGoalPoint = destination;
                 return;
             }
 
@@ -350,7 +466,7 @@ namespace RobotSNAP.Agents
                 : 1f;
             _currentGoalPoint = HumanPathTargetSelector.SelectTarget(
                 _currentPosition,
-                _avatar.currentDestination,
+                destination,
                 _pathCorners,
                 waypointAdvanceDistance,
                 destinationReachedDistance);
@@ -425,6 +541,9 @@ namespace RobotSNAP.Agents
             _avatar?.SetVelocity(Vector3.zero);
             _pathCorners = new Vector3[0];
             _currentGoalPoint = Vector2.zero;
+            _plannedPath.Clear();
+            _plannedGoal = Vector2.zero;
+            _scenarioPathInUse = false;
             _neighborPositions.Clear();
             _neighborVelocities.Clear();
             _tempObstacles.Clear();

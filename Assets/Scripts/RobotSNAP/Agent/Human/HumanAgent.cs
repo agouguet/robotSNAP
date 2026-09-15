@@ -51,6 +51,10 @@ namespace RobotSNAP.Agents
         private const float StallSpeedThreshold = 0.08f;
         private const float StallSecondsBeforeAdvance = 10f;
 
+        // Staggered entry: a crowd that steps off the line all at once reads as a block, so each of its agents
+        // may be told to stand still for a moment before it starts walking its route.
+        private float _holdRemaining;
+
         // Formation yielding: a member about to be walked through steps aside, then re-forms.
         private const float YieldDistance = 0.7f;
         private const float YieldHoldSeconds = 0.8f;
@@ -139,6 +143,17 @@ namespace RobotSNAP.Agents
             {
                 if (_animator != null && _animator.speed == 0f)
                     _animator.speed = 1f;
+            }
+
+            // A held agent keeps its route and stands still until its entry delay expires.
+            if (_holdRemaining > 0f)
+            {
+                _holdRemaining -= Time.deltaTime;
+                if (_holdRemaining <= 0f && _followingRoute && _walker.HasCurrent)
+                    SetRouteGoal(_walker.Current);
+
+                UpdateAnimation();
+                return;
             }
 
             // Any member may advance the group; the group keeps that to once per frame.
@@ -247,11 +262,33 @@ namespace RobotSNAP.Agents
             _stalledTime = 0f;
             // A group member never walks a route of its own: the group owns the route.
             _followingRoute = _walker.HasCurrent && !IsGroupMember;
+
+            // A held agent keeps its route but gets no destination yet, and no leftover destination from an
+            // earlier scenario either: it stands still until the hold expires in Update.
+            if (_holdRemaining > 0f && _followingRoute)
+            {
+                hasDestination = false;
+                _hasGoal = false;
+                _currentGoal = Vector3.zero;
+                Stop();
+                return;
+            }
+
             if (_followingRoute)
                 SetRouteGoal(_walker.Current);
             else if (_walker.Points.Count == 0)
                 ClearGoal();
         }
+
+        /// <summary>
+        /// Seconds this agent stands still before it starts walking its route. Used by a crowd so its agents
+        /// enter one after another instead of all leaving their spawn area on the same frame; a value of zero
+        /// makes the agent walk as soon as its route is set.
+        /// </summary>
+        public void SetStartHold(float seconds) => _holdRemaining = Mathf.Max(0f, seconds);
+
+        /// <summary>True while the agent is still waiting for its entry delay to expire.</summary>
+        public bool IsHoldingStart => _holdRemaining > 0f;
 
         private void AdvanceToNextGoal()
         {

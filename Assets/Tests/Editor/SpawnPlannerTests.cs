@@ -9,33 +9,40 @@ namespace RobotSNAP.Tests.Editor
     public sealed class SpawnPlannerTests
     {
         [Test]
-        public void ResolveGroupLayouts_TakesTheFirstExplicitFormationAndSpacing()
+        public void ResolveLayout_ReadsTheFormationSpacingAndParameterOfOneRoute()
         {
-            var humans = new List<HumanScenarioConfig>
+            var config = new HumanScenarioConfig
             {
-                new() { Group = "g1", Spawn = new SpawnConfig { Formation = null, Spacing = 1.2f } },
-                new() { Group = "g1", Spawn = new SpawnConfig { Formation = "wedge", Spacing = 2.4f } },
-                new() { Group = null, Spawn = new SpawnConfig { Formation = "column" } }
+                Spawn = new SpawnConfig
+                {
+                    Formation = "wedge",
+                    Spacing = 2.4f,
+                    FormationParameter = 60f
+                }
             };
 
-            Dictionary<string, SpawnPlanner.GroupLayout> layouts = SpawnPlanner.ResolveGroupLayouts(humans);
+            SpawnPlanner.GroupLayout layout = SpawnPlanner.ResolveLayout(config);
 
-            Assert.That(layouts.Count, Is.EqualTo(1), "Only grouped routes define a layout.");
-            Assert.That(layouts["g1"].HasFormation, Is.True);
-            Assert.That(layouts["g1"].Formation, Is.EqualTo("wedge"));
-            Assert.That(layouts["g1"].Spacing, Is.EqualTo(1.2f).Within(0.001f));
+            Assert.That(layout.HasFormation, Is.True);
+            Assert.That(layout.Formation, Is.EqualTo("wedge"));
+            Assert.That(layout.Spacing, Is.EqualTo(2.4f).Within(0.001f));
+            Assert.That(layout.Parameter, Is.EqualTo(60f).Within(0.001f));
         }
 
         [Test]
-        public void ResolveGroupLayouts_IgnoresAnUngroupedRoute()
+        public void ResolveLayout_WithoutASpawnBlockFallsBackOnTheDefaultSpacing()
         {
-            var humans = new List<HumanScenarioConfig>
-            {
-                new() { Group = "   ", Spawn = new SpawnConfig { Formation = "cluster" } }
-            };
+            SpawnPlanner.GroupLayout bare = SpawnPlanner.ResolveLayout(new HumanScenarioConfig());
 
-            Assert.That(SpawnPlanner.ResolveGroupLayouts(humans), Is.Empty);
-            Assert.That(SpawnPlanner.ResolveGroupLayouts(null), Is.Empty);
+            Assert.That(bare.HasFormation, Is.False);
+            Assert.That(bare.Formation, Is.Null);
+            Assert.That(bare.Spacing, Is.EqualTo(SpawnPlanner.DefaultSpacing).Within(0.001f));
+
+            // A null route cannot happen in a scenario, but the layout is asked for before the config is
+            // validated, so it degrades to the default instead of throwing.
+            Assert.That(
+                SpawnPlanner.ResolveLayout(null).Spacing,
+                Is.EqualTo(SpawnPlanner.DefaultSpacing).Within(0.001f));
         }
 
         [Test]

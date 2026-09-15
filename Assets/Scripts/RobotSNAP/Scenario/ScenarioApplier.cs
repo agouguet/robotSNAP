@@ -44,9 +44,10 @@ namespace RobotSNAP.Core.Scenario
 
         /// <summary>
         /// Random spawn anchors already drawn for the scenario being applied, so a single draw serves every
-        /// agent that shares it: keyed by group id, or by the entry itself when it walks on its own.
+        /// agent of the route that shares it: the whole formation then appears around one point. Keyed by the
+        /// route, which is the walking unit.
         /// </summary>
-        private readonly Dictionary<object, Vector3> _randomAnchors = new();
+        private readonly Dictionary<HumanScenarioConfig, Vector3> _randomAnchors = new();
 
         /// <summary>
         /// Anchors already drawn for the independent agents of one route, so each new draw can keep its
@@ -62,6 +63,18 @@ namespace RobotSNAP.Core.Scenario
 
         /// <summary>How many draws an independent agent gets to find a spot clear of the agents already placed.</summary>
         private const int IndependentDrawAttempts = 12;
+
+        /// <summary>
+        /// Spread of the walking speed of one independent agent around the speed its route authored. Pedestrians
+        /// do not share a pace, and a crowd of agents all walking at exactly 1.2 m/s reads as a marching block.
+        /// </summary>
+        private const float CrowdSpeedSpread = 0.15f;
+
+        /// <summary>Average delay between two entries of a crowd, in seconds.</summary>
+        private const float CrowdEntryGap = 0.6f;
+
+        /// <summary>Longest wait of a held agent, so a huge crowd still starts within a few seconds.</summary>
+        private const float CrowdEntryWindow = 6f;
 
         public ScenarioData CurrentScenario => _currentScenario;
         public bool IsApplying { get; private set; }
@@ -392,12 +405,15 @@ namespace RobotSNAP.Core.Scenario
             yield return null; // let Unity stabilize
 
             // Configure each human according to its YAML definition.
-            // Humans sharing a group id are collected so they can walk together afterwards.
+            //
+            // One route is one walking unit. A route that carries several agents and asks for a shape walks as
+            // a small group, and the route itself is that group: nothing has to declare a shared id any more.
+            // A route in scatter formation is the opposite case — every agent draws its own start inside the
+            // spawn area and its own arrival inside every goal area, and walks there on its own. That is what
+            // turns one entry into a crowd crossing the map instead of one block moving down the middle.
             int humanIndex = 0;
             var groups = new Dictionary<string, HumanGroup>();
             var groupsWithRoute = new HashSet<string>();
-            Dictionary<string, SpawnPlanner.GroupLayout> groupLayouts =
-                SpawnPlanner.ResolveGroupLayouts(_currentScenario.Humans);
             // One draw per spawn unit: a whole formation appears around a single random point, so the anchors
             // are resolved once for this scenario and then reused by every agent sharing them.
             _randomAnchors.Clear();
@@ -405,22 +421,20 @@ namespace RobotSNAP.Core.Scenario
             _independentGoals.Clear();
             foreach (var config in _currentScenario.Humans)
             {
+                // The route id keys the implicit group of this route, so a formation is never shared with
+                // another route by accident. A scatter route has no group at all.
+                string groupId = WalksAsAFormation(config) ? config.Id.Trim() : null;
                 for (int i = 0; i < config.Count && humanIndex < allHumans.Count; i++)
                 {
                     var human = allHumans[humanIndex];
                     if (human != null)
                     {
                         ConfigureHuman(human, config, i, config.Count, poolManager);
-                        if (!string.IsNullOrWhiteSpace(config.Group))
+                        if (groupId != null)
                         {
-                            string groupId = config.Group.Trim();
                             if (!groups.TryGetValue(groupId, out HumanGroup group))
                             {
-                                SpawnPlanner.GroupLayout layout = groupLayouts.TryGetValue(
-                                    groupId,
-                                    out SpawnPlanner.GroupLayout found)
-                                    ? found
-                                    : new SpawnPlanner.GroupLayout(null, SpawnPlanner.DefaultSpacing, hasFormation: false);
+                                SpawnPlanner.GroupLayout layout = SpawnPlanner.ResolveLayout(config);
                                 group = new HumanGroup(
                                     groupId,
                                     layout.Spacing,
@@ -429,12 +443,12 @@ namespace RobotSNAP.Core.Scenario
                                 groups[groupId] = group;
                             }
 
-                            // The group walks one shared route: the first entry of the group defines it, and
+                            // The group walks one shared route: the first agent of the route defines it, and
                             // every member holds a slot around its reference point instead of walking alone.
                             if (groupsWithRoute.Add(groupId))
                             {
                                 group.SetRoute(
-                                    PlanGroupRoute(human, groupId),
+                                    PlanFormationRoute(human, groupId),
                                     config.Speed,
                                     HumanEndBehaviorParser.Parse(config.EndBehavior));
                             }
@@ -465,15 +479,17 @@ namespace RobotSNAP.Core.Scenario
             }
 
             if (_logEvents)
-                Debug.Log($"[ScenarioApplier] Configured {humanIndex} humans across {groups.Count} group(s)");
+                Debug.Log($"[ScenarioApplier] Configured {humanIndex} humans across " +
+                          $"{groups.Count} formation route(s)");
         }
 
         /// <summary>
-        /// Shared route of a group, planned on the walkable grid of the scenario with the very planner the
+        /// Shared route of a formation, planned on the walkable grid of the scenario with the very planner the
         /// editor drew it with: the group walks around walls instead of through them, and it walks exactly the
-        /// polyline the author validated.
+        /// polyline the author validated. One route is one formation, so <paramref name="routeId"/> only names
+        /// the route in the warnings.
         /// </summary>
-        private List<Vector2> PlanGroupRoute(HumanAgent human, string groupId)
+        private List<Vector2> PlanFormationRoute(HumanAgent human, string routeId)
         {
             var authored = new List<Vector2>(human.RoutePoints.Count);
             foreach (Vector3 point in human.RoutePoints)
@@ -483,7 +499,7 @@ namespace RobotSNAP.Core.Scenario
             if (fallbackSegments > 0)
             {
                 Debug.LogWarning(
-                    $"[ScenarioApplier] Group '{groupId}': {fallbackSegments} leg(s) of the route could not be " +
+                    $"[ScenarioApplier] Route '{routeId}': {fallbackSegments} leg(s) of the route could not be " +
                     "planned on the walkable grid and are walked in a straight line. " +
                     "Check the route points and the occupancy image of the scenario.");
             }
@@ -559,9 +575,18 @@ namespace RobotSNAP.Core.Scenario
             // --- Ordered route: the spawn point first, then every goal until the last one ---
             var goals = new List<Vector3>();
             bool independent = IsIndependentRoute(config);
-            float arrivalSpacing = independent
-                ? SpawnPlanner.ClampSpacing(config.Spawn.Spacing, config.Spawn.Formation)
-                : 0f;
+            float arrivalSpacing = independent ? IndependentSpacing(config, total) : 0f;
+
+            // A crowd is not a block: every independent agent gets its own walking speed and its own entry
+            // delay, so the flow spreads out instead of stepping off the line as a single rank. Agents that
+            // walk in formation keep exactly the speed the scenario authored, or they would pull the shape
+            // apart.
+            float speedFactor = independent ? CrowdSpeedVariation() : 1f;
+            float entryHold = independent ? CrowdEntryHold(total) : 0f;
+
+            // The hold has to be set before the route, or the agent would start walking on the frame it is
+            // configured and only stop later.
+            human.SetStartHold(entryHold);
             if (IsSpatialGoal(config.Goal))
             {
                 // A random goal is resolved per agent: the members of a route each draw their own destination
@@ -601,7 +626,7 @@ namespace RobotSNAP.Core.Scenario
             // --- Basic Parameters ---
             // Speed and controller both live in the HumanConfig the controllers read, so they are applied
             // together: writing BaseAgent.desiredSpeed alone left the editor's Speed value without effect.
-            human.ApplyScenarioMovement(config.Speed, config.MovementController?.Type);
+            human.ApplyScenarioMovement(config.Speed * speedFactor, config.MovementController?.Type);
 
             // --- Color ---
             if (config.Color != null && config.Color.Length >= 3)
@@ -618,24 +643,22 @@ namespace RobotSNAP.Core.Scenario
         // ==========================================
 
         /// <summary>
-        /// Spawn policy, evaluated per human config.
+        /// Spawn policy, evaluated per agent of a human config.
         ///
-        /// <para><b>Grouped route</b> — every member takes the same anchor, snapped onto walkable ground.
-        /// The cluster is not spread here: <see cref="HumanGroup.PlaceMembersAtSpawn"/> lays the members
-        /// out on their formation slots around the leader once the whole group exists, so a group always
-        /// appears as one compact bloc.</para>
-        ///
-        /// <para><b>Ungrouped route with several agents</b> — the anchor is snapped onto walkable ground and
-        /// the agents are placed on formation slots around it, each projection bounded to half a spacing
-        /// so nobody is pushed into the next room by the projection.</para>
+        /// <para><b>Formation route</b> — everybody takes the same anchor, snapped onto walkable ground. The
+        /// agents of a route that walks as a group are not spread here either:
+        /// <see cref="HumanGroup.PlaceMembersAtSpawn"/> lays them out on their slots once the whole group
+        /// exists, so a group always appears as one compact bloc. The other agents of a route that stays on
+        /// formation slots are placed around the same anchor, each projection bounded to half a spacing so
+        /// nobody is pushed into the next room by it.</para>
         ///
         /// <para><b>Random spawn</b> — a point drawn inside the zone, on navigable ground. The draw feeds the
-        /// anchor, so a group, or the formation of a single entry, appears around one random point instead of
-        /// scattering its members over one draw each.</para>
+        /// anchor, so a formation appears around one random point instead of scattering its members over one
+        /// draw each.</para>
         ///
-        /// <para><b>Independent agents</b> — the route asks for no formation, so there is no shared anchor to
-        /// place anyone around: every agent draws its own point in the zone, kept apart from the agents this
-        /// route has already placed. That is what turns one entry into a crowd crossing the map.</para>
+        /// <para><b>Independent agents</b> — the route asks for no shape, so there is no shared anchor to place
+        /// anyone around: every agent draws its own point in the zone, kept apart from the agents this route has
+        /// already placed. That is what turns one entry into a crowd crossing the map.</para>
         /// </summary>
         private Vector3 ResolveSpawnPosition(
             HumanScenarioConfig config,
@@ -647,15 +670,13 @@ namespace RobotSNAP.Core.Scenario
             if (spawn == null)
                 return Vector3.zero;
 
-            // A group keeps its shared anchor: its members walk together, so scattering them would only fight
-            // the formation the group is about to lay out. Independent agents are the ones without a group.
-            if (string.IsNullOrWhiteSpace(config.Group) && GroupFormation.IsScatter(spawn.Formation))
+            // A scatter route asks for no shape at all: every agent draws its own point in the area, kept clear
+            // of the agents this route has already placed. That is what turns one entry into a crowd.
+            if (GroupFormation.IsScatter(spawn.Formation))
                 return SpawnPlanner.PlaceAnchor(DrawIndependentAnchor(config, spawn));
 
-            // Group members share the leader's anchor; the formation is applied after the whole group is built.
-            if (!string.IsNullOrWhiteSpace(config.Group))
-                return SpawnPlanner.PlaceAnchor(ResolveSharedAnchor(config, spawn));
-
+            // Everybody else shares one anchor: the whole formation appears around a single point, which is
+            // either a member of a group laid out once the group exists, or one agent of this entry below.
             Vector3 anchor = SpawnPlanner.PlaceAnchor(ResolveSharedAnchor(config, spawn));
             if (total <= 1)
                 return anchor;
@@ -672,9 +693,9 @@ namespace RobotSNAP.Core.Scenario
         }
 
         /// <summary>
-        /// One independent agent's own spawn point. The draw is kept at least one spacing away from the agents
-        /// this route already placed, so a crowd does not appear on top of itself; when the zone is too tight to
-        /// honour that, the last draw is kept rather than refusing to place the agent.
+        /// One independent agent's own spawn point. The draw is kept away from the agents this route already
+        /// placed, so a crowd does not appear on top of itself; when the zone is too tight to honour the
+        /// requested spacing, the last draw is kept rather than refusing to place the agent.
         /// </summary>
         private Vector3 DrawIndependentAnchor(HumanScenarioConfig config, SpawnConfig spawn)
         {
@@ -684,7 +705,7 @@ namespace RobotSNAP.Core.Scenario
                 _independentAnchors[config] = placed;
             }
 
-            float minDistance = SpawnPlanner.ClampSpacing(spawn.Spacing, spawn.Formation);
+            float minDistance = IndependentSpacing(config, Mathf.Max(1, config.Count));
             Vector3 drawn = DrawSpawnAnchor(spawn);
             for (int attempt = 1; attempt < IndependentDrawAttempts; attempt++)
             {
@@ -713,22 +734,61 @@ namespace RobotSNAP.Core.Scenario
 
         /// <summary>
         /// Anchor of a spawn definition, drawn once and remembered for the whole formation that shares it: the
-        /// members of a group, or the agents one entry places on formation slots. A random zone is therefore
-        /// sampled once, not once per agent, and the members keep their relative positions around that point.
+        /// agents one entry places on formation slots around it. A random zone is therefore sampled once, not
+        /// once per agent, and the members keep their relative positions around that point.
         /// </summary>
         private Vector3 ResolveSharedAnchor(HumanScenarioConfig config, SpawnConfig spawn)
         {
             if (!IsRandomSpawn(spawn))
                 return ResolveSpawnAnchor(spawn);
 
-            object key = string.IsNullOrWhiteSpace(config.Group) ? (object)config : config.Group.Trim();
-            if (_randomAnchors.TryGetValue(key, out Vector3 drawn))
+            if (_randomAnchors.TryGetValue(config, out Vector3 drawn))
                 return drawn;
 
             drawn = DrawSpawnAnchor(spawn);
-            _randomAnchors[key] = drawn;
+            _randomAnchors[config] = drawn;
             return drawn;
         }
+
+        /// <summary>
+        /// Minimum distance kept between the independent agents of one route. The authored spacing is honoured
+        /// when the area can hold it; below that, the area wins, because a crowd that cannot stay three metres
+        /// apart would otherwise stack every agent on the last accepted draw instead of filling its zone.
+        /// </summary>
+        private float IndependentSpacing(HumanScenarioConfig config, int count)
+        {
+            float requested = SpawnPlanner.ClampSpacing(
+                config.Spawn?.Spacing ?? SpawnPlanner.DefaultSpacing,
+                config.Spawn?.Formation);
+
+            if (count <= 1)
+                return requested;
+
+            Bounds bounds = ResolveBoundsFromSpawn(config.Spawn);
+            float area = Mathf.Max(0f, bounds.size.x) * Mathf.Max(0f, bounds.size.z);
+            if (area <= 0.01f)
+                return requested;
+
+            // A square lattice holding every agent of the route: the tighter of the two rules keeps the crowd
+            // apart without ever refusing to place the last agents.
+            float packing = Mathf.Sqrt(area / count);
+            return Mathf.Max(SpawnPlanner.MinSpacing, Mathf.Min(requested, packing));
+        }
+
+        /// <summary>
+        /// Walking speed of one independent agent, as a factor of the speed its route authored. Drawn from
+        /// <c>UnityEngine.Random</c>, which the simulation seeded, so a run stays reproducible.
+        /// </summary>
+        private static float CrowdSpeedVariation() =>
+            1f + UnityEngine.Random.Range(-CrowdSpeedSpread, CrowdSpeedSpread);
+
+        /// <summary>
+        /// Entry delay of one independent agent. A crowd enters over a short window instead of stepping off the
+        /// line as one rank, and the window follows the size of the crowd so the wait stays bounded however many
+        /// agents the route carries.
+        /// </summary>
+        private static float CrowdEntryHold(int count) =>
+            UnityEngine.Random.Range(0f, Mathf.Min(CrowdEntryWindow, Mathf.Max(1f, count * CrowdEntryGap)));
 
         private static bool IsRandomSpawn(SpawnConfig spawn)
         {
@@ -877,15 +937,33 @@ namespace RobotSNAP.Core.Scenario
         }
 
         /// <summary>
-        /// True when the agents of this route are on their own: no group to walk in, and a formation that
-        /// spreads them instead of holding a shape. Crowds are authored this way.
+        /// True when the agents of this route are on their own: a formation that spreads them instead of
+        /// holding a shape. Crowds are authored this way, and every agent then draws its own start and its own
+        /// arrival. No group id is involved: the route itself is the walking unit.
         /// </summary>
         private static bool IsIndependentRoute(HumanScenarioConfig config)
         {
             return config != null &&
-                   string.IsNullOrWhiteSpace(config.Group) &&
                    config.Spawn != null &&
                    GroupFormation.IsScatter(config.Spawn.Formation);
+        }
+
+        /// <summary>
+        /// True when the agents of this route walk together, as one small group holding a shape.
+        ///
+        /// A route of one agent walks alone by definition, and a route in scatter formation is a crowd whose
+        /// agents each own their start and their arrival. Everything else — several agents and a shape — walks
+        /// as a group keyed on the route itself, so no group id ever has to be written by hand. A route whose
+        /// goal is not spatial (wander, follow, stay) is left out as well: it has no polyline to walk in
+        /// formation, so its agents keep their own goal.
+        /// </summary>
+        private static bool WalksAsAFormation(HumanScenarioConfig config)
+        {
+            return config != null &&
+                   !string.IsNullOrWhiteSpace(config.Id) &&
+                   config.Count > 1 &&
+                   IsSpatialGoal(config.Goal) &&
+                   !GroupFormation.IsScatter(config.Spawn?.Formation);
         }
 
         /// <summary>

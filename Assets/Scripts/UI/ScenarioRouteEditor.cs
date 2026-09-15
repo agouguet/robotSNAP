@@ -1112,8 +1112,6 @@ public sealed class ScenarioRouteEditor
         }
         scenario.Robot.WaypointRefs = waypointRefs.Count > 0 ? waypointRefs : null;
 
-        NormalizeGroupLayouts();
-
         var humanConfigs = new List<HumanScenarioConfig>();
         int humanIndex = 1;
         foreach (RouteDraft draft in _routes.Where(route => !route.IsRobot && route.Count > 0))
@@ -1123,7 +1121,8 @@ public sealed class ScenarioRouteEditor
             config.Count = draft.Count;
             config.Speed = draft.Speed;
             config.EndBehavior = HumanEndBehaviorParser.ToYamlValue(draft.EndBehavior);
-            config.Group = string.IsNullOrWhiteSpace(draft.Group) ? null : draft.Group.Trim();
+            // Grouping is carried by the route formation now, so the editor never writes a group id back.
+            config.Group = null;
             config.Spawn ??= new SpawnConfig();
             config.Spawn.Formation = string.IsNullOrWhiteSpace(draft.Formation) ? "pair" : draft.Formation.Trim().ToLowerInvariant();
             config.Spawn.Spacing = Mathf.Clamp(
@@ -1174,33 +1173,6 @@ public sealed class ScenarioRouteEditor
         HashSet<string> activeRouteReferences = CollectRouteReferences(scenario);
         foreach (string staleReference in previousRouteReferences.Except(activeRouteReferences))
             scenario.Points.Remove(staleReference);
-    }
-
-    /// <summary>
-    /// Writes one formation and one spacing per group: the first route of a group defines the layout
-    /// and every other route of the same group is aligned on it before the YAML is emitted.
-    /// </summary>
-    private void NormalizeGroupLayouts()
-    {
-        var layouts = new Dictionary<string, RouteDraft>(StringComparer.OrdinalIgnoreCase);
-        foreach (RouteDraft route in _routes.Where(route => !route.IsRobot && route.Count > 0))
-        {
-            string groupId = route.Group?.Trim();
-            if (string.IsNullOrEmpty(groupId))
-                continue;
-
-            if (layouts.TryGetValue(groupId, out RouteDraft reference))
-            {
-                route.Formation = reference.Formation;
-                route.GroupSpacing = reference.GroupSpacing;
-                route.FormationParameter = reference.FormationParameter;
-                route.MovementController = reference.MovementController;
-            }
-            else
-            {
-                layouts[groupId] = route;
-            }
-        }
     }
 
     private void AddHumanRoute()
@@ -2931,7 +2903,9 @@ public sealed class ScenarioRouteEditor
             Count = Mathf.Max(0, human.Count),
             Speed = Mathf.Max(0.01f, human.Speed),
             EndBehavior = HumanEndBehaviorParser.Parse(human.EndBehavior),
-            Group = human.Group,
+            // A group id inherited from an older YAML has no representation in the editor any more,
+            // so it is dropped here instead of being carried over and silently re-emitted.
+            Group = null,
             MovementController = human.MovementController?.Type,
             Formation = string.IsNullOrWhiteSpace(human.Spawn?.Formation) ? "pair" : human.Spawn.Formation.Trim().ToLowerInvariant(),
             GroupSpacing = human.Spawn != null ? Mathf.Max(0.4f, human.Spawn.Spacing) : 1.5f,

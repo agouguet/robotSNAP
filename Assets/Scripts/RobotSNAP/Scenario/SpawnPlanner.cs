@@ -57,48 +57,21 @@ namespace RobotSNAP.Core.Scenario
         }
 
         /// <summary>
-        /// Resolves one layout per group id. The first config that sets a formation or a spacing wins,
-        /// so hand-written YAML stays valid even when only one entry of the group carries the layout.
+        /// Layout of one route: its own formation, spacing and shape parameter.
+        ///
+        /// A route is the walking unit, so nothing is shared with another route any more — the group a route
+        /// walks as is keyed on the route itself, and this is where its shape comes from.
         /// </summary>
-        public static Dictionary<string, GroupLayout> ResolveGroupLayouts(IEnumerable<HumanScenarioConfig> humans)
+        public static GroupLayout ResolveLayout(HumanScenarioConfig config)
         {
-            var layouts = new Dictionary<string, GroupLayout>();
-            if (humans == null)
-                return layouts;
-
-            foreach (HumanScenarioConfig config in humans)
-            {
-                if (config == null || string.IsNullOrWhiteSpace(config.Group))
-                    continue;
-
-                string id = config.Group.Trim();
-                if (!layouts.TryGetValue(id, out GroupLayout layout))
-                    layout = new GroupLayout(null, DefaultSpacing, hasFormation: false, hasSpacing: false);
-
-                string formation = layout.Formation;
-                bool hasFormation = layout.HasFormation;
-                float parameter = layout.Parameter;
-                if (!hasFormation && !string.IsNullOrWhiteSpace(config.Spawn?.Formation))
-                {
-                    formation = config.Spawn.Formation;
-                    hasFormation = true;
-                }
-
-                if (parameter <= 0f && config.Spawn != null && config.Spawn.FormationParameter > 0f)
-                    parameter = config.Spawn.FormationParameter;
-
-                float spacing = layout.Spacing;
-                bool hasSpacing = layout.HasSpacing;
-                if (!hasSpacing && config.Spawn != null)
-                {
-                    spacing = config.Spawn.Spacing;
-                    hasSpacing = true;
-                }
-
-                layouts[id] = new GroupLayout(formation, spacing, hasFormation, hasSpacing, parameter);
-            }
-
-            return layouts;
+            SpawnConfig spawn = config?.Spawn;
+            bool hasFormation = !string.IsNullOrWhiteSpace(spawn?.Formation);
+            return new GroupLayout(
+                hasFormation ? spawn.Formation : null,
+                spawn?.Spacing ?? DefaultSpacing,
+                hasFormation,
+                hasSpacing: spawn != null,
+                parameter: spawn?.FormationParameter ?? 0f);
         }
 
         /// <summary>

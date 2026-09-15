@@ -167,7 +167,7 @@
                             </ui:VisualElement>
                         </ui:VisualElement>
                         <ui:VisualElement class="editor-section">
-                            <ui:Button name="SectionGroupHeader" text="Group and formation" class="editor-section-header"/>
+                            <ui:Button name="SectionGroupHeader" text="Formation and spacing" class="editor-section-header"/>
                             <ui:VisualElement name="SectionGroupContent" class="editor-section-content">
                                 <ui:VisualElement class="creation-field">
                                     <ui:Label text="Formation" class="creation-field-label"/>

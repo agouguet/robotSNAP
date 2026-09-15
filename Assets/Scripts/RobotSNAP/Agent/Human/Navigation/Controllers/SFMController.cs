@@ -33,8 +33,11 @@ namespace RobotSNAP.Agents.Movement.Controllers
         private float _obstacleForceStrength;
         private float _obstacleForceDistance;
 
-        // Overtaking: anticipatory, reciprocal avoidance of the agents in front
-        private float _overtakingStrength;
+        // Overtaking: anticipatory, reciprocal avoidance of the agents in front.
+        // These are accelerations in m/s², not forces. They used to be divided by the agent mass, which left
+        // them two orders of magnitude below the goal force — the anticipation was inert, so agents only
+        // reacted once the short-range repulsion bit, i.e. when they were already touching.
+        private float _anticipationAcceleration;
         private float _anticipationHorizon;
         private float _anticipationMargin;
 
@@ -52,7 +55,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
         private float _robotForceDistance;
         private float _robotDampeningMin;
         private float _robotDampeningMax;
-        private float _robotAnticipationStrength;
+        private float _robotAnticipationAcceleration;
 
         /// <summary>
         /// Range in which the robot is anticipated, well outside <c>robotPerceptionRadius</c>: the robot covers
@@ -63,6 +66,25 @@ namespace RobotSNAP.Agents.Movement.Controllers
         // Numerical stability
         private const float MAX_ACCELERATION = 20f;
         private const float ANISOTROPIC_FACTOR = 0.5f;
+
+        /// <summary>Default lateral acceleration of an anticipated pedestrian conflict, in m/s².</summary>
+        private const float DefaultAnticipationAcceleration = 3f;
+
+        /// <summary>
+        /// Lateral acceleration of an anticipated conflict with the robot, in m/s². Higher than between
+        /// pedestrians: the robot is heavier, closes faster, and cannot dodge.
+        /// </summary>
+        private const float DefaultRobotAnticipationAcceleration = 3.5f;
+
+        /// <summary>Range of the alignment term, in metres.</summary>
+        private const float AlignmentRange = 2f;
+
+        /// <summary>
+        /// How fast a closing move may eat the gap left between two bodies, in seconds. The non-penetration
+        /// clamp uses it, so a body always keeps the right to move but never into the space of a neighbour
+        /// faster than the gap allows over this horizon.
+        /// </summary>
+        private const float ContactGuardSeconds = 0.4f;
 
         public SFMController(HumanConfig config, HumanAgent avatar)
         {
@@ -85,7 +107,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
             _obstacleForceDistance = config.obstacleForceDistance;
 
             // Overtaking parameters (use defaults if not present in config)
-            _overtakingStrength = 2.4f;                                        // can be made configurable
+            _anticipationAcceleration = DefaultAnticipationAcceleration;
             _anticipationHorizon = HumanAvoidance.DefaultHorizon;              // seconds
             _anticipationMargin = HumanAvoidance.DefaultMargin;                // metres
 
@@ -101,7 +123,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
             _robotDampeningMin = config.robotRepulsionDampeningMin;
             _robotDampeningMax = config.robotRepulsionDampeningMax;
             // A robot is heavier and closes faster than a pedestrian: humans give way to it earlier and harder.
-            _robotAnticipationStrength = 3.6f;
+            _robotAnticipationAcceleration = DefaultRobotAnticipationAcceleration;
         }
 
         public Vector2 ComputeVelocity(
@@ -192,13 +214,19 @@ namespace RobotSNAP.Agents.Movement.Controllers
                 if (prediction.IsConflict)
                 {
                     Vector2 rightDir = HumanAvoidance.RightOf(desiredDir);
-                    socialAccel += rightDir * (prediction.Side * _overtakingStrength * prediction.Urgency) / _mass;
+                    socialAccel += rightDir * (prediction.Side * _anticipationAcceleration * prediction.Urgency);
                 }
 
                 // ---- Alignment ----
-                float alignmentWeight = Mathf.Exp(-distance / _perceptionRadius);
-                Vector2 velDiff = neighborVel - currentVelocity;
-                alignmentAccel += alignmentWeight * velDiff * _alignmentStrength / _mass;
+                // Only with neighbours already walking roughly the same way: aligning on the mean velocity of
+                // everybody in sight would drag an agent backwards in front of an oncoming flow.
+                if (neighborVel.sqrMagnitude > 0.01f &&
+                    Vector2.Dot(neighborVel.normalized, desiredDir) > 0.5f)
+                {
+                    float alignmentWeight = Mathf.Exp(-distance / AlignmentRange);
+                    alignmentAccel += (neighborVel - currentVelocity) *
+                                      (_alignmentStrength * alignmentWeight);
+                }
 
                 // ---- Contact forces (when overlapping) ----
                 float overlap = _agentRadius * 2f - distance;
@@ -264,8 +292,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
                     {
                         // Step out of the path the robot is about to drive through, and do it early.
                         robotAccel += HumanAvoidance.RightOf(desiredDir) *
-                                      (prediction.Side * _robotAnticipationStrength * prediction.Urgency) /
-                                      _mass;
+                                      (prediction.Side * _robotAnticipationAcceleration * prediction.Urgency);
                     }
 
                     if (distance < _robotPerceptionRadius)
@@ -324,6 +351,26 @@ namespace RobotSNAP.Agents.Movement.Controllers
 
             // ---- 6. Integration ----
             Vector2 newVelocity = currentVelocity + totalAccel * deltaTime;
+
+            // ---- 7. Non-penetration clamp ----
+            // The forces above are soft, so a dense crowd can outvote them and two agents pressing towards
+            // each other end up sharing the same space. The last word goes to geometry: a closing speed that
+            // would eat the remaining gap within ContactGuardSeconds is removed. The agent slows down behind
+            // the person it cannot pass instead of walking through them, and it can always move away.
+            float guardRange = _agentRadius * 2f + _anticipationMargin;
+            for (int i = 0; i < count; i++)
+            {
+                Vector2 offset = neighbors[i] - currentPosition;
+                float distance = offset.magnitude;
+                if (distance <= 0.001f || distance > guardRange)
+                    continue;
+
+                Vector2 direction = offset / distance;
+                float allowedClosing = Mathf.Max(0f, distance - _agentRadius * 2f) / ContactGuardSeconds;
+                float closing = Vector2.Dot(newVelocity - neighborVelocities[i], direction);
+                if (closing > allowedClosing)
+                    newVelocity -= direction * (closing - allowedClosing);
+            }
 
             // Clamp speed
             float speed = newVelocity.magnitude;

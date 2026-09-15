@@ -20,11 +20,18 @@ namespace RobotSNAP.Agents
         /// <summary>How far ahead a conflict is anticipated, in seconds.</summary>
         public const float DefaultHorizon = 3f;
 
-        /// <summary>Clearance kept on top of the two body radii, in metres.</summary>
+        /// <summary>
+        /// Clearance kept on top of the two body radii, in metres. Pedestrians hold more than a body width
+        /// between them: the bodies alone are the physical limit, not the distance people walk at.
+        /// </summary>
         public const float DefaultMargin = 0.3f;
 
-        /// <summary>Predicted gap under which a conflict is worth steering for, in metres.</summary>
-        public const float ConflictGap = 0.45f;
+        /// <summary>
+        /// Predicted gap under which a conflict is worth steering for, in metres, measured from the personal
+        /// space rather than from the bodies. Together with <see cref="DefaultMargin"/> it fixes the distance
+        /// at which two agents start choosing a side: 1.2 m centre to centre for the shipped body radius.
+        /// </summary>
+        public const float ConflictGap = 0.3f;
 
         /// <summary>
         /// Under this lateral distance between the two predicted positions the encounter counts as head-on,
@@ -86,20 +93,29 @@ namespace RobotSNAP.Agents
 
             float time = 0f;
             float closest = offset.magnitude;
+            bool closing = false;
             if (relative.sqrMagnitude > 0.000001f)
             {
                 float approach = -Vector2.Dot(offset, relative) / relative.sqrMagnitude;
                 if (approach > 0f)
+                {
                     time = approach;
 
-                float sample = Mathf.Min(time, Mathf.Max(0f, horizon));
-                closest = (offset + relative * sample).magnitude;
+                    float sample = Mathf.Min(time, Mathf.Max(0f, horizon));
+                    closest = (offset + relative * sample).magnitude;
+                    closing = true;
+                }
             }
+
+            // A neighbour walking away, or at the very same pace, is not on a collision course: the two
+            // trajectories never get closer than they are now, so there is nothing to step aside for.
+            if (!closing)
+                return Prediction.None;
 
             if (time > horizon)
                 return Prediction.None;
 
-            float gap = closest - radiusSum;
+            float gap = closest - gapAllowed;
             if (gap > ConflictGap)
                 return Prediction.None;
 

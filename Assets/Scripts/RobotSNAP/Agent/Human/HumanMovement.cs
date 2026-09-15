@@ -129,19 +129,24 @@ namespace RobotSNAP.Agents
             CapsuleCollider collider = GetComponent<CapsuleCollider>();
             if (collider == null) collider = gameObject.AddComponent<CapsuleCollider>();
 
+            // The body the social forces keep apart is the one physics has to resolve. A capsule narrower than
+            // the configured radius lets two agents stand inside each other: the model believes they are
+            // touching while the solver still sees daylight between them.
+            float radius = _config != null ? Mathf.Max(0.05f, _config.agentRadius) : 0.25f;
+
             var renderer = GetComponentInChildren<SkinnedMeshRenderer>();
             if (renderer != null)
             {
                 var bounds = renderer.bounds;
                 float height = bounds.extents.y * 2;
-                collider.radius = 0.25f;
-                collider.height = height;
+                collider.radius = radius;
+                collider.height = Mathf.Max(height, radius * 2f);
                 collider.center = Vector3.up * height / 1.95f;
             }
             else
             {
-                collider.radius = 0.25f;
-                collider.height = 1.7f;
+                collider.radius = radius;
+                collider.height = Mathf.Max(1.7f, radius * 2f);
                 collider.center = Vector3.up * 0.85f;
             }
         }
@@ -150,6 +155,8 @@ namespace RobotSNAP.Agents
         {
             _avatar = avatar;
             _config = config;
+            // The capsule radius comes from the configuration, which only exists from here on.
+            SetupCollider();
             _agentId = avatar.agentId;
             _currentControllerType = config.controllerType;
             _warnedAboutExternalCommand = false;

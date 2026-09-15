@@ -125,14 +125,6 @@ public sealed class ScenarioRouteEditor
         public FloatField SizeZ;
     }
 
-    /// <summary>Which area the next two map clicks are drawing.</summary>
-    private enum ZonePickTarget
-    {
-        None,
-        Spawn,
-        Point
-    }
-
     private static readonly Color RobotColor = new(0.22f, 0.78f, 0.45f);
     private static readonly Color[] HumanColors =
     {
@@ -169,62 +161,37 @@ public sealed class ScenarioRouteEditor
         "Cluster"
     };
 
-    /// <summary>How the route appears: on its authored start point, or anywhere inside an area.</summary>
-    private const string SpawnModePointChoice = "Authored start point";
-    private const string SpawnModeRandomChoice = "Random in zone";
-
-    private static readonly string[] SpawnModeChoices =
-    {
-        SpawnModePointChoice,
-        SpawnModeRandomChoice
-    };
-
-    /// <summary>
-    /// Group ids are allocated by the editor, so the dropdown offers the groups that exist and one way to make
-    /// a new one; nobody has to invent an identifier by hand.
-    /// </summary>
-    private const string NoGroupChoice = "No group";
-    private const string NewGroupChoice = "New group...";
-
     private readonly List<RouteDraft> _routes = new();
     private readonly List<EditorSnapshot> _undoStack = new();
     private readonly List<EditorSnapshot> _redoStack = new();
     private readonly List<VisualElement> _pointRows = new();
     private readonly Dictionary<int, CoordinateFields> _pointFields = new();
+    /// <summary>The four area fields of the points that are areas, keyed by point index (0 is the start).</summary>
+    private readonly Dictionary<int, ZoneFields> _pointZoneFields = new();
+    /// <summary>The size badge of the points that are areas, so typing a number updates it live.</summary>
+    private readonly Dictionary<int, Label> _pointAreaLabels = new();
     private readonly VisualElement _routeList;
     private readonly Button _addHumanRouteButton;
     private readonly Button _removeHumanRouteButton;
     private readonly Button _setRouteStartButton;
     private readonly Button _addRouteObjectiveButton;
     private readonly Button _toggleMapGridButton;
-    private readonly VisualElement _robotRouteSettings;
     private readonly VisualElement _humanRouteSettings;
     private readonly IntegerField _humanCountField;
     private readonly FloatField _humanSpeedField;
     private readonly DropdownField _endBehaviorDropdown;
-    private readonly DropdownField _groupDropdown;
     private readonly DropdownField _movementControllerDropdown;
     private readonly DropdownField _formationDropdown;
     private readonly FloatField _groupSpacingField;
     private readonly FloatField _formationParameterField;
     private readonly Label _formationParameterLabel;
     private readonly Label _formationPreviewLabel;
-    private readonly Button _sectionPlacementHeader;
+    private readonly Button _sectionGlobalHeader;
     private readonly Button _sectionGroupHeader;
     private readonly Button _sectionBehaviourHeader;
-    private readonly VisualElement _sectionPlacementContent;
+    private readonly VisualElement _sectionGlobalContent;
     private readonly VisualElement _sectionGroupContent;
     private readonly VisualElement _sectionBehaviourContent;
-    private readonly DropdownField _spawnModeDropdown;
-    private readonly VisualElement _spawnZonePanel;
-    private readonly Label _spawnZoneHint;
-    private readonly Button _drawSpawnZoneButton;
-    private readonly ZoneFields _spawnZoneFields = new();
-    private readonly Toggle _goalZoneToggle;
-    private readonly VisualElement _goalZonePanel;
-    private readonly Label _goalZoneHint;
-    private readonly Button _drawGoalZoneButton;
-    private readonly ZoneFields _goalZoneFields = new();
     private readonly VisualElement _routePointsContainer;
     private readonly VisualElement _canvas;
     private readonly Image _mapImage;
@@ -238,7 +205,6 @@ public sealed class ScenarioRouteEditor
     private readonly VisualElement _pointLabelLayer;
     private readonly List<OccupancyMapRouteOverlay.FormationPreview> _formationPreviews = new();
     private readonly List<OccupancyMapRouteOverlay.ZoneVisual> _zoneVisuals = new();
-    private readonly List<string> _groupChoiceCache = new();
     private readonly Dictionary<int, PlannedGeometry> _plannedGeometry = new();
 
     private Texture2D _mapTexture;
@@ -252,16 +218,18 @@ public sealed class ScenarioRouteEditor
     private bool _updatingFields;
 
     // Disclosure state of the step-2 sections: the essentials stay on screen, the rest is one click away.
-    private bool _placementExpanded;
+    private bool _globalExpanded = true;
     private bool _groupExpanded = true;
     private bool _behaviourExpanded;
 
-    private ZonePickTarget _zonePick = ZonePickTarget.None;
+    /// <summary>Index of the point whose area the next two map clicks are drawing, or -1 when none is.</summary>
+    private int _zonePickIndex = -1;
     private bool _zoneFirstCornerPlaced;
     private Vector2 _zoneFirstCorner;
 
     private bool _zoneDragActive;
-    private bool _zoneDragSpawn;
+    /// <summary>Index of the point whose area a drag is moving; 0 is the start of the route.</summary>
+    private int _zoneDragIndex;
     private Vector2 _zoneDragGrab;
     private Vector2 _zoneCursorWorld;
     private bool _showGrid = true;
@@ -286,40 +254,22 @@ public sealed class ScenarioRouteEditor
         _setRouteStartButton = root.Q<Button>("SetRouteStartButton");
         _addRouteObjectiveButton = root.Q<Button>("AddRouteObjectiveButton");
         _toggleMapGridButton = root.Q<Button>("ToggleMapGridButton");
-        _robotRouteSettings = root.Q<VisualElement>("RobotRouteSettings");
         _humanRouteSettings = root.Q<VisualElement>("HumanRouteSettings");
         _humanCountField = root.Q<IntegerField>("HumanCountField");
         _humanSpeedField = root.Q<FloatField>("HumanSpeedField");
         _endBehaviorDropdown = root.Q<DropdownField>("EndBehaviorDropdown");
-        _groupDropdown = root.Q<DropdownField>("GroupDropdown");
         _movementControllerDropdown = root.Q<DropdownField>("MovementControllerDropdown");
         _formationDropdown = root.Q<DropdownField>("FormationDropdown");
         _groupSpacingField = root.Q<FloatField>("GroupSpacingField");
         _formationParameterField = root.Q<FloatField>("FormationParameterField");
         _formationParameterLabel = root.Q<Label>("FormationParameterLabel");
         _formationPreviewLabel = root.Q<Label>("FormationPreviewLabel");
-        _sectionPlacementHeader = root.Q<Button>("SectionPlacementHeader");
+        _sectionGlobalHeader = root.Q<Button>("SectionGlobalHeader");
         _sectionGroupHeader = root.Q<Button>("SectionGroupHeader");
         _sectionBehaviourHeader = root.Q<Button>("SectionBehaviourHeader");
-        _sectionPlacementContent = root.Q<VisualElement>("SectionPlacementContent");
+        _sectionGlobalContent = root.Q<VisualElement>("SectionGlobalContent");
         _sectionGroupContent = root.Q<VisualElement>("SectionGroupContent");
         _sectionBehaviourContent = root.Q<VisualElement>("SectionBehaviourContent");
-        _spawnModeDropdown = root.Q<DropdownField>("SpawnModeDropdown");
-        _spawnZonePanel = root.Q<VisualElement>("SpawnZonePanel");
-        _spawnZoneHint = root.Q<Label>("SpawnZoneHint");
-        _drawSpawnZoneButton = root.Q<Button>("DrawSpawnZoneButton");
-        _goalZoneToggle = root.Q<Toggle>("GoalZoneToggle");
-        _goalZonePanel = root.Q<VisualElement>("GoalZonePanel");
-        _goalZoneHint = root.Q<Label>("GoalZoneHint");
-        _drawGoalZoneButton = root.Q<Button>("DrawGoalZoneButton");
-        _spawnZoneFields.CenterX = root.Q<FloatField>("SpawnZoneCenterXField");
-        _spawnZoneFields.CenterZ = root.Q<FloatField>("SpawnZoneCenterZField");
-        _spawnZoneFields.SizeX = root.Q<FloatField>("SpawnZoneSizeXField");
-        _spawnZoneFields.SizeZ = root.Q<FloatField>("SpawnZoneSizeZField");
-        _goalZoneFields.CenterX = root.Q<FloatField>("GoalZoneCenterXField");
-        _goalZoneFields.CenterZ = root.Q<FloatField>("GoalZoneCenterZField");
-        _goalZoneFields.SizeX = root.Q<FloatField>("GoalZoneSizeXField");
-        _goalZoneFields.SizeZ = root.Q<FloatField>("GoalZoneSizeZField");
         _routePointsContainer = root.Q<VisualElement>("RoutePointsContainer");
         _canvas = root.Q<VisualElement>("AgentsEnvironmentCanvas");
         _mapImage = root.Q<Image>("AgentsEnvironmentImage");
@@ -335,19 +285,13 @@ public sealed class ScenarioRouteEditor
             {
                 _routeList, _addHumanRouteButton, _removeHumanRouteButton,
                 _setRouteStartButton, _addRouteObjectiveButton, _toggleMapGridButton,
-                _robotRouteSettings, _humanRouteSettings, _humanCountField, _humanSpeedField,
-                _endBehaviorDropdown, _groupDropdown, _formationDropdown, _groupSpacingField,
+                _humanRouteSettings, _humanCountField, _humanSpeedField,
+                _endBehaviorDropdown, _formationDropdown, _groupSpacingField,
                 _movementControllerDropdown,
                 _formationParameterField, _formationParameterLabel,
                 _formationPreviewLabel,
-                _sectionPlacementHeader, _sectionGroupHeader, _sectionBehaviourHeader,
-                _sectionPlacementContent, _sectionGroupContent, _sectionBehaviourContent,
-                _spawnModeDropdown, _spawnZonePanel, _spawnZoneHint, _drawSpawnZoneButton,
-                _goalZoneToggle, _goalZonePanel, _goalZoneHint, _drawGoalZoneButton,
-                _spawnZoneFields.CenterX, _spawnZoneFields.CenterZ,
-                _spawnZoneFields.SizeX, _spawnZoneFields.SizeZ,
-                _goalZoneFields.CenterX, _goalZoneFields.CenterZ,
-                _goalZoneFields.SizeX, _goalZoneFields.SizeZ,
+                _sectionGlobalHeader, _sectionGroupHeader, _sectionBehaviourHeader,
+                _sectionGlobalContent, _sectionGroupContent, _sectionBehaviourContent,
                 _routePointsContainer, _canvas, _mapImage, _mapPlaceholder, _instructionLabel,
                 _cursorCoordinatesLabel, _activeRouteLabel, _gridScaleLabel, _mapPathStatusLabel,
                 overlayHost
@@ -408,23 +352,7 @@ public sealed class ScenarioRouteEditor
             if (_updatingFields) return;
             PushUndo($"human-controller:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.MovementController = ParseMovementControllerChoice(evt.newValue));
-            ApplyGroupLayoutToPeers(ActiveRoute);
             RefreshFormationPreview();
-        });
-        _groupDropdown.RegisterValueChangedCallback(evt =>
-        {
-            if (_updatingFields) return;
-            RouteDraft active = ActiveRoute;
-            if (active == null || active.IsRobot)
-                return;
-
-            PushUndo($"human-group:{_activeRouteIndex}");
-            string group = ResolveGroupChoice(evt.newValue);
-            UpdateHumanDraft(draft => draft.Group = group);
-            ApplyGroupLayoutToPeers(active);
-            // The choices change when a group appears or disappears, and the row text names the group.
-            RefreshActiveRoute();
-            RefreshRouteList();
         });
         _formationDropdown.RegisterValueChangedCallback(evt =>
         {
@@ -439,7 +367,6 @@ public sealed class ScenarioRouteEditor
                     GroupFormation.MinSpacing(draft.Formation),
                     3f);
             });
-            ApplyGroupLayoutToPeers(ActiveRoute);
             RefreshActiveRoute();
             RefreshFormationPreview();
         });
@@ -453,7 +380,6 @@ public sealed class ScenarioRouteEditor
             if (_updatingFields) return;
             PushUndo($"human-group-spacing:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.GroupSpacing = value);
-            ApplyGroupLayoutToPeers(ActiveRoute);
             RefreshFormationPreview();
         });
         _formationParameterField.RegisterValueChangedCallback(evt =>
@@ -461,79 +387,17 @@ public sealed class ScenarioRouteEditor
             if (_updatingFields) return;
             PushUndo($"human-formation-parameter:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.FormationParameter = Mathf.Max(0f, evt.newValue));
-            ApplyGroupLayoutToPeers(ActiveRoute);
             RefreshFormationPreview();
         });
 
         // Step 2 shows the essentials and keeps the rest one click away.
-        _sectionPlacementHeader.userData = _sectionPlacementHeader.text;
+        _sectionGlobalHeader.userData = _sectionGlobalHeader.text;
         _sectionGroupHeader.userData = _sectionGroupHeader.text;
         _sectionBehaviourHeader.userData = _sectionBehaviourHeader.text;
-        _sectionPlacementHeader.clicked += () => { _placementExpanded = !_placementExpanded; ApplySectionState(); };
+        _sectionGlobalHeader.clicked += () => { _globalExpanded = !_globalExpanded; ApplySectionState(); };
         _sectionGroupHeader.clicked += () => { _groupExpanded = !_groupExpanded; ApplySectionState(); };
         _sectionBehaviourHeader.clicked += () => { _behaviourExpanded = !_behaviourExpanded; ApplySectionState(); };
         ApplySectionState();
-
-        _spawnModeDropdown.choices = new List<string>(SpawnModeChoices);
-        _spawnModeDropdown.RegisterValueChangedCallback(evt =>
-        {
-            if (_updatingFields) return;
-            RouteDraft active = ActiveRoute;
-            if (active == null || active.IsRobot)
-                return;
-
-            bool random = string.Equals(evt.newValue, SpawnModeRandomChoice, StringComparison.Ordinal);
-            PushUndo($"human-spawn-mode:{_activeRouteIndex}");
-            if (random && !IsUsableZone(active.SpawnZone))
-                active.SpawnZone = DefaultZoneAround(active.Points.Count > 0 ? active.Points[0] : Vector2.zero);
-            active.SpawnRandom = random;
-            active.RouteModified = true;
-            CancelZonePick();
-            RefreshActiveRoute();
-        });
-
-        RegisterZoneField(_spawnZoneFields.CenterX, spawn: true);
-        RegisterZoneField(_spawnZoneFields.CenterZ, spawn: true);
-        RegisterZoneField(_spawnZoneFields.SizeX, spawn: true);
-        RegisterZoneField(_spawnZoneFields.SizeZ, spawn: true);
-        RegisterZoneField(_goalZoneFields.CenterX, spawn: false);
-        RegisterZoneField(_goalZoneFields.CenterZ, spawn: false);
-        RegisterZoneField(_goalZoneFields.SizeX, spawn: false);
-        RegisterZoneField(_goalZoneFields.SizeZ, spawn: false);
-
-        _goalZoneToggle.RegisterValueChangedCallback(evt =>
-        {
-            if (_updatingFields) return;
-            RouteDraft active = ActiveRoute;
-            if (active == null || active.IsRobot)
-                return;
-
-            int index = _pendingPointIndex;
-            if (!IsAreaObjective(active, index))
-                return;
-
-            PushUndo($"human-goal-zone:{_activeRouteIndex}:{index}");
-            NormalizeZones(active);
-            if (evt.newValue)
-            {
-                // The objective changes nature: it stops being a point and becomes the area around it.
-                active.PointZones[index] = DefaultZoneAround(active.Points[index]);
-            }
-            else
-            {
-                // Back to a point, on the centre of the area the author was looking at, so it does not jump.
-                Rect? wasArea = active.ZoneAt(index);
-                if (wasArea.HasValue)
-                    active.Points[index] = wasArea.Value.center;
-                active.PointZones[index] = null;
-            }
-            active.RouteModified = true;
-            CancelZonePick();
-            RefreshActiveRoute();
-        });
-
-        _drawSpawnZoneButton.clicked += () => BeginZonePick(ZonePickTarget.Spawn);
-        _drawGoalZoneButton.clicked += () => BeginZonePick(ZonePickTarget.Point);
     }
 
     public int TotalHumanCount => _routes.Where(route => !route.IsRobot).Sum(route => Mathf.Max(0, route.Count));
@@ -1376,7 +1240,6 @@ public sealed class ScenarioRouteEditor
 
         _activeRouteLabel.text = active.Id;
         _removeHumanRouteButton.SetEnabled(!active.IsRobot);
-        _robotRouteSettings.EnableInClassList(HiddenClass, !active.IsRobot);
         _humanRouteSettings.EnableInClassList(HiddenClass, active.IsRobot);
         _pendingPointIndex = Mathf.Clamp(_pendingPointIndex, 0, Mathf.Max(0, active.Points.Count - 1));
 
@@ -1387,15 +1250,11 @@ public sealed class ScenarioRouteEditor
             _humanSpeedField.SetValueWithoutNotify(active.Speed);
             SetEndBehaviorChoices();
             _endBehaviorDropdown.SetValueWithoutNotify(HumanEndBehaviorParser.ToDisplayName(active.EndBehavior));
-            RefreshGroupChoices();
-            _groupDropdown.SetValueWithoutNotify(
-                string.IsNullOrWhiteSpace(active.Group) ? NoGroupChoice : GroupNaming.ToDisplayName(active.Group));
             _movementControllerDropdown.SetValueWithoutNotify(MovementControllerToDisplay(active.MovementController));
             SetFormationChoices();
             _formationDropdown.SetValueWithoutNotify(FormationToDisplay(active.Formation));
             _groupSpacingField.SetValueWithoutNotify(active.GroupSpacing);
             UpdateFormationParameterField(active);
-            RefreshZoneEditors(active);
         }
         _updatingFields = false;
 
@@ -1406,7 +1265,7 @@ public sealed class ScenarioRouteEditor
     }
 
     // ==========================================
-    //   STEP 2 DISCLOSURE AND PLACEMENT AREAS
+    //   STEP 2 DISCLOSURE AND POINT AREAS
     // ==========================================
 
     /// <summary>
@@ -1415,7 +1274,7 @@ public sealed class ScenarioRouteEditor
     /// </summary>
     private void ApplySectionState()
     {
-        ApplySection(_sectionPlacementHeader, _sectionPlacementContent, _placementExpanded);
+        ApplySection(_sectionGlobalHeader, _sectionGlobalContent, _globalExpanded);
         ApplySection(_sectionGroupHeader, _sectionGroupContent, _groupExpanded);
         ApplySection(_sectionBehaviourHeader, _sectionBehaviourContent, _behaviourExpanded);
     }
@@ -1429,29 +1288,6 @@ public sealed class ScenarioRouteEditor
         header.EnableInClassList("expanded", expanded);
         string title = header.userData as string ?? header.text;
         header.text = expanded ? $"▾  {title}" : $"▸  {title}";
-    }
-
-    /// <summary>
-    /// Pushes the areas of the active route into both editors: the spawn area of the route, and the arrival
-    /// area of the objective the author has selected.
-    /// </summary>
-    private void RefreshZoneEditors(RouteDraft active)
-    {
-        _spawnModeDropdown.SetValueWithoutNotify(active.SpawnRandom ? SpawnModeRandomChoice : SpawnModePointChoice);
-        _spawnZonePanel.EnableInClassList(HiddenClass, !active.SpawnRandom);
-        WriteZoneFields(_spawnZoneFields, active.SpawnZone);
-
-        int index = _pendingPointIndex;
-        bool areaObjective = IsAreaObjective(active, index);
-        bool goalIsArea = areaObjective && active.ZoneAt(index).HasValue;
-        _goalZoneToggle.SetEnabled(areaObjective);
-        _goalZoneToggle.SetValueWithoutNotify(goalIsArea);
-        _goalZonePanel.EnableInClassList(HiddenClass, !goalIsArea);
-        WriteZoneFields(
-            _goalZoneFields,
-            goalIsArea ? active.ZoneAt(index).Value : default);
-
-        UpdateZoneHints();
     }
 
     private static void WriteZoneFields(ZoneFields fields, Rect zone)
@@ -1469,82 +1305,116 @@ public sealed class ScenarioRouteEditor
         if (active == null)
             return;
 
-        WriteZoneFields(_spawnZoneFields, active.SpawnZone);
-        if (IsAreaObjective(active, _pendingPointIndex) && active.ZoneAt(_pendingPointIndex).HasValue)
-            WriteZoneFields(_goalZoneFields, active.ZoneAt(_pendingPointIndex).Value);
+        int index = _zoneDragIndex;
+        if (_pointZoneFields.TryGetValue(index, out ZoneFields fields))
+            WriteZoneFields(fields, PointArea(active, index) ?? default);
+        UpdateAreaBadge(index);
     }
 
-    /// <summary>Only a real objective can be an area; the start point of the route stays a point.</summary>
-    private static bool IsAreaObjective(RouteDraft active, int index) =>
-        active != null && index > 0 && index < active.Points.Count;
-
-    private void RegisterZoneField(FloatField field, bool spawn)
+    /// <summary>
+    /// The area of one point, or null when that point is fixed. Index 0 is the start of the route, so its area is
+    /// the spawn area, and every other index is the arrival area of one objective. A point is one or the other and
+    /// never both, which is why one accessor answers for a whole row.
+    /// </summary>
+    private static Rect? PointArea(RouteDraft route, int index)
     {
-        field.RegisterValueChangedCallback(evt =>
+        if (route == null || index < 0 || index >= route.Points.Count)
+            return null;
+
+        return index == 0
+            ? (route.SpawnRandom ? route.SpawnZone : (Rect?)null)
+            : route.ZoneAt(index);
+    }
+
+    /// <summary>Writes an area back to its point, or turns that point back into a fixed point.</summary>
+    private static void SetPointArea(RouteDraft route, int index, Rect? area)
+    {
+        if (index == 0)
+        {
+            route.SpawnRandom = area.HasValue;
+            if (area.HasValue)
+                route.SpawnZone = area.Value;
+        }
+        else
+        {
+            NormalizeZones(route);
+            route.PointZones[index] = area;
+        }
+
+        // A point is a point OR an area: while it is an area the route runs to the centre of that area.
+        if (area.HasValue)
+            route.Points[index] = area.Value.center;
+    }
+
+    private void RegisterZoneFields(int index, ZoneFields fields)
+    {
+        void OnChanged(ChangeEvent<float> evt)
         {
             if (_updatingFields) return;
-            PushUndo($"zone:{_activeRouteIndex}:{(spawn ? "spawn" : "goal")}");
-            ApplyZoneFields(spawn);
-        });
+            PushUndo($"zone:{_activeRouteIndex}:{index}");
+            ApplyZoneFields(index);
+        }
+
+        fields.CenterX?.RegisterValueChangedCallback(OnChanged);
+        fields.CenterZ?.RegisterValueChangedCallback(OnChanged);
+        fields.SizeX?.RegisterValueChangedCallback(OnChanged);
+        fields.SizeZ?.RegisterValueChangedCallback(OnChanged);
     }
 
     /// <summary>Rebuilds one area from its four numeric fields, so typing a value moves exactly its edge.</summary>
-    private void ApplyZoneFields(bool spawn)
+    private void ApplyZoneFields(int index)
     {
         RouteDraft active = ActiveRoute;
         if (active == null || active.IsRobot)
             return;
 
-        ZoneFields fields = spawn ? _spawnZoneFields : _goalZoneFields;
+        if (!_pointZoneFields.TryGetValue(index, out ZoneFields fields))
+            return;
+
         Rect zone = ZoneFromCenterAndSize(
             new Vector2(fields.CenterX.value, fields.CenterZ.value),
             new Vector2(fields.SizeX.value, fields.SizeZ.value));
 
-        if (spawn)
-        {
-            active.SpawnRandom = true;
-            active.SpawnZone = zone;
-        }
-        else
-        {
-            int index = _pendingPointIndex;
-            if (!IsAreaObjective(active, index))
-                return;
-
-            NormalizeZones(active);
-            active.PointZones[index] = zone;
-            // An objective is a point OR an area: while it is an area, the route runs to the centre of that area.
-            active.Points[index] = zone.center;
-        }
+        SetPointArea(active, index, zone);
+        UpdateAreaBadge(index);
 
         active.RouteModified = true;
         CancelZonePick();
         RefreshOverlay();
-        UpdateZoneHints();
     }
 
-    /// <summary>Starts the two-click gesture that draws an area on the map.</summary>
-    private void BeginZonePick(ZonePickTarget target)
+    private void UpdateAreaBadge(int index)
+    {
+        if (!_pointAreaLabels.TryGetValue(index, out Label badge))
+            return;
+
+        Rect? area = PointArea(ActiveRoute, index);
+        badge.text = area.HasValue && IsUsableZone(area.Value)
+            ? DescribeArea(area.Value)
+            : "Draw the area on the map";
+    }
+
+    private static string DescribeArea(Rect area) => $"Area {area.width:0.#} x {area.height:0.#} m";
+
+    /// <summary>Starts the two-click gesture that draws the area of one point.</summary>
+    private void BeginZonePick(int index)
     {
         RouteDraft active = ActiveRoute;
-        if (active == null || active.IsRobot)
+        if (active == null || active.IsRobot || index < 0 || index >= active.Points.Count)
             return;
 
-        if (target == ZonePickTarget.Point && !IsAreaObjective(active, _pendingPointIndex))
-        {
-            _instructionLabel.text = "Select an objective first: the start point of a route stays a point.";
-            return;
-        }
-
-        _zonePick = target;
+        _pendingPointIndex = index;
+        UpdatePointSelectionHighlight();
+        _zonePickIndex = index;
         _zoneFirstCornerPlaced = false;
-        _instructionLabel.text = "Click the first corner of the area, then the opposite one. Esc cancels.";
+        _instructionLabel.text =
+            $"{RouteMapHitTesting.PointLabel(index)}: click the first corner of the area, then the opposite one. Esc cancels.";
         RefreshOverlay();
     }
 
     private void CancelZonePick()
     {
-        _zonePick = ZonePickTarget.None;
+        _zonePickIndex = -1;
         _zoneFirstCornerPlaced = false;
     }
 
@@ -1552,7 +1422,7 @@ public sealed class ScenarioRouteEditor
     private void HandleZonePick(Vector2 worldPosition)
     {
         RouteDraft active = ActiveRoute;
-        if (active == null || _zonePick == ZonePickTarget.None)
+        if (active == null || _zonePickIndex < 0)
             return;
 
         if (!_zoneFirstCornerPlaced)
@@ -1573,18 +1443,7 @@ public sealed class ScenarioRouteEditor
         }
 
         PushUndo($"zone-draw:{_activeRouteIndex}");
-        if (_zonePick == ZonePickTarget.Spawn)
-        {
-            active.SpawnRandom = true;
-            active.SpawnZone = zone;
-        }
-        else
-        {
-            NormalizeZones(active);
-            active.PointZones[_pendingPointIndex] = zone;
-            // An objective is a point OR an area: while it is an area, the route runs to the centre of that area.
-            active.Points[_pendingPointIndex] = zone.center;
-        }
+        SetPointArea(active, _zonePickIndex, zone);
 
         active.RouteModified = true;
         CancelZonePick();
@@ -1601,15 +1460,13 @@ public sealed class ScenarioRouteEditor
         if (active == null || active.IsRobot)
             return false;
 
-        bool overSpawn = active.SpawnRandom && IsUsableZone(active.SpawnZone) && active.SpawnZone.Contains(worldPosition);
-        int index = _pendingPointIndex;
-        Rect? goalZone = IsAreaObjective(active, index) ? active.ZoneAt(index) : null;
-        bool overGoal = goalZone.HasValue && IsUsableZone(goalZone.Value) && goalZone.Value.Contains(worldPosition);
-        if (!overSpawn && !overGoal)
+        int index = _zonePickIndex >= 0 ? _zonePickIndex : _pendingPointIndex;
+        Rect? area = PointArea(active, index);
+        if (!area.HasValue || !IsUsableZone(area.Value) || !area.Value.Contains(worldPosition))
             return false;
 
         _zoneDragActive = true;
-        _zoneDragSpawn = overSpawn;
+        _zoneDragIndex = index;
         _zoneDragGrab = worldPosition;
         _dragUndoSnapshot = PushUndo($"zone-move:{_activeRouteIndex}");
         return true;
@@ -1622,55 +1479,17 @@ public sealed class ScenarioRouteEditor
             return;
 
         Vector2 delta = worldPosition - _zoneDragGrab;
-        if (_zoneDragSpawn)
-        {
-            Rect zone = active.SpawnZone;
-            active.SpawnZone = new Rect(zone.x + delta.x, zone.y + delta.y, zone.width, zone.height);
-        }
-        else
-        {
-            int index = _pendingPointIndex;
-            if (!IsAreaObjective(active, index) || !active.ZoneAt(index).HasValue)
-                return;
+        Rect? area = PointArea(active, _zoneDragIndex);
+        if (!area.HasValue)
+            return;
 
-            Rect zone = active.ZoneAt(index).Value;
-            NormalizeZones(active);
-            active.PointZones[index] = new Rect(zone.x + delta.x, zone.y + delta.y, zone.width, zone.height);
-            active.Points[index] = active.PointZones[index].Value.center;
-        }
+        SetPointArea(
+            active,
+            _zoneDragIndex,
+            new Rect(area.Value.x + delta.x, area.Value.y + delta.y, area.Value.width, area.Value.height));
 
         _zoneDragGrab = worldPosition;
         active.RouteModified = true;
-    }
-
-    /// <summary>Rewrites the two hints under the draw buttons with the area the author currently has.</summary>
-    private void UpdateZoneHints()
-    {
-        RouteDraft active = ActiveRoute;
-        if (active == null || active.IsRobot)
-            return;
-
-        string spawnHint = active.SpawnRandom && IsUsableZone(active.SpawnZone)
-            ? $"Agents appear anywhere inside a {active.SpawnZone.width:0.#} × {active.SpawnZone.height:0.#} m area."
-            : "Agents appear on the start point of the route.";
-        if (_zonePick == ZonePickTarget.Spawn)
-            spawnHint = _zoneFirstCornerPlaced ? "Now click the opposite corner." : "Click the first corner.";
-        _spawnZoneHint.text = spawnHint;
-
-        int index = _pendingPointIndex;
-        if (!IsAreaObjective(active, index))
-        {
-            _goalZoneHint.text = "Select an objective on the route to give it an arrival area.";
-            return;
-        }
-
-        Rect? zone = active.ZoneAt(index);
-        string goalHint = zone.HasValue && IsUsableZone(zone.Value)
-            ? $"Each agent draws its own point inside a {zone.Value.width:0.#} × {zone.Value.height:0.#} m area."
-            : "Every agent walks to this exact point.";
-        if (_zonePick == ZonePickTarget.Point)
-            goalHint = _zoneFirstCornerPlaced ? "Now click the opposite corner." : "Click the first corner.";
-        _goalZoneHint.text = goalHint;
     }
 
     private void RebuildRouteList()
@@ -1730,50 +1549,7 @@ public sealed class ScenarioRouteEditor
             _routeList[index].EnableInClassList("selected", index == _activeRouteIndex);
     }
 
-    /// <summary>Maps the dropdown selection to the group id a scenario stores.</summary>
-    private string ResolveGroupChoice(string choice)
-    {
-        if (string.IsNullOrEmpty(choice) || string.Equals(choice, NoGroupChoice, StringComparison.Ordinal))
-            return null;
-        if (string.Equals(choice, NewGroupChoice, StringComparison.Ordinal))
-            return GroupNaming.NextId(CollectGroupIds());
-        return GroupNaming.ToGroupId(choice);
-    }
-
-    /// <summary>
-    /// The groups that already exist, plus the two entries that join one or make a new one. The list is only
-    /// reassigned when it really changed: a dropdown rebuilt on every refresh would drop the open popup.
-    /// </summary>
-    private void RefreshGroupChoices()
-    {
-        List<string> groups = CollectGroupIds();
-        var choices = new List<string>(groups.Count + 2) { NoGroupChoice };
-        foreach (string groupId in groups)
-            choices.Add(GroupNaming.ToDisplayName(groupId));
-        choices.Add(NewGroupChoice);
-
-        if (choices.SequenceEqual(_groupChoiceCache, StringComparer.Ordinal))
-            return;
-
-        _groupChoiceCache.Clear();
-        _groupChoiceCache.AddRange(choices);
-        _groupDropdown.choices = new List<string>(choices);
-    }
-
-    /// <summary>Group ids in first-seen route order, so the list stays stable while editing.</summary>
-    private List<string> CollectGroupIds()
-    {
-        var groups = new List<string>();
-        foreach (RouteDraft route in _routes)
-        {
-            string groupId = route.IsRobot ? null : route.Group?.Trim();
-            if (string.IsNullOrEmpty(groupId) || groups.Contains(groupId))
-                continue;
-            groups.Add(groupId);
-        }
-        return groups;
-    }
-
+    /// <summary>Routes that share a group id walk as one formation, which the spawn preview has to respect.</summary>
     private List<RouteDraft> RoutesOfGroup(string groupId) => _routes
         .Where(route => !route.IsRobot &&
                         string.Equals(route.Group?.Trim(), groupId, StringComparison.OrdinalIgnoreCase))
@@ -1798,8 +1574,6 @@ public sealed class ScenarioRouteEditor
         };
         if (areas > 0)
             parts.Add($"{areas} area{(areas == 1 ? string.Empty : "s")}");
-        if (!string.IsNullOrWhiteSpace(route.Group))
-            parts.Add(GroupNaming.ToDisplayName(route.Group));
 
         return string.Join(" · ", parts);
     }
@@ -1809,6 +1583,8 @@ public sealed class ScenarioRouteEditor
         _routePointsContainer.Clear();
         _pointRows.Clear();
         _pointFields.Clear();
+        _pointZoneFields.Clear();
+        _pointAreaLabels.Clear();
         RouteDraft active = ActiveRoute;
         if (active == null)
             return;
@@ -1817,6 +1593,7 @@ public sealed class ScenarioRouteEditor
         {
             int capturedIndex = index;
             Vector2 point = active.Points[index];
+            Rect? area = PointArea(active, index);
             var row = new VisualElement();
             row.AddToClassList("route-point-row");
             row.EnableInClassList("selected", index == _pendingPointIndex);
@@ -1826,18 +1603,30 @@ public sealed class ScenarioRouteEditor
             var name = new Label(RouteMapHitTesting.PointLabel(index));
             name.AddToClassList("route-point-name");
             header.Add(name);
+
+            // The two states of a point live side by side here: the button names the one it will switch to.
+            var zoneButton = new Button(() => TogglePointArea(capturedIndex))
+            {
+                text = area.HasValue ? "Area" : "Point"
+            };
+            zoneButton.AddToClassList("route-point-zone-button");
+            zoneButton.EnableInClassList("on", area.HasValue);
+            zoneButton.tooltip = area.HasValue
+                ? "Turn this area back into one exact point"
+                : "Let each agent draw its own point inside an area";
+            header.Add(zoneButton);
             row.Add(header);
 
-            var coordinates = new VisualElement();
-            coordinates.AddToClassList("route-point-coordinates");
-            Rect? zone = active.ZoneAt(index);
-            if (zone.HasValue)
+            // Coordinates and row actions share one line, so a route of six points still fits without a scrollbar.
+            var line = new VisualElement();
+            line.AddToClassList("route-point-line");
+            if (area.HasValue)
             {
-                // An objective is a point OR an area. An area shows its size, not the coordinates of a point the
-                // author no longer has: the four numeric fields live in the placement section.
-                var summary = new Label($"Area {zone.Value.width:0.#} x {zone.Value.height:0.#} m");
+                // An area shows its size instead of the coordinates of a point the author no longer has.
+                var summary = new Label(IsUsableZone(area.Value) ? DescribeArea(area.Value) : "Draw the area on the map");
                 summary.AddToClassList("route-point-area-summary");
-                coordinates.Add(summary);
+                _pointAreaLabels[index] = summary;
+                line.Add(summary);
             }
             else
             {
@@ -1845,16 +1634,15 @@ public sealed class ScenarioRouteEditor
                 FloatField zField = CreateCoordinateField("Z", point.y);
                 xField.RegisterValueChangedCallback(evt => SetPointCoordinate(capturedIndex, true, evt.newValue));
                 zField.RegisterValueChangedCallback(evt => SetPointCoordinate(capturedIndex, false, evt.newValue));
-                coordinates.Add(xField);
-                coordinates.Add(zField);
+                line.Add(xField);
+                line.Add(zField);
                 _pointFields[index] = new CoordinateFields { X = xField, Z = zField };
             }
-            row.Add(coordinates);
 
+            var actions = new VisualElement();
+            actions.AddToClassList("route-point-actions");
             if (index > 0)
             {
-                var actions = new VisualElement();
-                actions.AddToClassList("route-point-actions");
                 Button up = CreateSmallButton("↑", () => MovePoint(capturedIndex, -1));
                 Button down = CreateSmallButton("↓", () => MovePoint(capturedIndex, 1));
                 Button remove = CreateSmallButton("×", () => RemovePoint(capturedIndex));
@@ -1864,13 +1652,74 @@ public sealed class ScenarioRouteEditor
                 actions.Add(up);
                 actions.Add(down);
                 actions.Add(remove);
-                row.Add(actions);
+            }
+            line.Add(actions);
+            row.Add(line);
+
+            if (area.HasValue)
+            {
+                // The exact numbers stay available for an author who wants a precise area; the map gesture is one
+                // click away. Both used to live in the left panel, away from the point they describe.
+                var fields = new ZoneFields
+                {
+                    CenterX = CreateZoneField("Center X"),
+                    CenterZ = CreateZoneField("Center Z"),
+                    SizeX = CreateZoneField("Size X"),
+                    SizeZ = CreateZoneField("Size Z")
+                };
+                var grid = new VisualElement();
+                grid.AddToClassList("route-point-zone-grid");
+                grid.Add(fields.CenterX);
+                grid.Add(fields.CenterZ);
+                grid.Add(fields.SizeX);
+                grid.Add(fields.SizeZ);
+                _pointZoneFields[index] = fields;
+                RegisterZoneFields(index, fields);
+                WriteZoneFields(fields, area.Value);
+                row.Add(grid);
+
+                var draw = new Button(() => BeginZonePick(capturedIndex)) { text = "Draw area on map" };
+                draw.AddToClassList("route-point-draw-button");
+                row.Add(draw);
             }
 
             row.RegisterCallback<PointerDownEvent>(_ => SelectPoint(capturedIndex));
             _pointRows.Add(row);
             _routePointsContainer.Add(row);
         }
+    }
+
+    /// <summary>
+    /// Turns one point into an area around it, or back into the exact point at the centre of that area. A point is
+    /// one or the other, so the two states never show up together on the map.
+    /// </summary>
+    private void TogglePointArea(int index)
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null || active.IsRobot || index < 0 || index >= active.Points.Count)
+            return;
+
+        PushUndo($"point-area:{_activeRouteIndex}:{index}");
+        Rect? area = PointArea(active, index);
+        if (area.HasValue)
+        {
+            // Back to a point, on the centre of the area the author was looking at, so it does not jump.
+            active.Points[index] = area.Value.center;
+            SetPointArea(active, index, null);
+        }
+        else
+        {
+            Rect created = DefaultZoneAround(active.Points[index]);
+            active.Points[index] = created.center;
+            SetPointArea(active, index, created);
+        }
+
+        active.RouteModified = true;
+        active.HasNonSpatialGoal = false;
+        _pendingPointIndex = index;
+        CancelZonePick();
+        RefreshActiveRoute();
+        RefreshRouteList();
     }
 
     private void UpdatePointSelectionHighlight()
@@ -1884,6 +1733,14 @@ public sealed class ScenarioRouteEditor
         var field = new FloatField(label) { value = RoundCoordinate(value) };
         field.AddToClassList("creation-text-field");
         field.AddToClassList("route-coordinate-field");
+        return field;
+    }
+
+    private static FloatField CreateZoneField(string label)
+    {
+        var field = new FloatField(label);
+        field.AddToClassList("creation-text-field");
+        field.AddToClassList("route-zone-field");
         return field;
     }
 
@@ -2047,32 +1904,6 @@ public sealed class ScenarioRouteEditor
     }
 
     /// <summary>
-    /// A formation is a property of the group, not of one route: routes sharing a group id keep the
-    /// same layout so the YAML never mixes a wedge with a column inside one walking group.
-    /// </summary>
-    private void ApplyGroupLayoutToPeers(RouteDraft source)
-    {
-        if (source == null || source.IsRobot)
-            return;
-
-        string groupId = source.Group?.Trim();
-        if (string.IsNullOrEmpty(groupId))
-            return;
-
-        foreach (RouteDraft route in _routes)
-        {
-            if (route == null || route.IsRobot || route == source)
-                continue;
-            if (!string.Equals(route.Group?.Trim(), groupId, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            route.Formation = source.Formation;
-            route.GroupSpacing = source.GroupSpacing;
-            route.FormationParameter = source.FormationParameter;
-            route.MovementController = source.MovementController;
-        }
-    }
-
     /// <summary>
     /// The dropdown exposes display labels while the YAML uses short values, so the label is
     /// mapped explicitly and the shared parser stays the fallback for anything else.
@@ -2101,7 +1932,7 @@ public sealed class ScenarioRouteEditor
             return;
 
         // While an area is being drawn, every click belongs to that area.
-        if (_zonePick != ZonePickTarget.None)
+        if (_zonePickIndex >= 0)
         {
             HandleZonePick(worldPosition);
             return;
@@ -2152,7 +1983,7 @@ public sealed class ScenarioRouteEditor
         }
 
         // While an area is being drawn, the rectangle from the first corner to the cursor follows the pointer.
-        if (onMap && _zonePick != ZonePickTarget.None && _zoneFirstCornerPlaced)
+        if (onMap && _zonePickIndex >= 0 && _zoneFirstCornerPlaced)
         {
             _zoneCursorWorld = worldPosition;
             RefreshOverlay();
@@ -2165,7 +1996,6 @@ public sealed class ScenarioRouteEditor
                 MoveDraggedZone(worldPosition);
                 SyncZoneFieldsNoNotify();
                 RefreshOverlay();
-                UpdateZoneHints();
             }
             return;
         }
@@ -2572,7 +2402,7 @@ public sealed class ScenarioRouteEditor
                 label: $"{RouteMapHitTesting.PointLabel(index)} area"));
         }
 
-        if (_zonePick != ZonePickTarget.None && _zoneFirstCornerPlaced)
+        if (_zonePickIndex >= 0 && _zoneFirstCornerPlaced)
         {
             Rect preview = ZoneFromCorners(_zoneFirstCorner, _zoneCursorWorld);
             if (IsUsableZone(preview))
@@ -2737,11 +2567,11 @@ public sealed class ScenarioRouteEditor
         if (active == null)
             return;
 
-        if (_zonePick != ZonePickTarget.None)
+        if (_zonePickIndex >= 0)
         {
             _instructionLabel.text = _zoneFirstCornerPlaced
-                ? $"{active.Id}: click the opposite corner of the area. Esc cancels."
-                : $"{active.Id}: click the first corner of the area. Esc cancels.";
+                ? $"{RouteMapHitTesting.PointLabel(_zonePickIndex)}: click the opposite corner of the area. Esc cancels."
+                : $"{RouteMapHitTesting.PointLabel(_zonePickIndex)}: click the first corner of the area. Esc cancels.";
             return;
         }
 

@@ -1762,7 +1762,7 @@
 .modal-heading-row,
 .import-modal-content,
 .route-point-row-header,
-.route-point-coordinates,
+.route-point-line,
 .route-point-actions {
     flex-direction: row;
     align-items: center;
@@ -1906,46 +1906,129 @@
     -unity-font-style: bold;
 }
 
-.route-point-coordinates {
+/* Coordinates and row actions on one line: a route of six points has to fit in this column without a scrollbar. */
+.route-point-line {
     width: 100%;
 }
 
 .route-coordinate-field {
     flex-grow: 1;
+    flex-shrink: 1;
     flex-basis: 0;
     width: auto;
-    margin-right: 5px;
+    min-width: 0;
+    margin-right: 4px;
 }
 
 .route-coordinate-field > .unity-base-field__label {
-    min-width: 14px;
-    width: 14px;
+    min-width: 12px;
+    width: 12px;
     margin-right: 2px;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .route-coordinate-field > .unity-base-field__input {
     min-width: 0;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .route-point-actions {
+    flex-shrink: 0;
     justify-content: flex-end;
-    margin-top: 6px;
 }
 
 .route-point-small-button {
-    width: 27px;
-    height: 24px;
-    margin-left: 4px;
+    width: 24px;
+    height: 22px;
+    margin-left: 3px;
     padding: 0;
     background-color: transparent;
     border-width: 1px;
     border-color: var(--border-color);
     border-radius: 4px;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 11px;
+}
+
+/* Names the state the point will switch to, and reads as pressed while the point is an area. */
+.route-point-zone-button {
+    flex-shrink: 0;
+    width: 52px;
+    height: 22px;
+    margin-left: 6px;
+    padding: 0;
+    background-color: transparent;
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.route-point-zone-button:hover {
+    background-color: var(--button-hover);
+    color: var(--text-primary);
+}
+
+.route-point-zone-button.on {
+    background-color: rgba(0, 110, 255, 0.16);
+    border-color: rgba(0, 110, 255, 0.45);
+    color: var(--text-primary);
+}
+
+/* Center / size fields of one area, two per row. */
+.route-point-zone-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+
+    margin-top: 8px;
+}
+
+.route-zone-field {
+    width: auto;
+
+    flex-grow: 1;
+    flex-basis: 44%;
+    min-width: 96px;
+
+    margin-bottom: 6px;
+
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.route-zone-field > .unity-base-field__label {
+    width: auto;
+    min-width: 0;
+
+    margin-bottom: 3px;
+
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.route-zone-field > .unity-base-field__input {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.route-point-draw-button {
+    height: 26px;
+    margin-top: 2px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: transparent;
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 5px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.route-point-draw-button:hover {
+    background-color: var(--button-hover);
+    color: var(--text-primary);
 }
 
 .modal-heading-row {
@@ -2351,97 +2434,6 @@
     flex-direction: column;
 
     margin-top: 8px;
-}
-
-/* Area drawn on the map for the random spawn / arrival placement. */
-.zone-panel {
-    flex-direction: column;
-
-    margin-top: 6px;
-    padding: 10px;
-
-    background-color: var(--bg-primary);
-
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 6px;
-}
-
-.zone-draw-button {
-    min-width: 0;
-    height: 30px;
-
-    margin-top: 4px;
-    margin-bottom: 8px;
-    padding-left: 8px;
-    padding-right: 8px;
-
-    background-color: transparent;
-
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 5px;
-
-    color: var(--text-secondary);
-
-    font-size: 12px;
-}
-
-.zone-draw-button:hover {
-    background-color: var(--button-hover);
-    color: var(--text-primary);
-}
-
-/* Center / size fields, two per row and wrapping on narrow panels. */
-.zone-field-grid {
-    flex-direction: row;
-    flex-wrap: wrap;
-}
-
-/* Two fields per row, label above the input: side by side, a label like "Center X" eats the field and the
-   number ends up clipped in a panel this narrow. */
-.zone-field-grid > .creation-text-field {
-    width: auto;
-
-    flex-grow: 1;
-    flex-basis: 44%;
-    min-width: 110px;
-
-    margin-bottom: 8px;
-
-    flex-direction: column;
-    align-items: stretch;
-}
-
-.zone-field-grid > .creation-text-field > .unity-base-field__label {
-    width: auto;
-    min-width: 0;
-
-    margin-bottom: 4px;
-
-    color: var(--text-secondary);
-    font-size: 11px;
-}
-
-.zone-field-grid > .creation-text-field > .unity-base-field__input {
-    flex-grow: 1;
-    min-width: 0;
-}
-
-.zone-toggle {
-    min-height: 24px;
-
-    color: var(--text-primary);
-
-    font-size: 12px;
-
-    white-space: normal;
-}
-
-/* A toggle label that has to wrap rather than run past the edge of the panel. */
-.zone-toggle > .unity-base-field__label {
-    white-space: normal;
-    flex-shrink: 1;
 }
 
 /* An expanded section reads as the one currently open, so the chevron and the tint agree. */

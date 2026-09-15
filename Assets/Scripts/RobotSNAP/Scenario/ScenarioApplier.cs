@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.AI;
 using RobotSNAP.Core;
 using RobotSNAP.Environment;
 using RobotSNAP.Agents;
@@ -17,6 +18,13 @@ namespace RobotSNAP.Core.Scenario
     /// </summary>
     public sealed class ScenarioApplier : MonoBehaviour
     {
+        /// <summary>
+        /// How far a drawn point may be pulled to reach navigable ground. A zone is sampled rather than
+        /// authored, so a draw can land deep inside a wall and the search reaches further than the one an
+        /// authored anchor gets.
+        /// </summary>
+        private const float DrawnPointSearchRadius = 5f;
+
         [Header("References")]
         [SerializeField] private ScenarioLoader _loader;
 
@@ -33,6 +41,12 @@ namespace RobotSNAP.Core.Scenario
         private readonly List<Coroutine> _activeCoroutines = new();
         private readonly Dictionary<string, HumanAgent> _spawnedHumans = new();
         private int _humanCounter;
+
+        /// <summary>
+        /// Random spawn anchors already drawn for the scenario being applied, so a single draw serves every
+        /// agent that shares it: keyed by group id, or by the entry itself when it walks on its own.
+        /// </summary>
+        private readonly Dictionary<object, Vector3> _randomAnchors = new();
 
         public ScenarioData CurrentScenario => _currentScenario;
         public bool IsApplying { get; private set; }
@@ -369,6 +383,9 @@ namespace RobotSNAP.Core.Scenario
             var groupsWithRoute = new HashSet<string>();
             Dictionary<string, SpawnPlanner.GroupLayout> groupLayouts =
                 SpawnPlanner.ResolveGroupLayouts(_currentScenario.Humans);
+            // One draw per spawn unit: a whole formation appears around a single random point, so the anchors
+            // are resolved once for this scenario and then reused by every agent sharing them.
+            _randomAnchors.Clear();
             foreach (var config in _currentScenario.Humans)
             {
                 for (int i = 0; i < config.Count && humanIndex < allHumans.Count; i++)
@@ -524,11 +541,13 @@ namespace RobotSNAP.Core.Scenario
 
             // --- Ordered route: the spawn point first, then every goal until the last one ---
             var goals = new List<Vector3>();
-            if (IsPointGoal(config.Goal))
+            if (IsSpatialGoal(config.Goal))
             {
-                goals.Add(ResolveGoalPosition(config.Goal));
+                // A random goal is resolved per agent: the members of a route each draw their own destination
+                // inside the zone, at the moment they are configured.
+                goals.Add(ResolveSpatialGoalPosition(config.Goal));
                 if (config.Goals != null)
-                    goals.AddRange(config.Goals.Where(IsPointGoal).Select(ResolveGoalPosition));
+                    goals.AddRange(config.Goals.Where(IsSpatialGoal).Select(ResolveSpatialGoalPosition));
             }
 
             // --- Spawn Position ---
@@ -579,17 +598,18 @@ namespace RobotSNAP.Core.Scenario
         /// <summary>
         /// Spawn policy, evaluated per human config.
         ///
-        /// <para><b>Grouped route</b> — every member takes the same anchor, snapped onto the NavMesh.
+        /// <para><b>Grouped route</b> — every member takes the same anchor, snapped onto walkable ground.
         /// The cluster is not spread here: <see cref="HumanGroup.PlaceMembersAtSpawn"/> lays the members
         /// out on their formation slots around the leader once the whole group exists, so a group always
         /// appears as one compact bloc.</para>
         ///
-        /// <para><b>Ungrouped route with several agents</b> — the anchor is snapped onto the NavMesh and
+        /// <para><b>Ungrouped route with several agents</b> — the anchor is snapped onto walkable ground and
         /// the agents are placed on formation slots around it, each projection bounded to half a spacing
-        /// so nobody is pushed into the next room by the NavMesh sampling.</para>
+        /// so nobody is pushed into the next room by the projection.</para>
         ///
-        /// <para><b>Random spawn</b> — a random point inside the zone, snapped onto the NavMesh so agents
-        /// never start inside a wall.</para>
+        /// <para><b>Random spawn</b> — a point drawn inside the zone, on navigable ground. The draw feeds the
+        /// anchor, so a group, or the formation of a single entry, appears around one random point instead of
+        /// scattering its members over one draw each.</para>
         /// </summary>
         private Vector3 ResolveSpawnPosition(
             HumanScenarioConfig config,
@@ -603,13 +623,9 @@ namespace RobotSNAP.Core.Scenario
 
             // Group members share the leader's anchor; the formation is applied after the whole group is built.
             if (!string.IsNullOrWhiteSpace(config.Group))
-                return SpawnPlanner.PlaceAnchor(ResolveSpawnAnchor(spawn));
+                return SpawnPlanner.PlaceAnchor(ResolveSharedAnchor(config, spawn));
 
-            if (string.Equals(spawn.Type, "random", StringComparison.OrdinalIgnoreCase))
-                // A random point sits anywhere in its zone: allow a wider search to reach walkable ground.
-                return SpawnPlacement.SnapToNavMesh(ResolveRandomSpawn(spawn), 1.5f, 5f);
-
-            Vector3 anchor = SpawnPlanner.PlaceAnchor(ResolveSpawnAnchor(spawn));
+            Vector3 anchor = SpawnPlanner.PlaceAnchor(ResolveSharedAnchor(config, spawn));
             if (total <= 1)
                 return anchor;
 
@@ -624,6 +640,30 @@ namespace RobotSNAP.Core.Scenario
             return SpawnPlanner.PlaceSlot(anchor, offset, spawn.Spacing);
         }
 
+        /// <summary>
+        /// Anchor of a spawn definition, drawn once and remembered for the whole formation that shares it: the
+        /// members of a group, or the agents one entry places on formation slots. A random zone is therefore
+        /// sampled once, not once per agent, and the members keep their relative positions around that point.
+        /// </summary>
+        private Vector3 ResolveSharedAnchor(HumanScenarioConfig config, SpawnConfig spawn)
+        {
+            if (!IsRandomSpawn(spawn))
+                return ResolveSpawnAnchor(spawn);
+
+            object key = string.IsNullOrWhiteSpace(config.Group) ? (object)config : config.Group.Trim();
+            if (_randomAnchors.TryGetValue(key, out Vector3 drawn))
+                return drawn;
+
+            drawn = DrawSpawnAnchor(spawn);
+            _randomAnchors[key] = drawn;
+            return drawn;
+        }
+
+        private static bool IsRandomSpawn(SpawnConfig spawn)
+        {
+            return spawn != null && string.Equals(spawn.Type, "random", StringComparison.OrdinalIgnoreCase);
+        }
+
         /// <summary>Single anchor of a spawn definition: named reference, direct position or zone center.</summary>
         private Vector3 ResolveSpawnAnchor(SpawnConfig spawn)
         {
@@ -636,25 +676,40 @@ namespace RobotSNAP.Core.Scenario
             return Vector3.zero;
         }
 
-        private Vector3 ResolveRandomSpawn(SpawnConfig spawn)
+        /// <summary>
+        /// Random anchor of a spawn definition: a point of its zone — the referenced one, or the inline one —
+        /// kept on navigable ground by <see cref="RandomPlacement"/>. Draws come from
+        /// <c>UnityEngine.Random</c>, which the simulation already seeded, so a run stays reproducible.
+        /// </summary>
+        private Vector3 DrawSpawnAnchor(SpawnConfig spawn)
+        {
+            Bounds bounds = ResolveBoundsFromSpawn(spawn);
+            float height = bounds.center.y;
+            Vector2 point = RandomPlacement.SampleWalkable(
+                bounds,
+                DrawUniformPoint,
+                position => IsNavigable(position, height),
+                position => ProjectToNavigable(position, height));
+            return new Vector3(point.x, bounds.center.y, point.y);
+        }
+
+        /// <summary>Zone of a random spawn: the referenced zone when it is one, the inline one otherwise.</summary>
+        private Bounds ResolveBoundsFromSpawn(SpawnConfig spawn)
         {
             if (!string.IsNullOrEmpty(spawn.Reference))
             {
-                Bounds referenceBounds = ResolveBounds(spawn.Reference);
-                if (referenceBounds.size != Vector3.zero)
-                    return RandomPointIn(referenceBounds);
+                Bounds referenced = ResolveBounds(spawn.Reference);
+                if (referenced.size != Vector3.zero)
+                    return referenced;
             }
 
             if (spawn.Zone != null && spawn.Zone.IsBounds)
-                return RandomPointIn(spawn.Zone.ToBounds());
+                return spawn.Zone.ToBounds();
 
-            return ResolveSpawnAnchor(spawn);
+            // No zone anywhere: the authored anchor becomes a degenerate zone, so the random spawn degrades to
+            // the point spawn it really describes instead of jumping to the origin.
+            return new Bounds(ResolveSpawnAnchor(spawn), Vector3.zero);
         }
-
-        private static Vector3 RandomPointIn(Bounds bounds) => new Vector3(
-            UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
-            bounds.center.y,
-            UnityEngine.Random.Range(bounds.min.z, bounds.max.z));
 
         /// <summary>
         /// Resolves a goal position from a GoalConfig.
@@ -674,25 +729,95 @@ namespace RobotSNAP.Core.Scenario
             return Vector3.zero;
         }
 
-        private static bool IsPointGoal(GoalConfig goal)
+        /// <summary>
+        /// Spatial position of one goal, for the agent being configured. A point stays where it is authored; a
+        /// random goal draws its own point inside its zone, kept on navigable ground.
+        ///
+        /// Resolving here, per agent, is what makes a random goal a real destination for each member of a
+        /// route instead of one frozen point shared by the whole scenario.
+        /// </summary>
+        private Vector3 ResolveSpatialGoalPosition(GoalConfig goal)
+        {
+            if (goal == null)
+                return Vector3.zero;
+
+            if (!IsRandomGoal(goal))
+                return ResolveGoalPosition(goal);
+
+            Bounds bounds = ResolveBoundsFromGoal(goal);
+            float height = bounds.center.y;
+            Vector2 point = RandomPlacement.SampleWalkable(
+                bounds,
+                DrawUniformPoint,
+                position => IsNavigable(position, height),
+                position => ProjectToNavigable(position, height));
+            return new Vector3(point.x, bounds.center.y, point.y);
+        }
+
+        /// <summary>A spatial goal owns a position: a point (empty type included), or a random zone.</summary>
+        private static bool IsSpatialGoal(GoalConfig goal)
         {
             return goal != null && (string.IsNullOrWhiteSpace(goal.Type) ||
-                                    string.Equals(goal.Type, "point", StringComparison.OrdinalIgnoreCase));
+                                    string.Equals(goal.Type, "point", StringComparison.OrdinalIgnoreCase) ||
+                                    IsRandomGoal(goal));
+        }
+
+        private static bool IsRandomGoal(GoalConfig goal)
+        {
+            return goal != null && string.Equals(goal.Type, "random", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
         /// Resolves a Bounds from a GoalConfig (for random goals).
-        /// Supports: 'ref' (legacy) or direct 'zone'.
+        /// Supports: 'ref' (legacy) or direct 'zone'; a goal carrying neither falls back on the point it
+        /// already resolves to, which <see cref="RandomPlacement"/> then projects onto navigable ground.
         /// </summary>
         private Bounds ResolveBoundsFromGoal(GoalConfig goal)
         {
             if (!string.IsNullOrEmpty(goal.Reference))
-                return _loader?.GetBounds(_currentScenario, goal.Reference) ?? new Bounds();
+            {
+                Bounds referenced = ResolveBounds(goal.Reference);
+                if (referenced.size != Vector3.zero)
+                    return referenced;
+            }
 
             if (goal.Zone != null && goal.Zone.IsBounds)
                 return goal.Zone.ToBounds();
 
-            return new Bounds();
+            return new Bounds(ResolveGoalPosition(goal), Vector3.zero);
+        }
+
+        /// <summary>Uniform draw inside the XZ footprint of a zone, at the height of its centre.</summary>
+        private static Vector2 DrawUniformPoint(Bounds bounds) => new Vector2(
+            UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
+            UnityEngine.Random.Range(bounds.min.z, bounds.max.z));
+
+        /// <summary>
+        /// True when an agent may stand on that world point: the walkable grid of the scenario answers first,
+        /// the scene NavMesh second, the way <see cref="SpawnPlacement"/> already arbitrates them. An
+        /// environment with neither refuses every draw, and the projection then returns it untouched.
+        /// <paramref name="height"/> is the height of the zone, which only the NavMesh cares about.
+        /// </summary>
+        private static bool IsNavigable(Vector2 point, float height)
+        {
+            if (ScenarioNavigation.IsAvailable)
+                return ScenarioNavigation.IsWalkable(point);
+
+            return NavMesh.SamplePosition(
+                new Vector3(point.x, height, point.y), out _, 0.1f, NavMesh.AllAreas);
+        }
+
+        /// <summary>
+        /// Nearest navigable point of a drawn position: walkable grid first, scene NavMesh second, and the
+        /// drawn point itself when neither can answer. <paramref name="height"/> is the height of the zone.
+        /// </summary>
+        private static Vector2 ProjectToNavigable(Vector2 point, float height)
+        {
+            Vector3 projected = SpawnPlacement.SnapToNavMesh(
+                new Vector3(point.x, height, point.y),
+                SpawnPlacement.AnchorSearchRadius,
+                DrawnPointSearchRadius);
+            return new Vector2(projected.x, projected.z);
         }
 
         // ==========================================
@@ -706,16 +831,6 @@ namespace RobotSNAP.Core.Scenario
                 case "point":
                     var goalPos = ResolveGoalPosition(goal);
                     human.SetGoal(goalPos);
-                    break;
-
-                case "random":
-                    Bounds bounds = ResolveBoundsFromGoal(goal);
-                    Vector3 randomGoal = new Vector3(
-                        UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
-                        bounds.center.y,
-                        UnityEngine.Random.Range(bounds.min.z, bounds.max.z)
-                    );
-                    human.SetGoal(randomGoal);
                     break;
 
                 case "wander":

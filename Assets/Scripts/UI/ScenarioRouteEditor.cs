@@ -52,9 +52,19 @@ public sealed class ScenarioRouteEditor
         public float GroupSpacing = 1.5f;
         public float FormationParameter;
         public readonly List<Vector2> Points = new();
+        /// <summary>True when the whole route is scattered at spawn instead of starting on its first point.</summary>
+        public bool SpawnRandom;
+        /// <summary>Area the route is scattered in, meaningful when <see cref="SpawnRandom"/> is set.</summary>
+        public Rect SpawnZone;
+        /// <summary>Arrival area of each point, parallel to <see cref="Points"/>; a null entry is a fixed point.</summary>
+        public readonly List<Rect?> PointZones = new();
         public HumanScenarioConfig Source;
         public bool RouteModified;
         public bool HasNonSpatialGoal;
+
+        /// <summary>Arrival area of one point, or null when that point is fixed.</summary>
+        public Rect? ZoneAt(int index) =>
+            index >= 0 && index < PointZones.Count ? PointZones[index] : null;
     }
 
     private sealed class RouteSnapshot
@@ -70,6 +80,9 @@ public sealed class ScenarioRouteEditor
         public float GroupSpacing;
         public float FormationParameter;
         public List<Vector2> Points;
+        public bool SpawnRandom;
+        public Rect SpawnZone;
+        public List<Rect?> PointZones;
         public HumanScenarioConfig Source;
         public bool RouteModified;
         public bool HasNonSpatialGoal;
@@ -101,6 +114,23 @@ public sealed class ScenarioRouteEditor
     {
         public FloatField X;
         public FloatField Z;
+    }
+
+    /// <summary>The four numeric fields of one area, so the spawn and arrival editors share one code path.</summary>
+    private sealed class ZoneFields
+    {
+        public FloatField CenterX;
+        public FloatField CenterZ;
+        public FloatField SizeX;
+        public FloatField SizeZ;
+    }
+
+    /// <summary>Which area the next two map clicks are drawing.</summary>
+    private enum ZonePickTarget
+    {
+        None,
+        Spawn,
+        Point
     }
 
     private static readonly Color RobotColor = new(0.22f, 0.78f, 0.45f);
@@ -139,6 +169,16 @@ public sealed class ScenarioRouteEditor
         "Cluster"
     };
 
+    /// <summary>How the route appears: on its authored start point, or anywhere inside an area.</summary>
+    private const string SpawnModePointChoice = "Authored start point";
+    private const string SpawnModeRandomChoice = "Random in zone";
+
+    private static readonly string[] SpawnModeChoices =
+    {
+        SpawnModePointChoice,
+        SpawnModeRandomChoice
+    };
+
     private readonly List<RouteDraft> _routes = new();
     private readonly List<EditorSnapshot> _undoStack = new();
     private readonly List<EditorSnapshot> _redoStack = new();
@@ -163,6 +203,22 @@ public sealed class ScenarioRouteEditor
     private readonly FloatField _formationParameterField;
     private readonly Label _formationParameterLabel;
     private readonly Label _formationPreviewLabel;
+    private readonly Button _sectionPlacementHeader;
+    private readonly Button _sectionGroupHeader;
+    private readonly Button _sectionBehaviourHeader;
+    private readonly VisualElement _sectionPlacementContent;
+    private readonly VisualElement _sectionGroupContent;
+    private readonly VisualElement _sectionBehaviourContent;
+    private readonly DropdownField _spawnModeDropdown;
+    private readonly VisualElement _spawnZonePanel;
+    private readonly Label _spawnZoneHint;
+    private readonly Button _drawSpawnZoneButton;
+    private readonly ZoneFields _spawnZoneFields = new();
+    private readonly Toggle _goalZoneToggle;
+    private readonly VisualElement _goalZonePanel;
+    private readonly Label _goalZoneHint;
+    private readonly Button _drawGoalZoneButton;
+    private readonly ZoneFields _goalZoneFields = new();
     private readonly VisualElement _routePointsContainer;
     private readonly VisualElement _canvas;
     private readonly Image _mapImage;
@@ -175,6 +231,7 @@ public sealed class ScenarioRouteEditor
     private readonly OccupancyMapRouteOverlay _overlay;
     private readonly VisualElement _pointLabelLayer;
     private readonly List<OccupancyMapRouteOverlay.FormationPreview> _formationPreviews = new();
+    private readonly List<OccupancyMapRouteOverlay.ZoneVisual> _zoneVisuals = new();
     private readonly Dictionary<int, PlannedGeometry> _plannedGeometry = new();
 
     private Texture2D _mapTexture;
@@ -186,6 +243,20 @@ public sealed class ScenarioRouteEditor
     private int _activeRouteIndex;
     private int _pendingPointIndex;
     private bool _updatingFields;
+
+    // Disclosure state of the step-2 sections: the essentials stay on screen, the rest is one click away.
+    private bool _placementExpanded;
+    private bool _groupExpanded = true;
+    private bool _behaviourExpanded;
+
+    private ZonePickTarget _zonePick = ZonePickTarget.None;
+    private bool _zoneFirstCornerPlaced;
+    private Vector2 _zoneFirstCorner;
+
+    private bool _zoneDragActive;
+    private bool _zoneDragSpawn;
+    private Vector2 _zoneDragGrab;
+    private Vector2 _zoneCursorWorld;
     private bool _showGrid = true;
 
     private bool _dragging;
@@ -221,6 +292,28 @@ public sealed class ScenarioRouteEditor
         _formationParameterField = root.Q<FloatField>("FormationParameterField");
         _formationParameterLabel = root.Q<Label>("FormationParameterLabel");
         _formationPreviewLabel = root.Q<Label>("FormationPreviewLabel");
+        _sectionPlacementHeader = root.Q<Button>("SectionPlacementHeader");
+        _sectionGroupHeader = root.Q<Button>("SectionGroupHeader");
+        _sectionBehaviourHeader = root.Q<Button>("SectionBehaviourHeader");
+        _sectionPlacementContent = root.Q<VisualElement>("SectionPlacementContent");
+        _sectionGroupContent = root.Q<VisualElement>("SectionGroupContent");
+        _sectionBehaviourContent = root.Q<VisualElement>("SectionBehaviourContent");
+        _spawnModeDropdown = root.Q<DropdownField>("SpawnModeDropdown");
+        _spawnZonePanel = root.Q<VisualElement>("SpawnZonePanel");
+        _spawnZoneHint = root.Q<Label>("SpawnZoneHint");
+        _drawSpawnZoneButton = root.Q<Button>("DrawSpawnZoneButton");
+        _goalZoneToggle = root.Q<Toggle>("GoalZoneToggle");
+        _goalZonePanel = root.Q<VisualElement>("GoalZonePanel");
+        _goalZoneHint = root.Q<Label>("GoalZoneHint");
+        _drawGoalZoneButton = root.Q<Button>("DrawGoalZoneButton");
+        _spawnZoneFields.CenterX = root.Q<FloatField>("SpawnZoneCenterXField");
+        _spawnZoneFields.CenterZ = root.Q<FloatField>("SpawnZoneCenterZField");
+        _spawnZoneFields.SizeX = root.Q<FloatField>("SpawnZoneSizeXField");
+        _spawnZoneFields.SizeZ = root.Q<FloatField>("SpawnZoneSizeZField");
+        _goalZoneFields.CenterX = root.Q<FloatField>("GoalZoneCenterXField");
+        _goalZoneFields.CenterZ = root.Q<FloatField>("GoalZoneCenterZField");
+        _goalZoneFields.SizeX = root.Q<FloatField>("GoalZoneSizeXField");
+        _goalZoneFields.SizeZ = root.Q<FloatField>("GoalZoneSizeZField");
         _routePointsContainer = root.Q<VisualElement>("RoutePointsContainer");
         _canvas = root.Q<VisualElement>("AgentsEnvironmentCanvas");
         _mapImage = root.Q<Image>("AgentsEnvironmentImage");
@@ -241,6 +334,14 @@ public sealed class ScenarioRouteEditor
                 _movementControllerDropdown,
                 _formationParameterField, _formationParameterLabel,
                 _formationPreviewLabel,
+                _sectionPlacementHeader, _sectionGroupHeader, _sectionBehaviourHeader,
+                _sectionPlacementContent, _sectionGroupContent, _sectionBehaviourContent,
+                _spawnModeDropdown, _spawnZonePanel, _spawnZoneHint, _drawSpawnZoneButton,
+                _goalZoneToggle, _goalZonePanel, _goalZoneHint, _drawGoalZoneButton,
+                _spawnZoneFields.CenterX, _spawnZoneFields.CenterZ,
+                _spawnZoneFields.SizeX, _spawnZoneFields.SizeZ,
+                _goalZoneFields.CenterX, _goalZoneFields.CenterZ,
+                _goalZoneFields.SizeX, _goalZoneFields.SizeZ,
                 _routePointsContainer, _canvas, _mapImage, _mapPlaceholder, _instructionLabel,
                 _cursorCoordinatesLabel, _activeRouteLabel, _gridScaleLabel, _mapPathStatusLabel,
                 overlayHost
@@ -350,6 +451,64 @@ public sealed class ScenarioRouteEditor
             ApplyGroupLayoutToPeers(ActiveRoute);
             RefreshGroupList();
         });
+
+        // Step 2 shows the essentials and keeps the rest one click away.
+        _sectionPlacementHeader.userData = _sectionPlacementHeader.text;
+        _sectionGroupHeader.userData = _sectionGroupHeader.text;
+        _sectionBehaviourHeader.userData = _sectionBehaviourHeader.text;
+        _sectionPlacementHeader.clicked += () => { _placementExpanded = !_placementExpanded; ApplySectionState(); };
+        _sectionGroupHeader.clicked += () => { _groupExpanded = !_groupExpanded; ApplySectionState(); };
+        _sectionBehaviourHeader.clicked += () => { _behaviourExpanded = !_behaviourExpanded; ApplySectionState(); };
+        ApplySectionState();
+
+        _spawnModeDropdown.choices = new List<string>(SpawnModeChoices);
+        _spawnModeDropdown.RegisterValueChangedCallback(evt =>
+        {
+            if (_updatingFields) return;
+            RouteDraft active = ActiveRoute;
+            if (active == null || active.IsRobot)
+                return;
+
+            bool random = string.Equals(evt.newValue, SpawnModeRandomChoice, StringComparison.Ordinal);
+            PushUndo($"human-spawn-mode:{_activeRouteIndex}");
+            if (random && !IsUsableZone(active.SpawnZone))
+                active.SpawnZone = DefaultZoneAround(active.Points.Count > 0 ? active.Points[0] : Vector2.zero);
+            active.SpawnRandom = random;
+            active.RouteModified = true;
+            CancelZonePick();
+            RefreshActiveRoute();
+        });
+
+        RegisterZoneField(_spawnZoneFields.CenterX, spawn: true);
+        RegisterZoneField(_spawnZoneFields.CenterZ, spawn: true);
+        RegisterZoneField(_spawnZoneFields.SizeX, spawn: true);
+        RegisterZoneField(_spawnZoneFields.SizeZ, spawn: true);
+        RegisterZoneField(_goalZoneFields.CenterX, spawn: false);
+        RegisterZoneField(_goalZoneFields.CenterZ, spawn: false);
+        RegisterZoneField(_goalZoneFields.SizeX, spawn: false);
+        RegisterZoneField(_goalZoneFields.SizeZ, spawn: false);
+
+        _goalZoneToggle.RegisterValueChangedCallback(evt =>
+        {
+            if (_updatingFields) return;
+            RouteDraft active = ActiveRoute;
+            if (active == null || active.IsRobot)
+                return;
+
+            int index = _pendingPointIndex;
+            if (!IsAreaObjective(active, index))
+                return;
+
+            PushUndo($"human-goal-zone:{_activeRouteIndex}:{index}");
+            NormalizeZones(active);
+            active.PointZones[index] = evt.newValue ? DefaultZoneAround(active.Points[index]) : null;
+            active.RouteModified = true;
+            CancelZonePick();
+            RefreshActiveRoute();
+        });
+
+        _drawSpawnZoneButton.clicked += () => BeginZonePick(ZonePickTarget.Spawn);
+        _drawGoalZoneButton.clicked += () => BeginZonePick(ZonePickTarget.Point);
     }
 
     public int TotalHumanCount => _routes.Where(route => !route.IsRobot).Sum(route => Mathf.Max(0, route.Count));
@@ -464,13 +623,15 @@ public sealed class ScenarioRouteEditor
     {
         _routes.Clear();
         _plannedGeometry.Clear();
-        _routes.Add(new RouteDraft
+        var robot = new RouteDraft
         {
             Id = "Robot route",
             IsRobot = true,
-            RouteModified = true,
-            Points = { Vector2.zero, new Vector2(2f, 0f) }
-        });
+            RouteModified = true
+        };
+        AppendPoint(robot, Vector2.zero);
+        AppendPoint(robot, new Vector2(2f, 0f));
+        _routes.Add(robot);
         _routes.Add(CreateHumanDraft(1));
         _activeRouteIndex = 0;
         _pendingPointIndex = 0;
@@ -487,15 +648,18 @@ public sealed class ScenarioRouteEditor
 
         RouteDraft robot = _routes[0];
         robot.Points.Clear();
+        robot.PointZones.Clear();
+        robot.SpawnRandom = false;
+        robot.SpawnZone = default;
         if (TryResolveReference(scenario, scenario.Robot?.StartRef, out Vector2 robotStart))
-            robot.Points.Add(robotStart);
+            AppendPoint(robot, robotStart);
         if (scenario.Robot?.WaypointRefs != null)
         {
             foreach (string waypointRef in scenario.Robot.WaypointRefs)
-                if (TryResolveReference(scenario, waypointRef, out Vector2 waypoint)) robot.Points.Add(waypoint);
+                if (TryResolveReference(scenario, waypointRef, out Vector2 waypoint)) AppendPoint(robot, waypoint);
         }
         if (TryResolveReference(scenario, scenario.Robot?.GoalRef, out Vector2 robotGoal))
-            robot.Points.Add(robotGoal);
+            AppendPoint(robot, robotGoal);
         EnsureMinimumPoints(robot);
         robot.RouteModified = false;
 
@@ -761,7 +925,62 @@ public sealed class ScenarioRouteEditor
         // them inside the wall next to it.
         error ??= FindSpawnSlotOnWall();
 
+        // A random placement area the runtime cannot sample would silently fall back to the nearest walkable
+        // pixel, which is not where the author drew it.
+        error ??= FindAreaWithoutWalkableGround();
+
         return error == null;
+    }
+
+    /// <summary>
+    /// Every area an author can draw must contain walkable ground, or the agents would all be projected onto the
+    /// nearest walkable pixel from an area that has none.
+    /// </summary>
+    private string FindAreaWithoutWalkableGround()
+    {
+        if (_occupancyGrid == null || !_occupancyGrid.IsValid)
+            return null;
+
+        foreach (RouteDraft route in _routes)
+        {
+            if (route.IsRobot || route.Count <= 0)
+                continue;
+
+            if (route.SpawnRandom && IsUsableZone(route.SpawnZone) &&
+                !AreaHasWalkableGround(route.SpawnZone, route.Points.Count > 0 ? route.Points[0] : Vector2.zero))
+                return $"{route.Id} start area contains no walkable ground.";
+
+            for (int index = 1; index < route.Points.Count; index++)
+            {
+                Rect? zone = route.ZoneAt(index);
+                if (zone.HasValue && IsUsableZone(zone.Value) &&
+                    !AreaHasWalkableGround(zone.Value, route.Points[index]))
+                    return $"{route.Id} {RouteMapHitTesting.PointLabel(index)} area contains no walkable ground.";
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Samples a coarse grid across an area: one walkable pixel is enough for the runtime to snap an agent to.
+    /// </summary>
+    private bool AreaHasWalkableGround(Rect zone, Vector2 fallback)
+    {
+        const int Samples = 5;
+        for (int row = 0; row < Samples; row++)
+        {
+            for (int column = 0; column < Samples; column++)
+            {
+                var sample = new Vector2(
+                    Mathf.Lerp(zone.xMin, zone.xMax, column / (Samples - 1f)),
+                    Mathf.Lerp(zone.yMin, zone.yMax, row / (Samples - 1f)));
+                if (GroundAt(sample) == PointGround.Walkable)
+                    return true;
+            }
+        }
+
+        return GroundAt(fallback) == PointGround.Walkable;
     }
 
     /// <summary>
@@ -958,13 +1177,20 @@ public sealed class ScenarioRouteEditor
             if (draft.Source == null || draft.RouteModified)
             {
                 EnsureMinimumPoints(draft);
+                NormalizeZones(draft);
                 config.Spawn ??= new SpawnConfig();
                 config.Goal ??= new GoalConfig();
                 string safeId = ToFileId(config.Id);
-                SetSpawnReference(config.Spawn, $"{safeId}_start");
-                SetGoalReference(config.Goal, $"{safeId}_goal_1");
-                WritePoint(scenario, config.Spawn.Reference, draft.Points[0]);
-                WritePoint(scenario, config.Goal.Reference, draft.Points[1]);
+
+                if (draft.SpawnRandom && IsUsableZone(draft.SpawnZone))
+                    WriteZoneSpawn(config.Spawn, draft.SpawnZone);
+                else
+                {
+                    SetSpawnReference(config.Spawn, $"{safeId}_start");
+                    WritePoint(scenario, config.Spawn.Reference, draft.Points[0]);
+                }
+
+                WriteGoal(scenario, config.Goal, $"{safeId}_goal_1", draft.Points[1], draft.ZoneAt(1));
 
                 var additionalGoals = new List<GoalConfig>();
                 for (int goalIndex = 2; goalIndex < draft.Points.Count; goalIndex++)
@@ -972,8 +1198,7 @@ public sealed class ScenarioRouteEditor
                     GoalConfig goal = config.Goals != null && goalIndex - 2 < config.Goals.Count
                         ? config.Goals[goalIndex - 2]
                         : new GoalConfig();
-                    SetGoalReference(goal, $"{safeId}_goal_{goalIndex}");
-                    WritePoint(scenario, goal.Reference, draft.Points[goalIndex]);
+                    WriteGoal(scenario, goal, $"{safeId}_goal_{goalIndex}", draft.Points[goalIndex], draft.ZoneAt(goalIndex));
                     additionalGoals.Add(goal);
                 }
                 config.Goals = additionalGoals.Count > 0 ? additionalGoals : null;
@@ -1051,7 +1276,7 @@ public sealed class ScenarioRouteEditor
 
         PushUndo();
         Vector2 anchor = active.Points.Count > 0 ? active.Points[^1] : Vector2.zero;
-        active.Points.Add(anchor + Vector2.right);
+        AppendPoint(active, anchor + Vector2.right);
         active.RouteModified = true;
         active.HasNonSpatialGoal = false;
         _pendingPointIndex = active.Points.Count - 1;
@@ -1110,6 +1335,7 @@ public sealed class ScenarioRouteEditor
             _formationDropdown.SetValueWithoutNotify(FormationToDisplay(active.Formation));
             _groupSpacingField.SetValueWithoutNotify(active.GroupSpacing);
             UpdateFormationParameterField(active);
+            RefreshZoneEditors(active);
         }
         _updatingFields = false;
 
@@ -1117,6 +1343,269 @@ public sealed class ScenarioRouteEditor
         RebuildPointRows();
         SetPlacementInstruction();
         RefreshOverlay();
+    }
+
+    // ==========================================
+    //   STEP 2 DISCLOSURE AND PLACEMENT AREAS
+    // ==========================================
+
+    /// <summary>
+    /// A collapsed section is one click away rather than gone: the chevron and the header carry the state, so
+    /// the author always knows there is more to see.
+    /// </summary>
+    private void ApplySectionState()
+    {
+        ApplySection(_sectionPlacementHeader, _sectionPlacementContent, _placementExpanded);
+        ApplySection(_sectionGroupHeader, _sectionGroupContent, _groupExpanded);
+        ApplySection(_sectionBehaviourHeader, _sectionBehaviourContent, _behaviourExpanded);
+    }
+
+    private static void ApplySection(Button header, VisualElement content, bool expanded)
+    {
+        if (header == null || content == null)
+            return;
+
+        content.EnableInClassList(HiddenClass, !expanded);
+        header.EnableInClassList("expanded", expanded);
+        string title = header.userData as string ?? header.text;
+        header.text = expanded ? $"▾  {title}" : $"▸  {title}";
+    }
+
+    /// <summary>
+    /// Pushes the areas of the active route into both editors: the spawn area of the route, and the arrival
+    /// area of the objective the author has selected.
+    /// </summary>
+    private void RefreshZoneEditors(RouteDraft active)
+    {
+        _spawnModeDropdown.SetValueWithoutNotify(active.SpawnRandom ? SpawnModeRandomChoice : SpawnModePointChoice);
+        _spawnZonePanel.EnableInClassList(HiddenClass, !active.SpawnRandom);
+        WriteZoneFields(_spawnZoneFields, active.SpawnZone);
+
+        int index = _pendingPointIndex;
+        bool areaObjective = IsAreaObjective(active, index);
+        bool goalIsArea = areaObjective && active.ZoneAt(index).HasValue;
+        _goalZoneToggle.SetEnabled(areaObjective);
+        _goalZoneToggle.SetValueWithoutNotify(goalIsArea);
+        _goalZonePanel.EnableInClassList(HiddenClass, !goalIsArea);
+        WriteZoneFields(
+            _goalZoneFields,
+            goalIsArea ? active.ZoneAt(index).Value : default);
+
+        UpdateZoneHints();
+    }
+
+    private static void WriteZoneFields(ZoneFields fields, Rect zone)
+    {
+        fields.CenterX?.SetValueWithoutNotify(RoundCoordinate(zone.center.x));
+        fields.CenterZ?.SetValueWithoutNotify(RoundCoordinate(zone.center.y));
+        fields.SizeX?.SetValueWithoutNotify(RoundCoordinate(zone.width));
+        fields.SizeZ?.SetValueWithoutNotify(RoundCoordinate(zone.height));
+    }
+
+    /// <summary>Keeps the numeric fields in step with an area being dragged on the map.</summary>
+    private void SyncZoneFieldsNoNotify()
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null)
+            return;
+
+        WriteZoneFields(_spawnZoneFields, active.SpawnZone);
+        if (IsAreaObjective(active, _pendingPointIndex) && active.ZoneAt(_pendingPointIndex).HasValue)
+            WriteZoneFields(_goalZoneFields, active.ZoneAt(_pendingPointIndex).Value);
+    }
+
+    /// <summary>Only a real objective can be an area; the start point of the route stays a point.</summary>
+    private static bool IsAreaObjective(RouteDraft active, int index) =>
+        active != null && index > 0 && index < active.Points.Count;
+
+    private void RegisterZoneField(FloatField field, bool spawn)
+    {
+        field.RegisterValueChangedCallback(evt =>
+        {
+            if (_updatingFields) return;
+            PushUndo($"zone:{_activeRouteIndex}:{(spawn ? "spawn" : "goal")}");
+            ApplyZoneFields(spawn);
+        });
+    }
+
+    /// <summary>Rebuilds one area from its four numeric fields, so typing a value moves exactly its edge.</summary>
+    private void ApplyZoneFields(bool spawn)
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null || active.IsRobot)
+            return;
+
+        ZoneFields fields = spawn ? _spawnZoneFields : _goalZoneFields;
+        Rect zone = ZoneFromCenterAndSize(
+            new Vector2(fields.CenterX.value, fields.CenterZ.value),
+            new Vector2(fields.SizeX.value, fields.SizeZ.value));
+
+        if (spawn)
+        {
+            active.SpawnRandom = true;
+            active.SpawnZone = zone;
+        }
+        else
+        {
+            int index = _pendingPointIndex;
+            if (!IsAreaObjective(active, index))
+                return;
+
+            NormalizeZones(active);
+            active.PointZones[index] = zone;
+        }
+
+        active.RouteModified = true;
+        CancelZonePick();
+        RefreshOverlay();
+        UpdateZoneHints();
+    }
+
+    /// <summary>Starts the two-click gesture that draws an area on the map.</summary>
+    private void BeginZonePick(ZonePickTarget target)
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null || active.IsRobot)
+            return;
+
+        if (target == ZonePickTarget.Point && !IsAreaObjective(active, _pendingPointIndex))
+        {
+            _instructionLabel.text = "Select an objective first: the start point of a route stays a point.";
+            return;
+        }
+
+        _zonePick = target;
+        _zoneFirstCornerPlaced = false;
+        _instructionLabel.text = "Click the first corner of the area, then the opposite one. Esc cancels.";
+        RefreshOverlay();
+    }
+
+    private void CancelZonePick()
+    {
+        _zonePick = ZonePickTarget.None;
+        _zoneFirstCornerPlaced = false;
+    }
+
+    /// <summary>Applies one corner of the area being drawn; the second one closes the rectangle.</summary>
+    private void HandleZonePick(Vector2 worldPosition)
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null || _zonePick == ZonePickTarget.None)
+            return;
+
+        if (!_zoneFirstCornerPlaced)
+        {
+            _zoneFirstCorner = worldPosition;
+            _zoneFirstCornerPlaced = true;
+            _instructionLabel.text = "Now click the opposite corner of the area. Esc cancels.";
+            RefreshOverlay();
+            return;
+        }
+
+        Rect zone = ZoneFromCorners(_zoneFirstCorner, worldPosition);
+        if (!IsUsableZone(zone))
+        {
+            _instructionLabel.text = "That area is too small: click two corners at least half a metre apart.";
+            _zoneFirstCornerPlaced = false;
+            return;
+        }
+
+        PushUndo($"zone-draw:{_activeRouteIndex}");
+        if (_zonePick == ZonePickTarget.Spawn)
+        {
+            active.SpawnRandom = true;
+            active.SpawnZone = zone;
+        }
+        else
+        {
+            NormalizeZones(active);
+            active.PointZones[_pendingPointIndex] = zone;
+        }
+
+        active.RouteModified = true;
+        CancelZonePick();
+        RefreshActiveRoute();
+    }
+
+    /// <summary>
+    /// Grabbing the inside of an area drags the whole area: the author moves it where the agents should appear
+    /// instead of retyping four numbers.
+    /// </summary>
+    private bool TryBeginZoneDrag(Vector2 worldPosition)
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null || active.IsRobot)
+            return false;
+
+        bool overSpawn = active.SpawnRandom && IsUsableZone(active.SpawnZone) && active.SpawnZone.Contains(worldPosition);
+        int index = _pendingPointIndex;
+        Rect? goalZone = IsAreaObjective(active, index) ? active.ZoneAt(index) : null;
+        bool overGoal = goalZone.HasValue && IsUsableZone(goalZone.Value) && goalZone.Value.Contains(worldPosition);
+        if (!overSpawn && !overGoal)
+            return false;
+
+        _zoneDragActive = true;
+        _zoneDragSpawn = overSpawn;
+        _zoneDragGrab = worldPosition;
+        _dragUndoSnapshot = PushUndo($"zone-move:{_activeRouteIndex}");
+        return true;
+    }
+
+    private void MoveDraggedZone(Vector2 worldPosition)
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null)
+            return;
+
+        Vector2 delta = worldPosition - _zoneDragGrab;
+        if (_zoneDragSpawn)
+        {
+            Rect zone = active.SpawnZone;
+            active.SpawnZone = new Rect(zone.x + delta.x, zone.y + delta.y, zone.width, zone.height);
+        }
+        else
+        {
+            int index = _pendingPointIndex;
+            if (!IsAreaObjective(active, index) || !active.ZoneAt(index).HasValue)
+                return;
+
+            Rect zone = active.ZoneAt(index).Value;
+            NormalizeZones(active);
+            active.PointZones[index] = new Rect(zone.x + delta.x, zone.y + delta.y, zone.width, zone.height);
+        }
+
+        _zoneDragGrab = worldPosition;
+        active.RouteModified = true;
+    }
+
+    /// <summary>Rewrites the two hints under the draw buttons with the area the author currently has.</summary>
+    private void UpdateZoneHints()
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null || active.IsRobot)
+            return;
+
+        string spawnHint = active.SpawnRandom && IsUsableZone(active.SpawnZone)
+            ? $"Agents appear anywhere inside a {active.SpawnZone.width:0.#} × {active.SpawnZone.height:0.#} m area."
+            : "Agents appear on the start point of the route.";
+        if (_zonePick == ZonePickTarget.Spawn)
+            spawnHint = _zoneFirstCornerPlaced ? "Now click the opposite corner." : "Click the first corner.";
+        _spawnZoneHint.text = spawnHint;
+
+        int index = _pendingPointIndex;
+        if (!IsAreaObjective(active, index))
+        {
+            _goalZoneHint.text = "Select an objective on the route to give it an arrival area.";
+            return;
+        }
+
+        Rect? zone = active.ZoneAt(index);
+        string goalHint = zone.HasValue && IsUsableZone(zone.Value)
+            ? $"Each agent draws its own point inside a {zone.Value.width:0.#} × {zone.Value.height:0.#} m area."
+            : "Every agent walks to this exact point.";
+        if (_zonePick == ZonePickTarget.Point)
+            goalHint = _zoneFirstCornerPlaced ? "Now click the opposite corner." : "Click the first corner.";
+        _goalZoneHint.text = goalHint;
     }
 
     private void RebuildRouteList()
@@ -1335,6 +1824,12 @@ public sealed class ScenarioRouteEditor
             var name = new Label(RouteMapHitTesting.PointLabel(index));
             name.AddToClassList("route-point-name");
             header.Add(name);
+            if (active.ZoneAt(index).HasValue)
+            {
+                var areaChip = new Label("area");
+                areaChip.AddToClassList("route-point-area-chip");
+                header.Add(areaChip);
+            }
             row.Add(header);
 
             var coordinates = new VisualElement();
@@ -1411,9 +1906,9 @@ public sealed class ScenarioRouteEditor
         Vector2 point = active.Points[index];
         if (Mathf.Abs((isX ? point.x : point.y) - value) < 0.0001f)
             return;
-        PushUndo($"coordinate:{_activeRouteIndex}:{index}:{(isX ? "x" : "z")}");
-        active.Points[index] = isX ? new Vector2(value, point.y) : new Vector2(point.x, value);
-        active.RouteModified = true;
+            PushUndo($"coordinate:{_activeRouteIndex}:{index}:{(isX ? "x" : "z")}");
+            SetPointPosition(active, index, isX ? new Vector2(value, point.y) : new Vector2(point.x, value));
+            active.RouteModified = true;
         active.HasNonSpatialGoal = false;
         RefreshOverlay();
     }
@@ -1425,7 +1920,7 @@ public sealed class ScenarioRouteEditor
         if (active == null || index <= 0 || targetIndex <= 0 || targetIndex >= active.Points.Count)
             return;
         PushUndo();
-        (active.Points[index], active.Points[targetIndex]) = (active.Points[targetIndex], active.Points[index]);
+        SwapPoints(active, index, targetIndex);
         active.RouteModified = true;
         _pendingPointIndex = targetIndex;
         RebuildPointRows();
@@ -1441,7 +1936,7 @@ public sealed class ScenarioRouteEditor
             return;
         }
         PushUndo();
-        active.Points.RemoveAt(index);
+        RemovePointAt(active, index);
         active.RouteModified = true;
         _pendingPointIndex = Mathf.Clamp(_pendingPointIndex, 0, active.Points.Count - 1);
         RebuildPointRows();
@@ -1597,10 +2092,22 @@ public sealed class ScenarioRouteEditor
         if (!TryLocalToWorld(localPosition, out Vector2 worldPosition))
             return;
 
+        // While an area is being drawn, every click belongs to that area.
+        if (_zonePick != ZonePickTarget.None)
+        {
+            HandleZonePick(worldPosition);
+            return;
+        }
+
+        // A point or a route wins over the area it may sit in: the small targets must stay reachable, and only a
+        // click on empty space inside an area grabs the area itself.
         if (TrySelectPointAt(localPosition))
             return;
 
         if (TrySelectRouteAt(localPosition))
+            return;
+
+        if (TryBeginZoneDrag(worldPosition))
             return;
 
         RouteDraft active = ActiveRoute;
@@ -1636,8 +2143,24 @@ public sealed class ScenarioRouteEditor
                 $"X {shown.x:0.##}  Z {shown.y:0.##}{DescribeModifiers(pointer)}";
         }
 
+        // While an area is being drawn, the rectangle from the first corner to the cursor follows the pointer.
+        if (onMap && _zonePick != ZonePickTarget.None && _zoneFirstCornerPlaced)
+        {
+            _zoneCursorWorld = worldPosition;
+            RefreshOverlay();
+        }
+
         if (!_dragging)
+        {
+            if (_zoneDragActive && onMap)
+            {
+                MoveDraggedZone(worldPosition);
+                SyncZoneFieldsNoNotify();
+                RefreshOverlay();
+                UpdateZoneHints();
+            }
             return;
+        }
         if (!_dragActive)
         {
             if (Vector2.Distance(localPosition, _dragOrigin) < DragThreshold)
@@ -1655,6 +2178,7 @@ public sealed class ScenarioRouteEditor
     private void OnMapPointerUp(MapPointerState pointer)
     {
         EndPointDrag();
+        _zoneDragActive = false;
     }
 
     private void OnMapPointerLeave()
@@ -1691,6 +2215,11 @@ public sealed class ScenarioRouteEditor
         if (evt.keyCode == KeyCode.Escape)
         {
             CancelPointDrag();
+            if (_zoneDragActive)
+                _zoneDragActive = false;
+            CancelZonePick();
+            SetPlacementInstruction();
+            RefreshOverlay();
             evt.StopPropagation();
             return;
         }
@@ -1721,7 +2250,7 @@ public sealed class ScenarioRouteEditor
         Vector2 moved = new(
             RoundCoordinate(point.x + offset.x),
             RoundCoordinate(point.y + offset.y));
-        active.Points[_pendingPointIndex] = moved;
+        SetPointPosition(active, _pendingPointIndex, moved);
         active.RouteModified = true;
         active.HasNonSpatialGoal = false;
         if (_pointFields.TryGetValue(_pendingPointIndex, out CoordinateFields fields))
@@ -1873,7 +2402,7 @@ public sealed class ScenarioRouteEditor
 
         float x = RoundCoordinate(worldPosition.x);
         float z = RoundCoordinate(worldPosition.y);
-        route.Points[_dragPointIndex] = new Vector2(x, z);
+        SetPointPosition(route, _dragPointIndex, new Vector2(x, z));
         route.RouteModified = true;
         route.HasNonSpatialGoal = false;
 
@@ -1923,10 +2452,13 @@ public sealed class ScenarioRouteEditor
         _overlay.ShowGrid = _showGrid;
         _overlay.SetRoutes(BuildRouteVisuals(markAllActive: false));
         _overlay.SetFormations(BuildFormationPreviews());
+        // Built once and shared: the overlay paints the rectangles, the label layer names them.
+        List<OccupancyMapRouteOverlay.ZoneVisual> zones = BuildZoneVisuals();
+        _overlay.SetZones(zones);
         UpdateGridScaleLabel();
         UpdatePathStatusLabel();
         UpdateFormationPreviewLabel();
-        RefreshPointLabels();
+        RefreshPointLabels(zones);
     }
 
     /// <summary>
@@ -1996,6 +2528,50 @@ public sealed class ScenarioRouteEditor
         }
 
         return count;
+    }
+
+    /// <summary>
+    /// The placement areas of the active route, as the overlay draws them: the spawn area of the route, the
+    /// arrival areas of its objectives, and the rubber band the author is currently dragging.
+    /// </summary>
+    private List<OccupancyMapRouteOverlay.ZoneVisual> BuildZoneVisuals()
+    {
+        _zoneVisuals.Clear();
+        RouteDraft active = ActiveRoute;
+        if (active == null || active.IsRobot || _mapTexture == null)
+            return _zoneVisuals;
+
+        Color color = RouteColor(_activeRouteIndex);
+        if (active.SpawnRandom && IsUsableZone(active.SpawnZone))
+        {
+            _zoneVisuals.Add(new OccupancyMapRouteOverlay.ZoneVisual(
+                active.SpawnZone,
+                color,
+                active: true,
+                label: "Spawn area"));
+        }
+
+        for (int index = 1; index < active.Points.Count; index++)
+        {
+            Rect? zone = active.ZoneAt(index);
+            if (!zone.HasValue || !IsUsableZone(zone.Value))
+                continue;
+
+            _zoneVisuals.Add(new OccupancyMapRouteOverlay.ZoneVisual(
+                zone.Value,
+                color,
+                active: index == _pendingPointIndex,
+                label: $"{RouteMapHitTesting.PointLabel(index)} area"));
+        }
+
+        if (_zonePick != ZonePickTarget.None && _zoneFirstCornerPlaced)
+        {
+            Rect preview = ZoneFromCorners(_zoneFirstCorner, _zoneCursorWorld);
+            if (IsUsableZone(preview))
+                _zoneVisuals.Add(new OccupancyMapRouteOverlay.ZoneVisual(preview, color, active: true, label: string.Empty));
+        }
+
+        return _zoneVisuals;
     }
 
     /// <summary>
@@ -2090,7 +2666,7 @@ public sealed class ScenarioRouteEditor
         return $", {resolved:0.##}{unit}";
     }
 
-    private void RefreshPointLabels()
+    private void RefreshPointLabels(IReadOnlyList<OccupancyMapRouteOverlay.ZoneVisual> zones)
     {
         _pointLabelLayer.Clear();
         RouteDraft active = ActiveRoute;
@@ -2107,6 +2683,23 @@ public sealed class ScenarioRouteEditor
             // Labels sit above the map: their offsets depend on the live pointer mapping.
             label.style.left = canvasPosition.x - PointLabelWidth * 0.5f;
             label.style.top = canvasPosition.y - 30f;
+            _pointLabelLayer.Add(label);
+        }
+
+        // Placement areas get their name from the same layer: Painter2D draws no text, so the overlay paints the
+        // rectangle and the label layer names it.
+        foreach (OccupancyMapRouteOverlay.ZoneVisual zone in zones)
+        {
+            if (string.IsNullOrEmpty(zone.Label))
+                continue;
+
+            Vector2 corner = WorldToCanvas(new Vector2(zone.WorldRect.xMin, zone.WorldRect.yMax));
+            var label = new Label(zone.Label);
+            label.AddToClassList("map-zone-label");
+            label.EnableInClassList("active", zone.Active);
+            label.pickingMode = PickingMode.Ignore;
+            label.style.left = corner.x + 4f;
+            label.style.top = corner.y + 4f;
             _pointLabelLayer.Add(label);
         }
     }
@@ -2135,6 +2728,15 @@ public sealed class ScenarioRouteEditor
         RouteDraft active = ActiveRoute;
         if (active == null)
             return;
+
+        if (_zonePick != ZonePickTarget.None)
+        {
+            _instructionLabel.text = _zoneFirstCornerPlaced
+                ? $"{active.Id}: click the opposite corner of the area. Esc cancels."
+                : $"{active.Id}: click the first corner of the area. Esc cancels.";
+            return;
+        }
+
         _instructionLabel.text =
             $"{active.Id}: {RouteMapHitTesting.PointLabel(_pendingPointIndex)} selected. Click the map or drag the point.";
     }
@@ -2227,6 +2829,9 @@ public sealed class ScenarioRouteEditor
                 GroupSpacing = route.GroupSpacing,
                 FormationParameter = route.FormationParameter,
                 Points = new List<Vector2>(route.Points),
+                SpawnRandom = route.SpawnRandom,
+                SpawnZone = route.SpawnZone,
+                PointZones = new List<Rect?>(route.PointZones),
                 Source = route.Source,
                 RouteModified = route.RouteModified,
                 HasNonSpatialGoal = route.HasNonSpatialGoal
@@ -2256,11 +2861,15 @@ public sealed class ScenarioRouteEditor
                 Formation = route.Formation,
                 GroupSpacing = route.GroupSpacing,
                 FormationParameter = route.FormationParameter,
+                SpawnRandom = route.SpawnRandom,
+                SpawnZone = route.SpawnZone,
                 Source = route.Source,
                 RouteModified = route.RouteModified,
                 HasNonSpatialGoal = route.HasNonSpatialGoal
             };
             draft.Points.AddRange(route.Points);
+            draft.PointZones.AddRange(route.PointZones ?? new List<Rect?>());
+            NormalizeZones(draft);
             _routes.Add(draft);
         }
 
@@ -2292,13 +2901,15 @@ public sealed class ScenarioRouteEditor
 
     private static RouteDraft CreateHumanDraft(int index)
     {
-        return new RouteDraft
+        var draft = new RouteDraft
         {
             Id = $"Human route {index}",
             Count = 0,
-            RouteModified = true,
-            Points = { new Vector2(2f, 0f), Vector2.zero }
+            RouteModified = true
         };
+        AppendPoint(draft, new Vector2(2f, 0f));
+        AppendPoint(draft, Vector2.zero);
+        return draft;
     }
 
     private static RouteDraft CreateHumanDraft(ScenarioData scenario, HumanScenarioConfig human, int index)
@@ -2314,24 +2925,31 @@ public sealed class ScenarioRouteEditor
             Formation = string.IsNullOrWhiteSpace(human.Spawn?.Formation) ? "pair" : human.Spawn.Formation.Trim().ToLowerInvariant(),
             GroupSpacing = human.Spawn != null ? Mathf.Max(0.4f, human.Spawn.Spacing) : 1.5f,
             FormationParameter = human.Spawn != null ? Mathf.Max(0f, human.Spawn.FormationParameter) : 0f,
+            SpawnRandom = IsRandomSpawn(human.Spawn),
+            SpawnZone = ReadZone(human.Spawn?.Zone) ?? default,
             Source = human,
             RouteModified = false
         };
 
-        draft.Points.Add(ResolveSpawnPosition(scenario, human.Spawn));
+        // The start of the route stays the point the author sees; the area around it is what the runtime scatters
+        // the group in, so a zone-shaped spawn falls back to its centre here.
+        AppendPoint(draft, ResolveSpawnPosition(scenario, human.Spawn));
         if (IsSpatialGoal(human.Goal))
-            draft.Points.Add(ResolveGoalPosition(scenario, human.Goal));
+            AppendPoint(draft, ResolveGoalPosition(scenario, human.Goal), GoalZone(human.Goal));
         else
             draft.HasNonSpatialGoal = human.Goal != null;
         if (human.Goals != null)
         {
             foreach (GoalConfig goal in human.Goals.Where(IsSpatialGoal))
-                draft.Points.Add(ResolveGoalPosition(scenario, goal));
+                AppendPoint(draft, ResolveGoalPosition(scenario, goal), GoalZone(goal));
         }
         if (draft.Points.Count < 2)
-            draft.Points.Add(draft.Points[0] + Vector2.right * 2f);
+            AppendPoint(draft, draft.Points[0] + Vector2.right * 2f);
+        NormalizeZones(draft);
         return draft;
     }
+
+    private static Rect? GoalZone(GoalConfig goal) => IsRandomGoal(goal) ? ReadZone(goal?.Zone) : null;
 
     private static bool TryResolveReference(ScenarioData scenario, string reference, out Vector2 position)
     {
@@ -2369,10 +2987,133 @@ public sealed class ScenarioRouteEditor
         return string.IsNullOrWhiteSpace(type) || type == "point" || type == "random";
     }
 
+    private static bool IsRandomGoal(GoalConfig goal) =>
+        goal != null && string.Equals(goal.Type?.Trim(), "random", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsRandomSpawn(SpawnConfig spawn) =>
+        string.Equals(spawn?.Type?.Trim(), "random", StringComparison.OrdinalIgnoreCase);
+
+    // ==========================================
+    //          POINT AND AREA BOOKKEEPING
+    // ==========================================
+
+    /// <summary>
+    /// Every mutation of the point list goes through these helpers: <see cref="RouteDraft.PointZones"/> is
+    /// parallel to <see cref="RouteDraft.Points"/>, and an area landing on the wrong objective would be a
+    /// silent authoring bug rather than a visible one.
+    /// </summary>
+    private static void AppendPoint(RouteDraft draft, Vector2 point, Rect? zone = null)
+    {
+        draft.Points.Add(point);
+        draft.PointZones.Add(zone);
+    }
+
+    private static void InsertPointAt(RouteDraft draft, int index, Vector2 point, Rect? zone = null)
+    {
+        index = Mathf.Clamp(index, 0, draft.Points.Count);
+        draft.Points.Insert(index, point);
+        draft.PointZones.Insert(index, zone);
+    }
+
+    private static void RemovePointAt(RouteDraft draft, int index)
+    {
+        if (index < 0 || index >= draft.Points.Count)
+            return;
+
+        draft.Points.RemoveAt(index);
+        if (index < draft.PointZones.Count)
+            draft.PointZones.RemoveAt(index);
+    }
+
+    private static void SwapPoints(RouteDraft draft, int first, int second)
+    {
+        (draft.Points[first], draft.Points[second]) = (draft.Points[second], draft.Points[first]);
+        if (first < draft.PointZones.Count && second < draft.PointZones.Count)
+        {
+            (draft.PointZones[first], draft.PointZones[second]) =
+                (draft.PointZones[second], draft.PointZones[first]);
+        }
+    }
+
+    /// <summary>Brings the area list back to the length of the point list after a load or an undo.</summary>
+    private static void NormalizeZones(RouteDraft draft)
+    {
+        while (draft.PointZones.Count < draft.Points.Count)
+            draft.PointZones.Add(null);
+
+        if (draft.PointZones.Count > draft.Points.Count)
+            draft.PointZones.RemoveRange(draft.Points.Count, draft.PointZones.Count - draft.Points.Count);
+    }
+
+    /// <summary>World XZ rectangle of an authored area, or null when the reference is a plain point.</summary>
+    private static Rect? ReadZone(RefPoint reference)
+    {
+        if (reference == null || !reference.IsBounds)
+            return null;
+
+        Bounds bounds = reference.ToBounds();
+        if (bounds.size.x <= 0f || bounds.size.z <= 0f)
+            return null;
+
+        return Rect.MinMaxRect(
+            bounds.min.x, bounds.min.z,
+            bounds.max.x, bounds.max.z);
+    }
+
+    /// <summary>Writes a world XZ rectangle back as the centre and size a scenario stores.</summary>
+    private static RefPoint WriteZone(Rect zone)
+    {
+        var center = new Vector3(zone.center.x, 0f, zone.center.y);
+        var size = new Vector3(zone.width, 0f, zone.height);
+        return RefPoint.FromBounds(center, size);
+    }
+
+    /// <summary>Normalised rectangle from two corners the author clicked on the map.</summary>
+    private static Rect ZoneFromCorners(Vector2 first, Vector2 second) =>
+        Rect.MinMaxRect(
+            Mathf.Min(first.x, second.x), Mathf.Min(first.y, second.y),
+            Mathf.Max(first.x, second.x), Mathf.Max(first.y, second.y));
+
+    /// <summary>A square area around a point, used when an objective is switched to a random arrival.</summary>
+    private static Rect DefaultZoneAround(Vector2 center, float size = 4f) =>
+        Rect.MinMaxRect(center.x - size * 0.5f, center.y - size * 0.5f,
+                        center.x + size * 0.5f, center.y + size * 0.5f);
+
+    /// <summary>An area the runtime can actually sample: a zero-size rectangle would pin the agent again.</summary>
+    private static bool IsUsableZone(Rect zone) => zone.width >= 0.5f && zone.height >= 0.5f;
+
+    /// <summary>Builds a positive-size rectangle from the centre and size an author typed.</summary>
+    private static Rect ZoneFromCenterAndSize(Vector2 center, Vector2 size)
+    {
+        float width = Mathf.Max(0.5f, Mathf.Abs(size.x));
+        float depth = Mathf.Max(0.5f, Mathf.Abs(size.y));
+        return Rect.MinMaxRect(
+            center.x - width * 0.5f, center.y - depth * 0.5f,
+            center.x + width * 0.5f, center.y + depth * 0.5f);
+    }
+
+    /// <summary>
+    /// Moves one route point and drags its arrival area along, so an area can never be left behind on the
+    /// map by the point it belongs to.
+    /// </summary>
+    private static void SetPointPosition(RouteDraft draft, int index, Vector2 position)
+    {
+        if (index < 0 || index >= draft.Points.Count)
+            return;
+
+        Vector2 delta = position - draft.Points[index];
+        draft.Points[index] = position;
+        if (index < draft.PointZones.Count && draft.PointZones[index].HasValue)
+        {
+            Rect zone = draft.PointZones[index].Value;
+            draft.PointZones[index] = new Rect(zone.x + delta.x, zone.y + delta.y, zone.width, zone.height);
+        }
+    }
+
     private static void EnsureMinimumPoints(RouteDraft draft)
     {
-        if (draft.Points.Count == 0) draft.Points.Add(Vector2.zero);
-        if (draft.Points.Count == 1) draft.Points.Add(draft.Points[0] + Vector2.right * 2f);
+        if (draft.Points.Count == 0) AppendPoint(draft, Vector2.zero);
+        if (draft.Points.Count == 1) AppendPoint(draft, draft.Points[0] + Vector2.right * 2f);
     }
 
     private static bool HasRepeatedConsecutivePoint(RouteDraft draft)
@@ -2433,6 +3174,41 @@ public sealed class ScenarioRouteEditor
     }
 
     private static float RoundCoordinate(float value) => Mathf.Round(value * 100f) / 100f;
+
+    /// <summary>
+    /// Writes one objective. A fixed point keeps its named reference in the scenario's point table; an area
+    /// becomes a random goal carrying its zone inline, and its reference is dropped so the two can never
+    /// disagree about where the agent is going.
+    /// </summary>
+    private static void WriteGoal(
+        ScenarioData scenario,
+        GoalConfig goal,
+        string fallbackReference,
+        Vector2 point,
+        Rect? zone)
+    {
+        if (zone.HasValue)
+        {
+            goal.Type = "random";
+            goal.Zone = WriteZone(zone.Value);
+            goal.Position = null;
+            goal.Target = null;
+            goal.Reference = null;
+            return;
+        }
+
+        SetGoalReference(goal, fallbackReference);
+        WritePoint(scenario, goal.Reference, point);
+    }
+
+    /// <summary>Writes the spawn as an area: the runtime draws one walkable point inside it per run.</summary>
+    private static void WriteZoneSpawn(SpawnConfig spawn, Rect zone)
+    {
+        spawn.Type = "random";
+        spawn.Zone = WriteZone(zone);
+        spawn.Position = null;
+        spawn.Reference = null;
+    }
 
     private static void SetSpawnReference(SpawnConfig spawn, string fallbackReference)
     {

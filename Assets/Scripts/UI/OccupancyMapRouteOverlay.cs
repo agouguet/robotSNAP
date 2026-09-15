@@ -53,8 +53,32 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
         public bool Active { get; }
     }
 
+    /// <summary>
+    /// A rectangular world-space area, such as a random spawn or goal zone, drawn below the
+    /// routes so the trajectories stay readable on top of it.
+    /// </summary>
+    public readonly struct ZoneVisual
+    {
+        public ZoneVisual(Rect worldRect, Color color, bool active, string label)
+        {
+            WorldRect = worldRect;
+            Color = color;
+            Active = active;
+            Label = label;
+        }
+
+        /// <summary>Rect in world XZ coordinates: x/y is the position, width/height is the size.</summary>
+        public Rect WorldRect { get; }
+        public Color Color { get; }
+        public bool Active { get; }
+
+        /// <summary>Short caption shown in the zone corner; an empty string is accepted.</summary>
+        public string Label { get; }
+    }
+
     private readonly List<RouteVisual> _routes = new();
     private readonly List<FormationPreview> _formations = new();
+    private readonly List<ZoneVisual> _zones = new();
     private readonly Label _scaleValueLabel;
     private Bounds _worldBounds;
     private Rect _imageRect;
@@ -115,6 +139,15 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
         MarkDirtyRepaint();
     }
 
+    /// <summary>Sets the world-space zones drawn on the map, for example random spawn and goal areas.</summary>
+    public void SetZones(IEnumerable<ZoneVisual> zones)
+    {
+        _zones.Clear();
+        if (zones != null)
+            _zones.AddRange(zones);
+        MarkDirtyRepaint();
+    }
+
     private void GenerateRouteVisuals(MeshGenerationContext context)
     {
         if (contentRect.width < 1f || contentRect.height < 1f ||
@@ -125,6 +158,13 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
         Painter2D painter = context.painter2D;
         if (_showGrid)
             DrawGrid(painter);
+
+        // Zones sit above the grid but below the routes, so the trajectories drawn next
+        // remain readable even when a whole route crosses a spawn or goal area.
+        foreach (ZoneVisual zone in _zones.Where(zone => !zone.Active))
+            DrawZone(painter, zone);
+        foreach (ZoneVisual zone in _zones.Where(zone => zone.Active))
+            DrawZone(painter, zone);
 
         foreach (RouteVisual route in _routes.Where(route => !route.Active))
             DrawRoute(painter, route);
@@ -221,6 +261,54 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
         painter.LineTo(new Vector2(barX + scaleWidth, barY));
         painter.LineTo(new Vector2(barX + scaleWidth, barY - 4f));
         painter.Stroke();
+    }
+
+    /// <summary>
+    /// Outlines a world-space zone with a translucent fill, brighter when the zone is the active one.
+    /// Showing the spawn and goal areas on the map keeps random placement visible before running.
+    /// </summary>
+    private void DrawZone(Painter2D painter, ZoneVisual zone)
+    {
+        Rect worldRect = zone.WorldRect;
+        if (worldRect.width <= 0f || worldRect.height <= 0f)
+            return;
+
+        // World X runs mirrored against the image X axis, so the two opposite corners are
+        // projected and recombined instead of assuming that the rect keeps its corner order.
+        Vector2 first = WorldToLocal(new Vector2(worldRect.x, worldRect.y));
+        Vector2 second = WorldToLocal(new Vector2(worldRect.xMax, worldRect.yMax));
+        float xMin = Mathf.Min(first.x, second.x);
+        float yMin = Mathf.Min(first.y, second.y);
+        float width = Mathf.Abs(second.x - first.x);
+        float height = Mathf.Abs(second.y - first.y);
+        if (width < 0.01f || height < 0.01f)
+            return;
+
+        Color fill = zone.Color;
+        fill.a = zone.Active ? 0.20f : 0.12f;
+        painter.fillColor = fill;
+        TraceRect(painter, xMin, yMin, width, height);
+        painter.Fill();
+
+        Color border = zone.Color;
+        border.a = zone.Active ? 0.95f : 0.45f;
+        painter.strokeColor = border;
+        painter.lineWidth = zone.Active ? 2f : 1.25f;
+        TraceRect(painter, xMin, yMin, width, height);
+        painter.Stroke();
+
+        // Painter2D has no text API, so ZoneVisual.Label is not painted here: the overlay only
+        // renders text through child labels, as the scale bar value already does.
+    }
+
+    private static void TraceRect(Painter2D painter, float xMin, float yMin, float width, float height)
+    {
+        painter.BeginPath();
+        painter.MoveTo(new Vector2(xMin, yMin));
+        painter.LineTo(new Vector2(xMin + width, yMin));
+        painter.LineTo(new Vector2(xMin + width, yMin + height));
+        painter.LineTo(new Vector2(xMin, yMin + height));
+        painter.ClosePath();
     }
 
     private void DrawRoute(Painter2D painter, RouteVisual route)

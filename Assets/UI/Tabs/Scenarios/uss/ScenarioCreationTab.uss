@@ -986,7 +986,7 @@
 
     color: var(--accent);
 
-    font-size: 10px;
+    font-size: 11px;
 
     -unity-text-align: middle-right;
 }
@@ -2362,4 +2362,158 @@
 .map-legend-name {
     font-size: 12px;
     color: var(--text-secondary);
+}
+
+
+/* ================================================================
+   STEP 2 - COLLAPSIBLE ROUTE EDITOR SECTIONS
+   ================================================================ */
+
+/* One collapsible block of the human route settings. */
+.editor-section {
+    margin-top: 14px;
+    padding-top: 12px;
+
+    border-top-width: 1px;
+    border-top-color: var(--border-color);
+}
+
+/* Reads as a clickable title: the whole row toggles the section content. */
+.editor-section-header {
+    width: 100%;
+    flex-shrink: 0;
+
+    padding-top: 6px;
+    padding-bottom: 6px;
+
+    background-color: transparent;
+
+    border-width: 0;
+
+    color: var(--text-primary);
+
+    font-size: 13px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+}
+
+/* USS has no cursor property, so the hover tint carries the affordance. */
+.editor-section-header:hover {
+    background-color: rgba(120, 130, 150, 0.1);
+}
+
+.editor-section-content {
+    flex-direction: column;
+
+    margin-top: 8px;
+}
+
+/* Area drawn on the map for the random spawn / arrival placement. */
+.zone-panel {
+    flex-direction: column;
+
+    margin-top: 6px;
+    padding: 10px;
+
+    background-color: var(--bg-primary);
+
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 6px;
+}
+
+.zone-draw-button {
+    min-width: 0;
+    height: 30px;
+
+    margin-top: 4px;
+    margin-bottom: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+
+    background-color: transparent;
+
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 5px;
+
+    color: var(--text-secondary);
+
+    font-size: 12px;
+}
+
+.zone-draw-button:hover {
+    background-color: var(--button-hover);
+    color: var(--text-primary);
+}
+
+/* Center / size fields, two per row and wrapping on narrow panels. */
+.zone-field-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.zone-field-grid > .creation-text-field {
+    width: auto;
+
+    flex-grow: 1;
+    flex-basis: 45%;
+    min-width: 96px;
+
+    margin-bottom: 6px;
+}
+
+.zone-toggle {
+    min-height: 24px;
+
+    color: var(--text-primary);
+
+    font-size: 12px;
+}
+
+/* An expanded section reads as the one currently open, so the chevron and the tint agree. */
+.editor-section-header.expanded {
+    color: var(--accent);
+}
+
+/* Name of a placement area drawn on the map: same plate as an objective label, one size down. */
+.map-zone-label {
+    position: absolute;
+    height: 16px;
+    padding-left: 5px;
+    padding-right: 5px;
+
+    color: var(--text-secondary);
+
+    font-size: 11px;
+    -unity-text-align: middle-left;
+
+    background-color: rgba(10, 16, 22, 0.62);
+
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.22);
+    border-radius: 3px;
+}
+
+.map-zone-label.active {
+    color: white;
+
+    background-color: rgba(10, 16, 22, 0.9);
+
+    border-color: var(--accent);
+}
+
+/* Marks the objectives whose arrival is an area rather than an exact point. */
+.route-point-area-chip {
+    margin-left: 6px;
+    padding-left: 5px;
+    padding-right: 5px;
+
+    color: var(--accent);
+
+    font-size: 10px;
+
+    background-color: var(--accent-soft);
+
+    border-radius: 3px;
 }

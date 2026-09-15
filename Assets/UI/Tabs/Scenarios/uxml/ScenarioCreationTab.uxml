@@ -175,36 +175,80 @@
                                 <ui:FloatField name="HumanSpeedField" class="creation-text-field"/>
                             </ui:VisualElement>
                         </ui:VisualElement>
-                        <ui:VisualElement class="creation-field">
-                            <ui:Label text="End behavior" class="creation-field-label"/>
-                            <ui:DropdownField name="EndBehaviorDropdown" class="creation-dropdown"/>
-                            <ui:Label text="What the agents do once they reach the last point of the route." class="field-help"/>
+                        <ui:VisualElement class="editor-section">
+                            <ui:Button name="SectionPlacementHeader" text="Placement areas" class="editor-section-header"/>
+                            <ui:VisualElement name="SectionPlacementContent" class="editor-section-content">
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Label text="Spawn area" class="creation-field-label"/>
+                                    <ui:DropdownField name="SpawnModeDropdown" class="creation-dropdown"/>
+                                    <ui:Label text="Random in zone scatters the whole group inside the area you draw." class="field-help"/>
+                                </ui:VisualElement>
+                                <ui:VisualElement name="SpawnZonePanel" class="zone-panel route-editor-hidden">
+                                    <ui:Label name="SpawnZoneHint" text="No area yet." class="field-help"/>
+                                    <ui:Button name="DrawSpawnZoneButton" text="Draw area on map" class="zone-draw-button"/>
+                                    <ui:VisualElement class="zone-field-grid">
+                                        <ui:FloatField name="SpawnZoneCenterXField" label="Center X" class="creation-text-field"/>
+                                        <ui:FloatField name="SpawnZoneCenterZField" label="Center Z" class="creation-text-field"/>
+                                        <ui:FloatField name="SpawnZoneSizeXField" label="Size X" class="creation-text-field"/>
+                                        <ui:FloatField name="SpawnZoneSizeZField" label="Size Z" class="creation-text-field"/>
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Toggle name="GoalZoneToggle" label="Random arrival inside an area" class="zone-toggle"/>
+                                    <ui:Label text="Applies to the selected objective. Each agent draws its own point." class="field-help"/>
+                                </ui:VisualElement>
+                                <ui:VisualElement name="GoalZonePanel" class="zone-panel route-editor-hidden">
+                                    <ui:Label name="GoalZoneHint" text="No area yet." class="field-help"/>
+                                    <ui:Button name="DrawGoalZoneButton" text="Draw area on map" class="zone-draw-button"/>
+                                    <ui:VisualElement class="zone-field-grid">
+                                        <ui:FloatField name="GoalZoneCenterXField" label="Center X" class="creation-text-field"/>
+                                        <ui:FloatField name="GoalZoneCenterZField" label="Center Z" class="creation-text-field"/>
+                                        <ui:FloatField name="GoalZoneSizeXField" label="Size X" class="creation-text-field"/>
+                                        <ui:FloatField name="GoalZoneSizeZField" label="Size Z" class="creation-text-field"/>
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                            </ui:VisualElement>
                         </ui:VisualElement>
-                        <ui:VisualElement class="creation-field">
-                            <ui:Label text="Group" class="creation-field-label"/>
-                            <ui:TextField name="GroupField" placeholder="No group" max-length="40" class="creation-text-field"/>
-                            <ui:Label text="Routes sharing a group id walk together in formation." class="field-help"/>
+                        <ui:VisualElement class="editor-section">
+                            <ui:Button name="SectionGroupHeader" text="Group and formation" class="editor-section-header"/>
+                            <ui:VisualElement name="SectionGroupContent" class="editor-section-content">
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Label text="Group" class="creation-field-label"/>
+                                    <ui:TextField name="GroupField" placeholder="No group" max-length="40" class="creation-text-field"/>
+                                    <ui:Label text="Routes sharing a group id walk together in formation." class="field-help"/>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Label text="Group formation" class="creation-field-label"/>
+                                    <ui:DropdownField name="FormationDropdown" class="creation-dropdown"/>
+                                    <ui:Label text="Pair, row and column are the most natural for pedestrians; wedge and cluster are looser. Sharing a group id applies the same formation to every route of the group." class="field-help"/>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Label name="FormationParameterLabel" text="Formation parameter" class="creation-field-label"/>
+                                    <ui:FloatField name="FormationParameterField" class="creation-text-field"/>
+                                    <ui:Label text="Leave 0 to keep the natural default of the selected formation." class="field-help"/>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Label text="Group spacing (m)" class="creation-field-label"/>
+                                    <ui:FloatField name="GroupSpacingField" class="creation-text-field"/>
+                                    <ui:Label text="Distance kept between members of the same formation." class="field-help"/>
+                                    <ui:Label name="FormationPreviewLabel" text="" class="formation-preview-label"/>
+                                </ui:VisualElement>
+                            </ui:VisualElement>
                         </ui:VisualElement>
-                        <ui:VisualElement class="creation-field">
-                            <ui:Label text="Movement controller" class="creation-field-label"/>
-                            <ui:DropdownField name="MovementControllerDropdown" class="creation-dropdown"/>
-                            <ui:Label text="SFM follows social forces, External is driven by the Python API. Inherit keeps the setting of the agent configuration asset. Routes sharing a group id share the choice." class="field-help"/>
-                        </ui:VisualElement>
-                        <ui:VisualElement class="creation-field">
-                            <ui:Label text="Group formation" class="creation-field-label"/>
-                            <ui:DropdownField name="FormationDropdown" class="creation-dropdown"/>
-                            <ui:Label text="Pair, row and column are the most natural for pedestrians; wedge and cluster are looser. Sharing a group id applies the same formation to every route of the group." class="field-help"/>
-                        </ui:VisualElement>
-                        <ui:VisualElement class="creation-field">
-                            <ui:Label name="FormationParameterLabel" text="Formation parameter" class="creation-field-label"/>
-                            <ui:FloatField name="FormationParameterField" class="creation-text-field"/>
-                            <ui:Label text="Leave 0 to keep the natural default of the selected formation." class="field-help"/>
-                        </ui:VisualElement>
-                        <ui:VisualElement class="creation-field">
-                            <ui:Label text="Group spacing (m)" class="creation-field-label"/>
-                            <ui:FloatField name="GroupSpacingField" class="creation-text-field"/>
-                            <ui:Label text="Distance kept between members of the same formation." class="field-help"/>
-                            <ui:Label name="FormationPreviewLabel" text="" class="formation-preview-label"/>
+                        <ui:VisualElement class="editor-section">
+                            <ui:Button name="SectionBehaviourHeader" text="Behaviour" class="editor-section-header"/>
+                            <ui:VisualElement name="SectionBehaviourContent" class="editor-section-content">
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Label text="End behavior" class="creation-field-label"/>
+                                    <ui:DropdownField name="EndBehaviorDropdown" class="creation-dropdown"/>
+                                    <ui:Label text="What the agents do once they reach the last point of the route." class="field-help"/>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Label text="Movement controller" class="creation-field-label"/>
+                                    <ui:DropdownField name="MovementControllerDropdown" class="creation-dropdown"/>
+                                    <ui:Label text="SFM follows social forces, External is driven by the Python API. Inherit keeps the setting of the agent configuration asset. Routes sharing a group id share the choice." class="field-help"/>
+                                </ui:VisualElement>
+                            </ui:VisualElement>
                         </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:ScrollView>

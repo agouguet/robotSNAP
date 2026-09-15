@@ -48,6 +48,21 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         private readonly Dictionary<object, Vector3> _randomAnchors = new();
 
+        /// <summary>
+        /// Anchors already drawn for the independent agents of one route, so each new draw can keep its
+        /// distance from them. Keyed by the human config, which is one route.
+        /// </summary>
+        private readonly Dictionary<HumanScenarioConfig, List<Vector3>> _independentAnchors = new();
+
+        /// <summary>
+        /// Arrival points already drawn for one random goal of an independent route, so the agents of that route
+        /// do not all converge on the same pixel. Keyed by the goal definition, which is one objective.
+        /// </summary>
+        private readonly Dictionary<GoalConfig, List<Vector3>> _independentGoals = new();
+
+        /// <summary>How many draws an independent agent gets to find a spot clear of the agents already placed.</summary>
+        private const int IndependentDrawAttempts = 12;
+
         public ScenarioData CurrentScenario => _currentScenario;
         public bool IsApplying { get; private set; }
 
@@ -386,6 +401,8 @@ namespace RobotSNAP.Core.Scenario
             // One draw per spawn unit: a whole formation appears around a single random point, so the anchors
             // are resolved once for this scenario and then reused by every agent sharing them.
             _randomAnchors.Clear();
+            _independentAnchors.Clear();
+            _independentGoals.Clear();
             foreach (var config in _currentScenario.Humans)
             {
                 for (int i = 0; i < config.Count && humanIndex < allHumans.Count; i++)
@@ -541,13 +558,18 @@ namespace RobotSNAP.Core.Scenario
 
             // --- Ordered route: the spawn point first, then every goal until the last one ---
             var goals = new List<Vector3>();
+            bool independent = IsIndependentRoute(config);
+            float arrivalSpacing = independent
+                ? SpawnPlanner.ClampSpacing(config.Spawn.Spacing, config.Spawn.Formation)
+                : 0f;
             if (IsSpatialGoal(config.Goal))
             {
                 // A random goal is resolved per agent: the members of a route each draw their own destination
                 // inside the zone, at the moment they are configured.
-                goals.Add(ResolveSpatialGoalPosition(config.Goal));
+                goals.Add(ResolveSpatialGoalPosition(config.Goal, independent, arrivalSpacing));
                 if (config.Goals != null)
-                    goals.AddRange(config.Goals.Where(IsSpatialGoal).Select(ResolveSpatialGoalPosition));
+                    goals.AddRange(config.Goals.Where(IsSpatialGoal)
+                        .Select(goal => ResolveSpatialGoalPosition(goal, independent, arrivalSpacing)));
             }
 
             // --- Spawn Position ---
@@ -610,6 +632,10 @@ namespace RobotSNAP.Core.Scenario
         /// <para><b>Random spawn</b> — a point drawn inside the zone, on navigable ground. The draw feeds the
         /// anchor, so a group, or the formation of a single entry, appears around one random point instead of
         /// scattering its members over one draw each.</para>
+        ///
+        /// <para><b>Independent agents</b> — the route asks for no formation, so there is no shared anchor to
+        /// place anyone around: every agent draws its own point in the zone, kept apart from the agents this
+        /// route has already placed. That is what turns one entry into a crowd crossing the map.</para>
         /// </summary>
         private Vector3 ResolveSpawnPosition(
             HumanScenarioConfig config,
@@ -620,6 +646,11 @@ namespace RobotSNAP.Core.Scenario
             SpawnConfig spawn = config.Spawn;
             if (spawn == null)
                 return Vector3.zero;
+
+            // A group keeps its shared anchor: its members walk together, so scattering them would only fight
+            // the formation the group is about to lay out. Independent agents are the ones without a group.
+            if (string.IsNullOrWhiteSpace(config.Group) && GroupFormation.IsScatter(spawn.Formation))
+                return SpawnPlanner.PlaceAnchor(DrawIndependentAnchor(config, spawn));
 
             // Group members share the leader's anchor; the formation is applied after the whole group is built.
             if (!string.IsNullOrWhiteSpace(config.Group))
@@ -638,6 +669,46 @@ namespace RobotSNAP.Core.Scenario
                 heading,
                 spawn.FormationParameter);
             return SpawnPlanner.PlaceSlot(anchor, offset, spawn.Spacing);
+        }
+
+        /// <summary>
+        /// One independent agent's own spawn point. The draw is kept at least one spacing away from the agents
+        /// this route already placed, so a crowd does not appear on top of itself; when the zone is too tight to
+        /// honour that, the last draw is kept rather than refusing to place the agent.
+        /// </summary>
+        private Vector3 DrawIndependentAnchor(HumanScenarioConfig config, SpawnConfig spawn)
+        {
+            if (!_independentAnchors.TryGetValue(config, out List<Vector3> placed))
+            {
+                placed = new List<Vector3>();
+                _independentAnchors[config] = placed;
+            }
+
+            float minDistance = SpawnPlanner.ClampSpacing(spawn.Spacing, spawn.Formation);
+            Vector3 drawn = DrawSpawnAnchor(spawn);
+            for (int attempt = 1; attempt < IndependentDrawAttempts; attempt++)
+            {
+                if (IsClearOf(drawn, placed, minDistance))
+                    break;
+                drawn = DrawSpawnAnchor(spawn);
+            }
+
+            placed.Add(drawn);
+            return drawn;
+        }
+
+        private static bool IsClearOf(Vector3 candidate, List<Vector3> placed, float minDistance)
+        {
+            float squared = minDistance * minDistance;
+            foreach (Vector3 other in placed)
+            {
+                float dx = candidate.x - other.x;
+                float dz = candidate.z - other.z;
+                if (dx * dx + dz * dz < squared)
+                    return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -736,7 +807,7 @@ namespace RobotSNAP.Core.Scenario
         /// Resolving here, per agent, is what makes a random goal a real destination for each member of a
         /// route instead of one frozen point shared by the whole scenario.
         /// </summary>
-        private Vector3 ResolveSpatialGoalPosition(GoalConfig goal)
+        private Vector3 ResolveSpatialGoalPosition(GoalConfig goal, bool keepApart = false, float minDistance = 0f)
         {
             if (goal == null)
                 return Vector3.zero;
@@ -746,12 +817,50 @@ namespace RobotSNAP.Core.Scenario
 
             Bounds bounds = ResolveBoundsFromGoal(goal);
             float height = bounds.center.y;
+            if (keepApart)
+                return DrawIndependentGoal(goal, bounds, height, minDistance);
+
             Vector2 point = RandomPlacement.SampleWalkable(
                 bounds,
                 DrawUniformPoint,
                 position => IsNavigable(position, height),
                 position => ProjectToNavigable(position, height));
             return new Vector3(point.x, bounds.center.y, point.y);
+        }
+
+        /// <summary>
+        /// An arrival point of an independent route, drawn away from the arrivals already given to the other
+        /// agents of the same objective. Everybody crossing the map towards the same area should still end on a
+        /// spot of their own; when the area cannot hold them apart, the last draw is kept rather than left empty.
+        /// </summary>
+        private Vector3 DrawIndependentGoal(GoalConfig goal, Bounds bounds, float height, float minDistance)
+        {
+            if (!_independentGoals.TryGetValue(goal, out List<Vector3> placed))
+            {
+                placed = new List<Vector3>();
+                _independentGoals[goal] = placed;
+            }
+
+            Vector3 drawn = DrawGoalPoint(bounds, height);
+            for (int attempt = 1; attempt < IndependentDrawAttempts; attempt++)
+            {
+                if (IsClearOf(drawn, placed, minDistance))
+                    break;
+                drawn = DrawGoalPoint(bounds, height);
+            }
+
+            placed.Add(drawn);
+            return drawn;
+        }
+
+        private Vector3 DrawGoalPoint(Bounds bounds, float height)
+        {
+            Vector2 point = RandomPlacement.SampleWalkable(
+                bounds,
+                DrawUniformPoint,
+                position => IsNavigable(position, height),
+                position => ProjectToNavigable(position, height));
+            return new Vector3(point.x, height, point.y);
         }
 
         /// <summary>A spatial goal owns a position: a point (empty type included), or a random zone.</summary>
@@ -765,6 +874,18 @@ namespace RobotSNAP.Core.Scenario
         private static bool IsRandomGoal(GoalConfig goal)
         {
             return goal != null && string.Equals(goal.Type, "random", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// True when the agents of this route are on their own: no group to walk in, and a formation that
+        /// spreads them instead of holding a shape. Crowds are authored this way.
+        /// </summary>
+        private static bool IsIndependentRoute(HumanScenarioConfig config)
+        {
+            return config != null &&
+                   string.IsNullOrWhiteSpace(config.Group) &&
+                   config.Spawn != null &&
+                   GroupFormation.IsScatter(config.Spawn.Formation);
         }
 
         /// <summary>

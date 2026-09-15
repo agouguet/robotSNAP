@@ -26,6 +26,14 @@ namespace RobotSNAP.Agents
         /// <summary>Loose disc, kept tight around the leader: reads as a natural chatting group.</summary>
         public const string ClusterFormation = "cluster";
 
+        /// <summary>
+        /// No formation at all: every agent of the route is on its own. Used by crowds, where each of the
+        /// agents draws its own start inside the spawn area and its own arrival inside the goal area, so
+        /// they neither share a block nor a destination. <see cref="CreateSlots"/> has no slots to build in
+        /// that case, and the spawn policy draws one anchor per agent instead of one per route.
+        /// </summary>
+        public const string ScatterFormation = "scatter";
+
         public const string DefaultFormation = PairFormation;
 
         /// <summary>Depth of the wedge behind the apex, relative to the requested spacing.</summary>
@@ -81,10 +89,21 @@ namespace RobotSNAP.Agents
                 case "disc":
                 case "loose":
                     return ClusterFormation;
+                case "scatter":
+                case "none":
+                case "independent":
+                case "individual":
+                case "free":
+                case "solo":
+                    return ScatterFormation;
                 default:
                     return DefaultFormation;
             }
         }
+
+        /// <summary>True when the agents walk on their own rather than as a formation.</summary>
+        public static bool IsScatter(string formation) =>
+            Normalize(formation) == ScatterFormation;
 
         /// <summary>
         /// Smallest spacing a formation can hold without its members walking into each other.
@@ -101,7 +120,11 @@ namespace RobotSNAP.Agents
         }
 
         /// <summary>An editor field is only useful for the formations that actually have something to tune.</summary>
-        public static bool HasParameter(string formation) => Normalize(formation) != ColumnFormation;
+        public static bool HasParameter(string formation)
+        {
+            string layout = Normalize(formation);
+            return layout != ColumnFormation && layout != ScatterFormation;
+        }
 
         /// <summary>Label and default of the single parameter a formation exposes in the editor.</summary>
         public static string DescribeParameter(string formation, float spacing)
@@ -117,6 +140,8 @@ namespace RobotSNAP.Agents
                     return $"Maximum radius (m) · default {DefaultClusterRadius(step):0.##}";
                 case ColumnFormation:
                     return "Single file: only the spacing matters.";
+                case ScatterFormation:
+                    return "Independent agents: there is no shape to tune, only the spacing they keep apart.";
                 default:
                     return $"Front spacing (m) · default {DefaultPairLateral(step):0.##}";
             }
@@ -149,6 +174,7 @@ namespace RobotSNAP.Agents
                 case RowFormation: return DefaultRowStagger(step);
                 case ClusterFormation: return DefaultClusterRadius(step);
                 case ColumnFormation: return 0f;
+                case ScatterFormation: return 0f;
                 default: return DefaultPairLateral(step);
             }
         }
@@ -169,6 +195,13 @@ namespace RobotSNAP.Agents
                 return slots;
 
             string layout = Normalize(formation);
+
+            // Independent agents have no slots: the spawn policy draws one anchor per agent instead of laying
+            // them out around a shared one. Falling back on the loose cluster keeps a misused group readable
+            // rather than stacking every member on the same point.
+            if (layout == ScatterFormation)
+                layout = ClusterFormation;
+
             float step = Mathf.Max(MinSpacing(layout), spacing);
             slots.Add(Vector2.zero);
             float resolved = ResolveParameter(layout, step, parameter);

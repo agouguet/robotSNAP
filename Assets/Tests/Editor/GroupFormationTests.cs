@@ -17,6 +17,53 @@ namespace RobotSNAP.Tests.Editor
         }
 
         [Test]
+        public void IsScatter_RecognizesTheIndependentSpellings()
+        {
+            Assert.That(GroupFormation.IsScatter("scatter"), Is.True);
+            Assert.That(GroupFormation.IsScatter("Independent"), Is.True);
+            Assert.That(GroupFormation.IsScatter(" none "), Is.True);
+            Assert.That(GroupFormation.IsScatter("individual"), Is.True);
+        }
+
+        [Test]
+        public void IsScatter_LeavesTheRealFormationsAlone()
+        {
+            Assert.That(GroupFormation.IsScatter("pair"), Is.False);
+            Assert.That(GroupFormation.IsScatter("cluster"), Is.False);
+            // An unset formation is the default pair, not a crowd: a scenario written before the option existed
+            // must keep laying its members out around their shared anchor.
+            Assert.That(GroupFormation.IsScatter(null), Is.False);
+            Assert.That(GroupFormation.IsScatter(string.Empty), Is.False);
+        }
+
+        [Test]
+        public void HasParameter_HidesTheFieldForIndependentAgents()
+        {
+            Assert.That(GroupFormation.HasParameter(GroupFormation.ScatterFormation), Is.False);
+            Assert.That(GroupFormation.HasParameter(GroupFormation.PairFormation), Is.True);
+        }
+
+        [Test]
+        public void MinSpacing_KeepsIndependentAgentsApart()
+        {
+            // The spacing of an independent route is the shortest distance two of its agents may appear at, so
+            // it still has a floor even though there is no shape to hold.
+            Assert.That(GroupFormation.MinSpacing(GroupFormation.ScatterFormation), Is.GreaterThan(0f));
+        }
+
+        [Test]
+        public void CreateSlots_NeverStacksIndependentAgentsOnOnePoint()
+        {
+            // Independent agents are drawn one by one by the spawn policy, so slots are never asked for. The
+            // fallback still has to be readable rather than piling every member on the leader.
+            List<Vector2> slots = GroupFormation.CreateSlots(4, 1.5f, GroupFormation.ScatterFormation);
+
+            Assert.That(slots.Count, Is.EqualTo(4));
+            for (int index = 1; index < slots.Count; index++)
+                Assert.That(Vector2.Distance(slots[0], slots[index]), Is.GreaterThan(0.1f));
+        }
+
+        [Test]
         public void CreateSlots_WedgeAlternatesBehindTheLeader()
         {
             List<Vector2> slots = GroupFormation.CreateSlots(3, 1f, GroupFormation.WedgeFormation);

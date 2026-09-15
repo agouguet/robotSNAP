@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using RobotSNAP.Agents;
 using RobotSNAP.Core.Scenario;
 using UnityEngine;
@@ -145,6 +146,12 @@ public sealed class ScenarioRouteEditor
     /// <summary>First entry keeps the controller of the HumanConfig asset; the rest pin it for the group.</summary>
     private const string InheritControllerChoice = "Inherit from config";
 
+    /// <summary>
+    /// Share of an area that has to be walkable. Below this the area is a drawing mistake rather than a tight
+    /// spot: the runtime projects every agent it cannot place, so the crowd lands on one strip.
+    /// </summary>
+    private const float MinimumAreaCoverage = 0.15f;
+
     private static readonly string[] MovementControllerChoices =
     {
         InheritControllerChoice,
@@ -158,12 +165,15 @@ public sealed class ScenarioRouteEditor
         "Row",
         "Column",
         "Wedge",
-        "Cluster"
+        "Cluster",
+        "Independent"
     };
 
     private readonly List<RouteDraft> _routes = new();
     private readonly List<EditorSnapshot> _undoStack = new();
     private readonly List<EditorSnapshot> _redoStack = new();
+    /// <summary>Route copied with Ctrl+C, waiting to be pasted as a new route.</summary>
+    private RouteSnapshot _routeClipboard;
     private readonly List<VisualElement> _pointRows = new();
     private readonly Dictionary<int, CoordinateFields> _pointFields = new();
     /// <summary>The four area fields of the points that are areas, keyed by point index (0 is the start).</summary>
@@ -172,6 +182,7 @@ public sealed class ScenarioRouteEditor
     private readonly Dictionary<int, Label> _pointAreaLabels = new();
     private readonly VisualElement _routeList;
     private readonly Button _addHumanRouteButton;
+    private readonly Button _duplicateHumanRouteButton;
     private readonly Button _removeHumanRouteButton;
     private readonly Button _setRouteStartButton;
     private readonly Button _addRouteObjectiveButton;
@@ -183,6 +194,8 @@ public sealed class ScenarioRouteEditor
     private readonly DropdownField _movementControllerDropdown;
     private readonly DropdownField _formationDropdown;
     private readonly FloatField _groupSpacingField;
+    private readonly Label _groupSpacingLabel;
+    private readonly Label _groupSpacingHelp;
     private readonly FloatField _formationParameterField;
     private readonly Label _formationParameterLabel;
     private readonly Label _formationPreviewLabel;
@@ -250,6 +263,7 @@ public sealed class ScenarioRouteEditor
     {
         _routeList = root.Q<VisualElement>("RouteSelectorList");
         _addHumanRouteButton = root.Q<Button>("AddHumanRouteButton");
+        _duplicateHumanRouteButton = root.Q<Button>("DuplicateHumanRouteButton");
         _removeHumanRouteButton = root.Q<Button>("RemoveHumanRouteButton");
         _setRouteStartButton = root.Q<Button>("SetRouteStartButton");
         _addRouteObjectiveButton = root.Q<Button>("AddRouteObjectiveButton");
@@ -261,6 +275,8 @@ public sealed class ScenarioRouteEditor
         _movementControllerDropdown = root.Q<DropdownField>("MovementControllerDropdown");
         _formationDropdown = root.Q<DropdownField>("FormationDropdown");
         _groupSpacingField = root.Q<FloatField>("GroupSpacingField");
+        _groupSpacingLabel = root.Q<Label>("GroupSpacingLabel");
+        _groupSpacingHelp = root.Q<Label>("GroupSpacingHelp");
         _formationParameterField = root.Q<FloatField>("FormationParameterField");
         _formationParameterLabel = root.Q<Label>("FormationParameterLabel");
         _formationPreviewLabel = root.Q<Label>("FormationPreviewLabel");
@@ -283,10 +299,11 @@ public sealed class ScenarioRouteEditor
 
         if (new VisualElement[]
             {
-                _routeList, _addHumanRouteButton, _removeHumanRouteButton,
+                _routeList, _addHumanRouteButton, _duplicateHumanRouteButton, _removeHumanRouteButton,
                 _setRouteStartButton, _addRouteObjectiveButton, _toggleMapGridButton,
                 _humanRouteSettings, _humanCountField, _humanSpeedField,
                 _endBehaviorDropdown, _formationDropdown, _groupSpacingField,
+                _groupSpacingLabel, _groupSpacingHelp,
                 _movementControllerDropdown,
                 _formationParameterField, _formationParameterLabel,
                 _formationPreviewLabel,
@@ -318,6 +335,7 @@ public sealed class ScenarioRouteEditor
         _canvas.RegisterCallback<GeometryChangedEvent>(_ => RefreshOverlay());
 
         _addHumanRouteButton.clicked += AddHumanRoute;
+        _duplicateHumanRouteButton.clicked += DuplicateActiveHumanRoute;
         _removeHumanRouteButton.clicked += RemoveActiveHumanRoute;
         _setRouteStartButton.clicked += SelectStartForPlacement;
         _addRouteObjectiveButton.clicked += AddObjective;
@@ -869,15 +887,16 @@ public sealed class ScenarioRouteEditor
                 continue;
 
             if (route.SpawnRandom && IsUsableZone(route.SpawnZone) &&
-                !AreaHasWalkableGround(route.SpawnZone, route.Points.Count > 0 ? route.Points[0] : Vector2.zero))
-                return $"{route.Id} start area contains no walkable ground.";
+                DescribeAreaCoverage(route.Id, "start", route.SpawnZone) is string startProblem)
+                return startProblem;
 
             for (int index = 1; index < route.Points.Count; index++)
             {
                 Rect? zone = route.ZoneAt(index);
                 if (zone.HasValue && IsUsableZone(zone.Value) &&
-                    !AreaHasWalkableGround(zone.Value, route.Points[index]))
-                    return $"{route.Id} {RouteMapHitTesting.PointLabel(index)} area contains no walkable ground.";
+                    DescribeAreaCoverage(route.Id, RouteMapHitTesting.PointLabel(index), zone.Value)
+                        is string pointProblem)
+                    return pointProblem;
             }
         }
 
@@ -885,11 +904,27 @@ public sealed class ScenarioRouteEditor
     }
 
     /// <summary>
-    /// Samples a coarse grid across an area: one walkable pixel is enough for the runtime to snap an agent to.
+    /// Why an area cannot host the agents it promises, or null when it can. An area drawn over a wall is the
+    /// mistake that turns a crowd into a heap: every agent the runtime cannot place is projected onto the nearest
+    /// free pixel, so a zone that is mostly wall collapses its whole crowd onto the same strip.
     /// </summary>
-    private bool AreaHasWalkableGround(Rect zone, Vector2 fallback)
+    private string DescribeAreaCoverage(string routeId, string what, Rect zone)
+    {
+        float coverage = AreaWalkableCoverage(zone);
+        if (coverage <= 0f)
+            return $"{routeId} {what} area contains no walkable ground.";
+        if (coverage < MinimumAreaCoverage)
+            return $"{routeId} {what} area is mostly wall ({coverage:P0} walkable): the agents will be pushed " +
+                   "onto the free strip instead of spreading over the area you drew.";
+
+        return null;
+    }
+
+    /// <summary>Fraction of a coarse grid across an area that an agent can stand on.</summary>
+    private float AreaWalkableCoverage(Rect zone)
     {
         const int Samples = 5;
+        int walkable = 0;
         for (int row = 0; row < Samples; row++)
         {
             for (int column = 0; column < Samples; column++)
@@ -898,11 +933,11 @@ public sealed class ScenarioRouteEditor
                     Mathf.Lerp(zone.xMin, zone.xMax, column / (Samples - 1f)),
                     Mathf.Lerp(zone.yMin, zone.yMax, row / (Samples - 1f)));
                 if (GroundAt(sample) == PointGround.Walkable)
-                    return true;
+                    walkable++;
             }
         }
 
-        return GroundAt(fallback) == PointGround.Walkable;
+        return (float)walkable / (Samples * Samples);
     }
 
     /// <summary>
@@ -921,6 +956,11 @@ public sealed class ScenarioRouteEditor
                 continue;
 
             string groupId = route.Group?.Trim();
+            // Independent agents draw their own point inside the start area, so there is no slot to check here;
+            // the start area itself is validated like every other area.
+            if (GroupFormation.IsScatter(route.Formation))
+                continue;
+
             if (string.IsNullOrEmpty(groupId))
             {
                 AppendSlots(slots, route.Id, route.Points[0], route, index, route.Count, 1);
@@ -1174,6 +1214,79 @@ public sealed class ScenarioRouteEditor
         RefreshActiveRoute();
     }
 
+    /// <summary>
+    /// Adds a copy of the active route. A crowd is built by tuning one route and repeating it — the same start
+    /// area crossed from another side, a second flow through the same corridor — so the copy has to carry the
+    /// whole route: points, areas, formation, end behaviour and speed.
+    /// </summary>
+    private void DuplicateActiveHumanRoute()
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null || active.IsRobot)
+            return;
+
+        InsertRouteCopy(CaptureRoute(active));
+    }
+
+    /// <summary>Keeps the active route on the editor clipboard; Ctrl+V turns it into a new route.</summary>
+    private void CopyActiveRoute()
+    {
+        RouteDraft active = ActiveRoute;
+        if (active == null || active.IsRobot)
+            return;
+
+        _routeClipboard = CaptureRoute(active);
+        _instructionLabel.text = $"{active.Id} copied. Ctrl+V adds a copy.";
+    }
+
+    private void PasteRoute()
+    {
+        if (_routeClipboard == null)
+        {
+            _instructionLabel.text = "Nothing to paste: copy a route with Ctrl+C first.";
+            return;
+        }
+
+        InsertRouteCopy(_routeClipboard);
+    }
+
+    private void InsertRouteCopy(RouteSnapshot source)
+    {
+        if (source == null)
+            return;
+
+        PushUndo();
+        RouteDraft copy = CreateDraftFromSnapshot(source);
+        copy.Id = NextRouteCopyId(source.Id);
+        // The copy starts as a new route: saving it as a fresh entry is the point of duplicating.
+        copy.RouteModified = true;
+        copy.Source = null;
+        _routes.Add(copy);
+        _activeRouteIndex = _routes.Count - 1;
+        _pendingPointIndex = 0;
+        RebuildRouteList();
+        RefreshActiveRoute();
+    }
+
+    /// <summary>
+    /// Name of the copy: "human_route_1" gives "human_route_1_copy", then "_copy2". A copy of a copy keeps one
+    /// suffix instead of stacking them, and the new id is checked against the routes already in the editor.
+    /// </summary>
+    private string NextRouteCopyId(string sourceId)
+    {
+        string root = Regex.Replace(string.IsNullOrWhiteSpace(sourceId) ? "human_route" : sourceId.Trim(),
+            "_copy\\d*$", string.Empty, RegexOptions.IgnoreCase);
+        string candidate = root + "_copy";
+        int suffix = 2;
+        while (_routes.Any(route => string.Equals(route.Id, candidate, StringComparison.OrdinalIgnoreCase)))
+        {
+            candidate = $"{root}_copy{suffix}";
+            suffix++;
+        }
+
+        return candidate;
+    }
+
     private void RemoveActiveHumanRoute()
     {
         RouteDraft active = ActiveRoute;
@@ -1240,6 +1353,7 @@ public sealed class ScenarioRouteEditor
 
         _activeRouteLabel.text = active.Id;
         _removeHumanRouteButton.SetEnabled(!active.IsRobot);
+        _duplicateHumanRouteButton.SetEnabled(!active.IsRobot);
         _humanRouteSettings.EnableInClassList(HiddenClass, active.IsRobot);
         _pendingPointIndex = Mathf.Clamp(_pendingPointIndex, 0, Mathf.Max(0, active.Points.Count - 1));
 
@@ -1884,6 +1998,7 @@ public sealed class ScenarioRouteEditor
             if (formation == "column") return "Column";
             if (formation == "wedge") return "Wedge";
             if (formation == "cluster") return "Cluster";
+            if (formation == "scatter" || formation == "none" || formation == "independent") return "Independent";
         }
 
         return "Pair";
@@ -1898,6 +2013,7 @@ public sealed class ScenarioRouteEditor
             if (formation == "column") return "column";
             if (formation == "wedge") return "wedge";
             if (formation == "cluster") return "cluster";
+            if (formation == "independent") return GroupFormation.ScatterFormation;
         }
 
         return "pair";
@@ -2041,6 +2157,24 @@ public sealed class ScenarioRouteEditor
         if (control && evt.keyCode == KeyCode.Y)
         {
             Redo();
+            evt.StopPropagation();
+            return;
+        }
+        if (control && evt.keyCode == KeyCode.C)
+        {
+            CopyActiveRoute();
+            evt.StopPropagation();
+            return;
+        }
+        if (control && evt.keyCode == KeyCode.V)
+        {
+            PasteRoute();
+            evt.StopPropagation();
+            return;
+        }
+        if (control && evt.keyCode == KeyCode.D)
+        {
+            DuplicateActiveHumanRoute();
             evt.StopPropagation();
             return;
         }
@@ -2426,6 +2560,10 @@ public sealed class ScenarioRouteEditor
             if (route.IsRobot || route.Count <= 1 || route.Points.Count < 2)
                 continue;
 
+            // Independent agents have no slots to draw: where they appear is drawn from the zone at run time.
+            if (GroupFormation.IsScatter(route.Formation))
+                continue;
+
             List<Vector2> slots = GroupFormation.CreateSlots(
                 route.Count,
                 route.GroupSpacing,
@@ -2482,11 +2620,36 @@ public sealed class ScenarioRouteEditor
             return;
         }
 
-        _formationPreviewLabel.text = active.Count <= 1
-            ? "One agent: no formation to lay out."
-            : $"{active.Count} agents · {FormationToDisplay(active.Formation).ToLowerInvariant()} · " +
-              $"{active.GroupSpacing:0.##} m — slots shown on the start point" +
-              DescribeActiveParameter(active) + ".";
+        bool independent = GroupFormation.IsScatter(active.Formation);
+
+        // Independent agents keep no shape, so the two fields that describe a shape say what they do instead.
+        _groupSpacingLabel.text = independent ? "Minimum spacing (m)" : "Spacing (m)";
+        _groupSpacingHelp.text = independent
+            ? "Shortest distance kept between two independent agents when they appear."
+            : "Distance kept between members of the same formation.";
+
+        if (active.Count <= 1)
+        {
+            _formationPreviewLabel.text = independent
+                ? "One agent: it draws its own start and arrival inside the areas."
+                : "One agent: no formation to lay out.";
+            return;
+        }
+
+        if (independent)
+        {
+            _formationPreviewLabel.text = active.SpawnRandom
+                ? $"{active.Count} independent agents · each one draws its own point in the start area, " +
+                  $"and its own arrival in every goal area, at least {active.GroupSpacing:0.##} m apart."
+                : $"{active.Count} independent agents share the start point: give the start an area so each " +
+                  "one draws its own point.";
+            return;
+        }
+
+        _formationPreviewLabel.text =
+            $"{active.Count} agents · {FormationToDisplay(active.Formation).ToLowerInvariant()} · " +
+            $"{active.GroupSpacing:0.##} m — slots shown on the start point" +
+            DescribeActiveParameter(active) + ".";
     }
 
     /// <summary>Names the tuned value of the formation, so the picture and the numbers agree.</summary>
@@ -2654,29 +2817,60 @@ public sealed class ScenarioRouteEditor
     {
         return new EditorSnapshot
         {
-            Routes = _routes.Select(route => new RouteSnapshot
-            {
-                Id = route.Id,
-                IsRobot = route.IsRobot,
-                Count = route.Count,
-                Speed = route.Speed,
-                EndBehavior = route.EndBehavior,
-                Group = route.Group,
-                MovementController = route.MovementController,
-                Formation = route.Formation,
-                GroupSpacing = route.GroupSpacing,
-                FormationParameter = route.FormationParameter,
-                Points = new List<Vector2>(route.Points),
-                SpawnRandom = route.SpawnRandom,
-                SpawnZone = route.SpawnZone,
-                PointZones = new List<Rect?>(route.PointZones),
-                Source = route.Source,
-                RouteModified = route.RouteModified,
-                HasNonSpatialGoal = route.HasNonSpatialGoal
-            }).ToList(),
+            Routes = _routes.Select(CaptureRoute).ToList(),
             ActiveRouteIndex = _activeRouteIndex,
             PendingPointIndex = _pendingPointIndex
         };
+    }
+
+    private static RouteSnapshot CaptureRoute(RouteDraft route)
+    {
+        return new RouteSnapshot
+        {
+            Id = route.Id,
+            IsRobot = route.IsRobot,
+            Count = route.Count,
+            Speed = route.Speed,
+            EndBehavior = route.EndBehavior,
+            Group = route.Group,
+            MovementController = route.MovementController,
+            Formation = route.Formation,
+            GroupSpacing = route.GroupSpacing,
+            FormationParameter = route.FormationParameter,
+            Points = new List<Vector2>(route.Points),
+            SpawnRandom = route.SpawnRandom,
+            SpawnZone = route.SpawnZone,
+            PointZones = new List<Rect?>(route.PointZones),
+            Source = route.Source,
+            RouteModified = route.RouteModified,
+            HasNonSpatialGoal = route.HasNonSpatialGoal
+        };
+    }
+
+    private static RouteDraft CreateDraftFromSnapshot(RouteSnapshot route)
+    {
+        var draft = new RouteDraft
+        {
+            Id = route.Id,
+            IsRobot = route.IsRobot,
+            Count = route.Count,
+            Speed = route.Speed,
+            EndBehavior = route.EndBehavior,
+            Group = route.Group,
+            MovementController = route.MovementController,
+            Formation = route.Formation,
+            GroupSpacing = route.GroupSpacing,
+            FormationParameter = route.FormationParameter,
+            SpawnRandom = route.SpawnRandom,
+            SpawnZone = route.SpawnZone,
+            Source = route.Source,
+            RouteModified = route.RouteModified,
+            HasNonSpatialGoal = route.HasNonSpatialGoal
+        };
+        draft.Points.AddRange(route.Points);
+        draft.PointZones.AddRange(route.PointZones ?? new List<Rect?>());
+        NormalizeZones(draft);
+        return draft;
     }
 
     private void RestoreSnapshot(EditorSnapshot snapshot)
@@ -2686,30 +2880,7 @@ public sealed class ScenarioRouteEditor
 
         _routes.Clear();
         foreach (RouteSnapshot route in snapshot.Routes)
-        {
-            var draft = new RouteDraft
-            {
-                Id = route.Id,
-                IsRobot = route.IsRobot,
-                Count = route.Count,
-                Speed = route.Speed,
-                EndBehavior = route.EndBehavior,
-                Group = route.Group,
-                MovementController = route.MovementController,
-                Formation = route.Formation,
-                GroupSpacing = route.GroupSpacing,
-                FormationParameter = route.FormationParameter,
-                SpawnRandom = route.SpawnRandom,
-                SpawnZone = route.SpawnZone,
-                Source = route.Source,
-                RouteModified = route.RouteModified,
-                HasNonSpatialGoal = route.HasNonSpatialGoal
-            };
-            draft.Points.AddRange(route.Points);
-            draft.PointZones.AddRange(route.PointZones ?? new List<Rect?>());
-            NormalizeZones(draft);
-            _routes.Add(draft);
-        }
+            _routes.Add(CreateDraftFromSnapshot(route));
 
         _activeRouteIndex = Mathf.Clamp(snapshot.ActiveRouteIndex, 0, Mathf.Max(0, _routes.Count - 1));
         _pendingPointIndex = Mathf.Max(0, snapshot.PendingPointIndex);

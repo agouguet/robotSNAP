@@ -144,6 +144,7 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="route-management-actions">
                         <ui:Button name="AddHumanRouteButton" text="+ Human route" class="route-management-button"/>
+                        <ui:Button name="DuplicateHumanRouteButton" text="Duplicate" class="route-management-button"/>
                         <ui:Button name="RemoveHumanRouteButton" text="Remove" class="route-management-button danger-subtle"/>
                     </ui:VisualElement>
                     <ui:VisualElement name="HumanRouteSettings" class="route-editor-hidden">
@@ -179,9 +180,9 @@
                                     <ui:Label text="Leave 0 to keep the natural default of the selected formation." class="field-help"/>
                                 </ui:VisualElement>
                                 <ui:VisualElement class="creation-field">
-                                    <ui:Label text="Spacing (m)" class="creation-field-label"/>
+                                    <ui:Label name="GroupSpacingLabel" text="Spacing (m)" class="creation-field-label"/>
                                     <ui:FloatField name="GroupSpacingField" class="creation-text-field"/>
-                                    <ui:Label text="Distance kept between members of the same formation." class="field-help"/>
+                                    <ui:Label name="GroupSpacingHelp" text="Distance kept between members of the same formation." class="field-help"/>
                                     <ui:Label name="FormationPreviewLabel" text="" class="formation-preview-label"/>
                                 </ui:VisualElement>
                             </ui:VisualElement>
@@ -237,6 +238,7 @@
                     <ui:Label name="MapShortcutUndo" text="Ctrl+Z  Undo" class="map-shortcut-chip"/>
                     <ui:Label name="MapShortcutRedo" text="Ctrl+Y  Redo" class="map-shortcut-chip"/>
                     <ui:Label name="MapShortcutNudge" text="Arrows  Nudge 0.1 m" class="map-shortcut-chip"/>
+                    <ui:Label name="MapShortcutCopy" text="Ctrl+C / Ctrl+V  Copy a route" class="map-shortcut-chip"/>
                     <ui:Label name="MapShortcutCancel" text="Esc  Cancel drag" class="map-shortcut-chip"/>
                 </ui:VisualElement>
             </ui:VisualElement>

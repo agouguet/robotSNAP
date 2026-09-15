@@ -19,7 +19,6 @@ namespace RobotSNAP.Core.Scenario
     {
         [Header("References")]
         [SerializeField] private ScenarioLoader _loader;
-        [SerializeField] private EnvironmentBuilder _environmentBuilder;
 
         [Header("Prefabs")]
         [SerializeField] private GameObject _robotPrefab; 
@@ -119,8 +118,8 @@ namespace RobotSNAP.Core.Scenario
 
         private IEnumerator ApplyScenarioCoroutine()
         {
-            // 1. Build the map (if needed). Currently disabled in favor of external build.
-            // yield return StartCoroutine(BuildMapFromScenario());
+            // 1. The map is built by ScenarioManager, through GameManager.BuildMap, before this coroutine runs:
+            //    the floor, the walls and the walkable grid all come from that single build.
 
             // 2. Clear existing humans (return them to the pool)
             if (_clearExistingHumans)
@@ -135,10 +134,9 @@ namespace RobotSNAP.Core.Scenario
             // 4. Apply simulation configuration (seed, time scale, duration)
             ApplySimulationConfig();
 
-            // 4b. Build the walkable grid of the scenario. The editor plans and validates its trajectories on
-            // that same grid, so loading it before anything spawns is what makes the simulation walk the routes
-            // the author drew — and what lets the spawn policy pull a formation out of a wall.
-            yield return StartCoroutine(LoadNavigationGrid());
+            // 4b. Report which navigation the agents will use. The environment builder already built it, from
+            // the same image as the floor and the walls, before anything could spawn.
+            LogNavigationSource();
 
             // 5. Setup the robot (position, rotation, goal, behavior, speed)
             yield return StartCoroutine(SetupRobot());
@@ -150,87 +148,30 @@ namespace RobotSNAP.Core.Scenario
         }
 
         // ==========================================
-        //          NAVIGATION GRID
+        //          NAVIGATION SOURCE
         // ==========================================
 
         /// <summary>
-        /// Loads the occupancy image of the scenario and builds the walkable grid the agents plan on.
-        /// The image is only sampled: the texture is released right away, so a large map does not stay in
-        /// memory for the whole simulation.
+        /// The map of a scenario is built in one place, <see cref="EnvironmentBuilder.BuildEnvironment"/>: it
+        /// creates the floor, the walls and the walkable grid from the very same occupancy image. A map that is
+        /// a prefab or an additive scene brings its own geometry and leaves no grid, and the agents then follow
+        /// the scene NavMesh.
         /// </summary>
-        private IEnumerator LoadNavigationGrid()
+        private void LogNavigationSource()
         {
-            ScenarioNavigation.Clear();
+            if (!_logEvents)
+                return;
 
-            string map = _currentScenario?.MapImage;
-            if (string.IsNullOrEmpty(map))
+            if (ScenarioNavigation.IsAvailable)
             {
-                if (_logEvents)
-                    Debug.Log("[ScenarioApplier] Scenario has no occupancy map: navigation falls back on the scene NavMesh.");
-                yield break;
+                Debug.Log($"[ScenarioApplier] Walkable grid ready: " +
+                          $"{ScenarioNavigation.Walkable.Width}×{ScenarioNavigation.Walkable.Height} cells, " +
+                          $"clearance {ScenarioNavigation.DefaultAgentRadius} m.");
+                return;
             }
 
-            if (_loader == null)
-            {
-                Debug.LogWarning("[ScenarioApplier] No scenario loader: the walkable grid cannot be built.");
-                yield break;
-            }
-
-            if (!_loader.LoadMapData(map, out Texture2D texture, out Bounds bounds) || texture == null)
-            {
-                Debug.LogWarning($"[ScenarioApplier] Occupancy image '{map}' could not be loaded: " +
-                                 "navigation falls back on the scene NavMesh.");
-                yield break;
-            }
-
-            try
-            {
-                ScenarioNavigation.BuildFrom(texture, bounds);
-            }
-            finally
-            {
-                Destroy(texture);
-            }
-
-            if (_logEvents)
-                Debug.Log($"[ScenarioApplier] Navigation grid '{map}' built: " +
-                          $"{ScenarioNavigation.Walkable.Width}×{ScenarioNavigation.Walkable.Height} cells " +
-                          $"({ScenarioNavigation.Resolution} max), clearance {ScenarioNavigation.DefaultAgentRadius} m.");
-
-            yield return null;
-        }
-
-        // ==========================================
-        //          MAP BUILDING (OPTIONAL)
-        // ==========================================
-
-        private IEnumerator BuildMapFromScenario()
-        {
-            if (string.IsNullOrEmpty(_currentScenario.MapImage))
-            {
-                if (_logEvents) Debug.Log("[ScenarioApplier] No map specified in scenario, skipping map build.");
-                yield break;
-            }
-
-            if (_environmentBuilder == null)
-            {
-                OnApplicationError?.Invoke("GridEnvironmentBuilder not assigned, cannot build map.");
-                yield break;
-            }
-
-            if (_loader.LoadMapData(_currentScenario.MapImage, out Texture2D texture, out Bounds bounds))
-            {
-                if (texture == null)
-                {
-                    OnApplicationError?.Invoke($"Failed to load map texture: {_currentScenario.MapImage}");
-                    yield break;
-                }
-                _environmentBuilder.BuildFromTexture(texture, bounds);
-                // Same image, same sampling, same planner as the editor: the runtime then walks the very
-                // trajectories the scenario author validated on the map.
-                ScenarioNavigation.BuildFrom(texture, bounds);
-            }
-            yield return null;
+            Debug.Log("[ScenarioApplier] No walkable grid for this environment: " +
+                      "navigation falls back on the scene NavMesh.");
         }
 
         // ==========================================

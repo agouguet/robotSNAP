@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using RobotSNAP.Agents;
 using RobotSNAP.Agents.Movement.Interfaces;
@@ -29,9 +30,9 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2 currentPosition,
             Vector2 currentVelocity,
             Vector2 goalPosition,
-            Vector2[] neighbors,
-            Vector2[] neighborVelocities,
-            Vector2[] staticObstacles,
+            IReadOnlyList<Vector2> neighbors,
+            IReadOnlyList<Vector2> neighborVelocities,
+            IReadOnlyList<Vector2> staticObstacles,
             RobotObservation robot,
             float deltaTime,
             float cruiseSpeedOverride = 0f)

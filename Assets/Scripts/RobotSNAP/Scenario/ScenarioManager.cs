@@ -235,6 +235,11 @@ namespace RobotSNAP.Core.Scenario
             foreach (var gm in _gameManagers)
                 if (gm != null) Destroy(gm.gameObject);
             _gameManagers.Clear();
+
+            // The walkable grid belongs to the environment that was just dropped. An environment that has no
+            // occupancy image — a prefab or an additive scene — never rebuilds one, so leaving it behind would
+            // make the next scenario plan on the previous map.
+            ScenarioNavigation.Clear();
         }
 
         // === Chargement du scénario (Coroutine principale) ===

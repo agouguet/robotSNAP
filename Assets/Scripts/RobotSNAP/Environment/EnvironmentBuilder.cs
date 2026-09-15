@@ -253,6 +253,10 @@ namespace RobotSNAP.Environment
             // 1. Nettoyer l'ancien
             yield return StartCoroutine(ClearEnvironmentCoroutine());
 
+            // A prefab or an additive scene brings its own geometry and its own NavMesh: no occupancy grid is
+            // loaded for them, so the agents keep navigating the scene. An image map rebuilds the grid below.
+            ScenarioNavigation.Clear();
+
             if (string.IsNullOrEmpty(mapName)) yield break;
 
             if (_loader == null)
@@ -283,9 +287,9 @@ namespace RobotSNAP.Environment
         private IEnumerator ClearEnvironmentCoroutine()
         {
             // Nettoyer l'ancien prefab ou l'ancienne image
-            if (_currentEnvironmentInstance != null) Destroy(_currentEnvironmentInstance);
-            if (_floor != null) Destroy(_floor);
-            if (_walls != null) Destroy(_walls);
+            DestroyInCurrentContext(_currentEnvironmentInstance);
+            DestroyInCurrentContext(_floor);
+            DestroyInCurrentContext(_walls);
             _currentEnvironmentInstance = null;
             _floor = null;
             _walls = null;
@@ -344,6 +348,10 @@ namespace RobotSNAP.Environment
         {
             Clear();
 
+            // Floor, walls and walkable grid come from this single image, so what the scenario editor validates
+            // on the map is what the agents walk, and the two can never drift apart.
+            ScenarioNavigation.BuildFrom(occupancyTexture, worldBounds);
+
             int width = occupancyTexture.width;
             int height = occupancyTexture.height;
             float resolutionX = worldBounds.size.x / width;
@@ -376,8 +384,20 @@ namespace RobotSNAP.Environment
             _floor.tag = "Floor";
 
             var renderer = _floor.GetComponent<Renderer>();
-            renderer.material = floorMaterial;
-            renderer.material.mainTexture = texture;
+            if (Application.isPlaying)
+            {
+                // Unity instantiates the shared material for this renderer, and releases it with the floor.
+                renderer.material = floorMaterial;
+                renderer.material.mainTexture = texture;
+            }
+            else
+            {
+                // The builder also runs from editor tooling: renderer.material is refused outside play mode,
+                // and would leak a material into the scene. An explicit instance has the same effect.
+                var instance = new Material(floorMaterial);
+                instance.mainTexture = texture;
+                renderer.sharedMaterial = instance;
+            }
         }
 
         private void GenerateWallsOptimized(
@@ -420,12 +440,14 @@ namespace RobotSNAP.Environment
                         tempWall.transform.localPosition = new Vector3(worldCenter.x, wallHeight / 2f, worldCenter.y);
                         tempWall.transform.localScale = new Vector3(widthM, wallHeight, depthM);
 
+                        // sharedMesh, not mesh: the property would instantiate a copy of the cube mesh for every
+                        // wall block, and those copies would never be released.
                         combineInstances.Add(new CombineInstance
                         {
-                            mesh = tempWall.GetComponent<MeshFilter>().mesh,
+                            mesh = tempWall.GetComponent<MeshFilter>().sharedMesh,
                             transform = transform.worldToLocalMatrix * tempWall.transform.localToWorldMatrix
                         });
-                        Destroy(tempWall);
+                        DestroyInCurrentContext(tempWall);
                     }
                 }
             }
@@ -471,8 +493,27 @@ namespace RobotSNAP.Environment
 
         private void Clear()
         {
-            if (_floor != null) Destroy(_floor);
-            if (_walls != null) Destroy(_walls);
+            DestroyInCurrentContext(_floor);
+            DestroyInCurrentContext(_walls);
+        }
+
+        /// <summary>
+        /// Removes a GameObject of the previous environment. Destroy() is refused outside play mode, where the
+        /// builder is also driven from the editor, so the immediate form is used there instead.
+        /// </summary>
+        private static void DestroyInCurrentContext(GameObject target)
+        {
+            if (target == null)
+                return;
+
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                DestroyImmediate(target);
+                return;
+            }
+#endif
+            Destroy(target);
         }
 
         private void OnDestroy()

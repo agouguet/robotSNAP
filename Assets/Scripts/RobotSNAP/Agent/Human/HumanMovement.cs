@@ -263,9 +263,9 @@ namespace RobotSNAP.Agents
                 _currentPosition,
                 _currentVelocity,
                 _currentGoalPoint,
-                _neighborPositions.ToArray(),
-                _neighborVelocities.ToArray(),
-                _tempObstacles.ToArray(),
+                _neighborPositions,
+                _neighborVelocities,
+                _tempObstacles,
                 ObserveRobot(),
                 Time.fixedDeltaTime,
                 _cruiseSpeedOverride

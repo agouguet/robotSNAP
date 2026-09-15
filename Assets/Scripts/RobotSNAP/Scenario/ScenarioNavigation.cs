@@ -9,7 +9,10 @@ namespace RobotSNAP.Core.Scenario
     /// The editor draws its trajectories on the occupancy image with <see cref="OccupancyPathPlanner"/>, at
     /// <see cref="Resolution"/> cells and with <see cref="DefaultAgentRadius"/> metres of clearance kept around
     /// obstacles. The simulation builds the very same grid from the very same image with the same constants,
-    /// so what the author validates on the map is what the agents actually walk.
+    /// so what the author validates on the map is what the agents actually walk. It is
+    /// <see cref="RobotSNAP.Environment.EnvironmentBuilder"/> that builds it, from the image it also uses for
+    /// the floor and the walls: one map, one grid. An environment made of a prefab or of an additive Unity
+    /// scene has no grid at all, and its agents keep navigating the scene NavMesh.
     /// </summary>
     public static class ScenarioNavigation
     {

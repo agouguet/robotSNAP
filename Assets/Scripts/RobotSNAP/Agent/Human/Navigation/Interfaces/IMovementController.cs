@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using RobotSNAP.Agents;
 
@@ -35,6 +36,17 @@ namespace RobotSNAP.Agents.Movement.Interfaces
         /// <summary>
         /// Calcule la vélocité désirée en fonction de l'état courant
         /// </summary>
+        /// <param name="neighbors">
+        /// Positions des voisins perçus, ou <c>null</c> si l'agent n'en voit aucun.
+        /// La liste est lue telle quelle pendant l'appel : le contrôleur ne la conserve pas et ne la modifie
+        /// pas, ce qui évite une copie en tableau à chaque pas physique.
+        /// </param>
+        /// <param name="neighborVelocities">
+        /// Vélocités des voisins, alignées index par index sur <paramref name="neighbors"/>.
+        /// </param>
+        /// <param name="staticObstacles">
+        /// Positions des obstacles statiques perçus, ou <c>null</c> s'il n'y en a aucun.
+        /// </param>
         /// <param name="cruiseSpeedOverride">
         /// Vitesse de croisière imposée pour cette frame (0 = celle de la configuration).
         /// Un suiveur de groupe en a besoin : plafonné à sa vitesse de croisière, il ne peut
@@ -44,9 +56,9 @@ namespace RobotSNAP.Agents.Movement.Interfaces
             Vector2 currentPosition,
             Vector2 currentVelocity,
             Vector2 goalPosition,
-            Vector2[] neighbors,
-            Vector2[] neighborVelocities,
-            Vector2[] staticObstacles,
+            IReadOnlyList<Vector2> neighbors,
+            IReadOnlyList<Vector2> neighborVelocities,
+            IReadOnlyList<Vector2> staticObstacles,
             RobotObservation robot,
             float deltaTime,
             float cruiseSpeedOverride = 0f

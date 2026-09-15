@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using RobotSNAP.Agents;
 using RobotSNAP.Agents.Movement.Interfaces;
@@ -107,9 +108,9 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2 currentPosition,
             Vector2 currentVelocity,
             Vector2 goalPosition,
-            Vector2[] neighbors,
-            Vector2[] neighborVelocities,
-            Vector2[] staticObstacles,
+            IReadOnlyList<Vector2> neighbors,
+            IReadOnlyList<Vector2> neighborVelocities,
+            IReadOnlyList<Vector2> staticObstacles,
             RobotObservation robot,
             float deltaTime,
             float cruiseSpeedOverride = 0f)
@@ -145,7 +146,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2 contactAccel = Vector2.zero;
             Vector2 alignmentAccel = Vector2.zero;
 
-            int count = neighbors?.Length ?? 0;
+            int count = neighbors?.Count ?? 0;
             for (int i = 0; i < count; i++)
             {
                 Vector2 neighborPos = neighbors[i];
@@ -215,21 +216,22 @@ namespace RobotSNAP.Agents.Movement.Controllers
 
             // ---- 3. Static obstacle repulsion ----
             Vector2 obstacleAccel = Vector2.zero;
-            if (staticObstacles != null)
+            // Indexed iteration, same order as the previous foreach over an array: enumerating a list through
+            // the interface would box its enumerator, i.e. allocate once per call.
+            int obstacleCount = staticObstacles?.Count ?? 0;
+            for (int i = 0; i < obstacleCount; i++)
             {
-                foreach (Vector2 obstaclePos in staticObstacles)
-                {
-                    Vector2 toObstacle = obstaclePos - currentPosition;
-                    float distance = toObstacle.magnitude;
+                Vector2 obstaclePos = staticObstacles[i];
+                Vector2 toObstacle = obstaclePos - currentPosition;
+                float distance = toObstacle.magnitude;
 
-                    if (distance <= 0.001f || distance > _obstaclePerceptionRadius)
-                        continue;
+                if (distance <= 0.001f || distance > _obstaclePerceptionRadius)
+                    continue;
 
-                    Vector2 dirToObstacle = toObstacle / distance;
-                    float forceMag = _obstacleForceStrength * Mathf.Exp((_agentRadius - distance) / _obstacleForceDistance);
-                    Vector2 obstacleForce = -forceMag * dirToObstacle;
-                    obstacleAccel += obstacleForce / _mass;
-                }
+                Vector2 dirToObstacle = toObstacle / distance;
+                float forceMag = _obstacleForceStrength * Mathf.Exp((_agentRadius - distance) / _obstacleForceDistance);
+                Vector2 obstacleForce = -forceMag * dirToObstacle;
+                obstacleAccel += obstacleForce / _mass;
             }
 
             // ---- 3b. Robot: repulsion close up, anticipation from further out ----

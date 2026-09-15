@@ -20,6 +20,10 @@ namespace RobotSNAP.Agents.Movement.Controllers
         private Vector2[] _trajectoryBuffer;
         private int _bufferIndex;
         private readonly List<Vector2> _neighborsWithRobot = new List<Vector2>();
+        // Tampons réutilisés par UpdatePrediction : le prédicteur n'accepte que des tableaux, on évite donc
+        // d'en allouer un par mise à jour de prédiction.
+        private readonly Vector2[] _historyBuffer = new Vector2[TRAJECTORY_LENGTH];
+        private Vector2[] _neighborBuffer = new Vector2[0];
         private const int TRAJECTORY_LENGTH = 8;  // Nombre de points d'historique utilisés par le modèle
 
         public ONNXPredictionController(HumanConfig config)
@@ -35,9 +39,9 @@ namespace RobotSNAP.Agents.Movement.Controllers
             Vector2 currentPosition,
             Vector2 currentVelocity,
             Vector2 goalPosition,
-            Vector2[] neighbors,
-            Vector2[] neighborVelocities,
-            Vector2[] staticObstacles,
+            IReadOnlyList<Vector2> neighbors,
+            IReadOnlyList<Vector2> neighborVelocities,
+            IReadOnlyList<Vector2> staticObstacles,
             RobotObservation robot,
             float deltaTime,
             float cruiseSpeedOverride = 0f)
@@ -81,32 +85,43 @@ namespace RobotSNAP.Agents.Movement.Controllers
             return predictedDirection * speed;
         }
 
-        /// <summary>The robot is appended to the observed neighbours so the model can react to it.</summary>
-        private Vector2[] WithRobot(Vector2[] neighbors, RobotObservation robot)
+        /// <summary>
+        /// Le robot est ajouté aux voisins observés pour que le modèle puisse réagir à lui.
+        /// La liste interne est réutilisée : elle est vidée avant remplissage et consommée immédiatement
+        /// par <see cref="UpdatePrediction"/>, donc aucun tableau temporaire n'est nécessaire.
+        /// </summary>
+        private IReadOnlyList<Vector2> WithRobot(IReadOnlyList<Vector2> neighbors, RobotObservation robot)
         {
             if (!robot.IsVisible)
                 return neighbors;
 
-            int count = neighbors?.Length ?? 0;
+            int count = neighbors?.Count ?? 0;
             _neighborsWithRobot.Clear();
             for (int index = 0; index < count; index++)
                 _neighborsWithRobot.Add(neighbors[index]);
             _neighborsWithRobot.Add(robot.Position);
-            return _neighborsWithRobot.ToArray();
+            return _neighborsWithRobot;
         }
 
-        private void UpdatePrediction(Vector2 currentPos, Vector2 currentVel, Vector2 goal, Vector2[] neighbors)
+        private void UpdatePrediction(Vector2 currentPos, Vector2 currentVel, Vector2 goal, IReadOnlyList<Vector2> neighbors)
         {
-            // Construction de l'historique de trajectoire (ordre temporel)
-            Vector2[] history = new Vector2[TRAJECTORY_LENGTH];
+            // Construction de l'historique de trajectoire (ordre temporel), dans le tampon réutilisé
             for (int i = 0; i < TRAJECTORY_LENGTH; i++)
             {
                 int idx = (_bufferIndex - i - 1 + TRAJECTORY_LENGTH) % TRAJECTORY_LENGTH;
-                history[i] = _trajectoryBuffer[idx];
+                _historyBuffer[i] = _trajectoryBuffer[idx];
             }
 
+            // ONNXHumanPredictor déduit ses features de neighbors.Length : le tampon passé doit donc
+            // contenir exactement les voisins courants, sinon les features sont fausses.
+            int neighborCount = neighbors?.Count ?? 0;
+            if (_neighborBuffer.Length != neighborCount)
+                System.Array.Resize(ref _neighborBuffer, neighborCount);
+            for (int i = 0; i < neighborCount; i++)
+                _neighborBuffer[i] = neighbors[i];
+
             // Appel au prédicteur ONNX
-            var result = _predictor.PredictTrajectory(history, neighbors, goal, _config.predictionSamples);
+            var result = _predictor.PredictTrajectory(_historyBuffer, _neighborBuffer, goal, _config.predictionSamples);
             if (result != null && result.predictions != null && result.predictions.Length > 0)
             {
                 // On garde la première prédiction (échantillon le plus probable)

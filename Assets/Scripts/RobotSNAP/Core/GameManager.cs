@@ -90,6 +90,15 @@ namespace RobotSNAP.Core
             {
                 yield return StartCoroutine(_environmentBuilder.BuildEnvironment(mapName));
                 Debug.Log($"[GameManager:{_environmentId}] Map '{mapName}' built.");
+
+                // Initialize() built the NavMesh before the map existed, so it described the previous
+                // environment: rebuild it on the walls that were just created. The walkable grid the humans
+                // plan on is built by the environment builder itself, from the same image.
+                if (_navMeshManager != null)
+                {
+                    Debug.Log($"[GameManager:{_environmentId}] Rebuilding NavMesh on the new map...");
+                    yield return StartCoroutine(_navMeshManager.BuildNavMeshes());
+                }
             }
             else
             {

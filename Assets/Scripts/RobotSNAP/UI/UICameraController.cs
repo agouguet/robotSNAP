@@ -1,6 +1,7 @@
 using RobotSNAP.CameraControl;
 using RobotSNAP;
 using RobotSNAP.Agents;
+using RobotSNAP.Core.Scenario;
 using UnityEngine;
 using UnityEngine.UIElements;
 using System.Collections.Generic;
@@ -13,9 +14,14 @@ public class UICameraController : MonoBehaviour
     private DropdownField _agentDropdown;
     private Button _prevButton, _nextButton, _viewButton;
     private Label _agentNameLabel, _agentProgressLabel;
-    private VisualElement _viewMenu;
+    private VisualElement _viewMenu, _focusStatusDot, _agentProgressBlock, _agentProgressSeparator;
+    private ScenarioManager _scenarioManager;
 
     private List<Button> _viewMenuButtons = new List<Button>();
+
+    /// <summary>A target refresh inside <see cref="RefreshUI"/> calls the UI back through
+    /// the camera events; the outer call already reads the fresh state afterwards.</summary>
+    private bool _refreshing;
 
     private void Start()
     {
@@ -31,6 +37,9 @@ public class UICameraController : MonoBehaviour
         _agentProgressLabel = root.Q<Label>("AgentProgressLabel");
         _viewButton = root.Q<Button>("ViewButton");
         _viewMenu = root.Q<VisualElement>("ViewMenu");
+        _focusStatusDot = root.Q<VisualElement>("FocusStatusDot");
+        _agentProgressBlock = root.Q<VisualElement>("AgentProgressBlock");
+        _agentProgressSeparator = root.Q<VisualElement>("AgentProgressSeparator");
 
         BuildViewMenu();
         RefreshUI();
@@ -41,6 +50,26 @@ public class UICameraController : MonoBehaviour
         if (_viewButton != null) _viewButton.RegisterCallback<ClickEvent>(evt => ToggleViewMenu());
 
         cameraController.OnFollowTargetChanged += _ => RefreshUI();
+        // The dropdown tracks the live target list, which grows when a scenario spawns its agents.
+        cameraController.OnTargetsUpdated += _ => RefreshUI();
+
+        // The robot is spawned by the scenario, long after this UI exists. That event is the
+        // signal that a new target appeared, so it is the moment to refresh the target list and
+        // let the camera hand the focus to the robot.
+        _scenarioManager = FindAnyObjectByType<ScenarioManager>();
+        if (_scenarioManager != null)
+            _scenarioManager.OnScenarioApplied += OnScenarioApplied;
+    }
+
+    private void OnDestroy()
+    {
+        if (_scenarioManager != null)
+            _scenarioManager.OnScenarioApplied -= OnScenarioApplied;
+    }
+
+    private void OnScenarioApplied(ScenarioData scenario)
+    {
+        if (cameraController != null) cameraController.RefreshFollowableTargets();
     }
 
     private void BuildViewMenu()
@@ -91,21 +120,48 @@ public class UICameraController : MonoBehaviour
 
     private void RefreshUI()
     {
+        // Refreshing the target list is also what lets the camera hand the focus to the robot by
+        // default, so the targets have to be asked for before the current target is read. The
+        // camera events fired from in there re-enter this method; the outer call is the one
+        // that ends up writing the fresh values.
+        if (_refreshing) return;
+        _refreshing = true;
+        try
+        {
+            RefreshUIInternal();
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    private void RefreshUIInternal()
+    {
+        var targets = cameraController.GetFollowableTargets();
         var target = cameraController.GetCurrentFollowTarget();
         bool hasFocus = target != null;
 
-        if (hasFocus)
+        if (_agentNameLabel != null) _agentNameLabel.text = hasFocus ? GetAgentDisplayName(target) : "No target";
+
+        // Camera lock: filled while an agent is followed, muted while there is no focus.
+        if (_focusStatusDot != null)
         {
-            if (_agentNameLabel != null) _agentNameLabel.text = GetAgentDisplayName(target);
-            if (_agentProgressLabel != null) _agentProgressLabel.text = GetAgentProgress(target);
-        }
-        else
-        {
-            if (_agentNameLabel != null) _agentNameLabel.text = "No target";
-            if (_agentProgressLabel != null) _agentProgressLabel.text = "0%";
+            if (hasFocus) _focusStatusDot.RemoveFromClassList("idle");
+            else _focusStatusDot.AddToClassList("idle");
         }
 
-        var targets = cameraController.GetFollowableTargets();
+        // No progress figure rather than a made-up one: the bar hides the block until the
+        // followed agent actually reports its progress.
+        float progress = 0f;
+        bool hasProgress = hasFocus && TryGetAgentProgress(target, out progress);
+        if (_agentProgressBlock != null)
+            _agentProgressBlock.style.display = hasProgress ? DisplayStyle.Flex : DisplayStyle.None;
+        if (_agentProgressSeparator != null)
+            _agentProgressSeparator.style.display = hasProgress ? DisplayStyle.Flex : DisplayStyle.None;
+        if (_agentProgressLabel != null)
+            _agentProgressLabel.text = hasProgress ? $"{progress * 100:F0}%" : string.Empty;
+
         if (targets != null && targets.Count > 0 && _agentDropdown != null)
         {
             var names = new List<string>();
@@ -183,13 +239,18 @@ public class UICameraController : MonoBehaviour
         return target.name;
     }
 
-    private string GetAgentProgress(Transform target)
+    /// <summary>
+    /// Reads the progress an agent publishes through <see cref="IAgentProgress"/>. Returns false
+    /// when the agent does not implement it, so the bar shows nothing instead of a stand-in value.
+    /// </summary>
+    private static bool TryGetAgentProgress(Transform target, out float progress)
     {
-        if (target == null) return "0%";
+        progress = 0f;
+        if (target == null) return false;
         var progressAgent = target.GetComponent<IAgentProgress>();
-        if (progressAgent != null)
-            return $"{progressAgent.Progress * 100:F0}%";
-        return "50%";
+        if (progressAgent == null) return false;
+        progress = Mathf.Clamp01(progressAgent.Progress);
+        return true;
     }
 
     public interface IAgentProgress { float Progress { get; } }

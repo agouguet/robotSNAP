@@ -120,20 +120,22 @@
             <ui:VisualElement class="creation-panel agent-settings-panel">
                 <ui:ScrollView class="agent-settings-scroll">
                     <ui:Label text="Route editor" class="creation-panel-title"/>
-                    <ui:VisualElement class="editor-section">
-                        <ui:Button name="SectionGlobalHeader" text="Global parameters" class="editor-section-header"/>
-                        <ui:VisualElement name="SectionGlobalContent" class="editor-section-content">
-                            <ui:VisualElement class="creation-field">
-                                <ui:Label text="Robot type" class="creation-field-label"/>
-                                <ui:DropdownField name="RobotTypeDropdown" class="creation-dropdown"/>
-                            </ui:VisualElement>
-                            <ui:VisualElement class="creation-field">
-                                <ui:Label text="Speed (m/s) *" class="creation-field-label"/>
-                                <ui:FloatField name="RobotSpeedField" class="creation-text-field"/>
-                            </ui:VisualElement>
-                            <ui:VisualElement class="creation-field">
-                                <ui:Label text="Start orientation Y (degrees)" class="creation-field-label"/>
-                                <ui:FloatField name="StartYawField" class="creation-text-field"/>
+                    <ui:VisualElement name="RobotRouteSettings" class="route-editor-hidden">
+                        <ui:VisualElement class="editor-section">
+                            <ui:Button name="SectionGlobalHeader" text="Robot route settings" class="editor-section-header"/>
+                            <ui:VisualElement name="SectionGlobalContent" class="editor-section-content">
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Label text="Robot type" class="creation-field-label"/>
+                                    <ui:DropdownField name="RobotTypeDropdown" class="creation-dropdown"/>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Label text="Speed (m/s) *" class="creation-field-label"/>
+                                    <ui:FloatField name="RobotSpeedField" class="creation-text-field"/>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Label text="Start orientation Y (degrees)" class="creation-field-label"/>
+                                    <ui:FloatField name="StartYawField" class="creation-text-field"/>
+                                </ui:VisualElement>
                             </ui:VisualElement>
                         </ui:VisualElement>
                     </ui:VisualElement>

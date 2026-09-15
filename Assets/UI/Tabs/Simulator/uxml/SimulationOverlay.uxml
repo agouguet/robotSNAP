@@ -15,23 +15,26 @@
                 <ui:Label class="minimap-title"/>
             </ui:VisualElement>
             <!-- <ui:Button name="FullScreenButton" class="full-screen-button" style="position: absolute; pointer-events: auto; background-image: url(&quot;project://database/Assets/Resources/Icons/fullscreen.png?fileID=2800000&amp;guid=573a03db3500544a4a9653eed5db98df&amp;type=3#fullscreen&quot;);"/> -->
-            <ui:VisualElement name="AgentFocusBar" class="agent-focus-bar" style="position: absolute; pointer-events: auto;">
-                <ui:VisualElement class="focus-block">
-                    <ui:Label text="AGENT ID" class="block-label"/>
-                    <ui:Label name="AgentNameLabel" text="TIAGO Base" class="block-value"/>
-                </ui:VisualElement>
-                <ui:VisualElement class="separator-vertical"/>
-                <ui:VisualElement class="focus-block">
-                    <ui:Label text="PROGRESS" class="block-label"/>
-                    <ui:Label name="AgentProgressLabel" text="78%" class="block-value"/>
-                </ui:VisualElement>
-                <ui:VisualElement class="separator-vertical"/>
-                <ui:VisualElement class="focus-block">
-                    <ui:Label text="FOCUS" class="block-label"/>
-                    <ui:VisualElement class="focus-controls">
-                        <ui:Button name="PrevAgentButton" text="◀" class="agent-nav-button"/>
-                        <ui:DropdownField name="AgentDropdown" label="" class="agent-dropdown" style="min-width: 120px;"/>
-                        <ui:Button name="NextAgentButton" text="▶" class="agent-nav-button"/>
+            <ui:VisualElement name="AgentFocusBarContainer" class="agent-focus-container">
+                <ui:VisualElement name="AgentFocusBar" class="agent-focus-bar">
+                    <ui:VisualElement name="FocusStatusDot" class="focus-status-dot idle"/>
+                    <ui:VisualElement class="focus-block">
+                        <ui:Label text="AGENT ID" class="block-label"/>
+                        <ui:Label name="AgentNameLabel" text="No target" class="block-value agent-name"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="AgentProgressSeparator" class="separator-vertical"/>
+                    <ui:VisualElement name="AgentProgressBlock" class="focus-block">
+                        <ui:Label text="PROGRESS" class="block-label"/>
+                        <ui:Label name="AgentProgressLabel" text="—" class="block-value agent-progress"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="separator-vertical"/>
+                    <ui:VisualElement class="focus-block">
+                        <ui:Label text="FOCUS" class="block-label"/>
+                        <ui:VisualElement class="focus-controls">
+                            <ui:Button name="PrevAgentButton" text="◀" class="agent-nav-button"/>
+                            <ui:DropdownField name="AgentDropdown" label="" class="agent-dropdown"/>
+                            <ui:Button name="NextAgentButton" text="▶" class="agent-nav-button"/>
+                        </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>

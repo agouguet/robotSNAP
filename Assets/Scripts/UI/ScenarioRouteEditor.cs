@@ -188,6 +188,7 @@ public sealed class ScenarioRouteEditor
     private readonly Button _addRouteObjectiveButton;
     private readonly Button _toggleMapGridButton;
     private readonly VisualElement _humanRouteSettings;
+    private readonly VisualElement _robotRouteSettings;
     private readonly IntegerField _humanCountField;
     private readonly FloatField _humanSpeedField;
     private readonly DropdownField _endBehaviorDropdown;
@@ -269,6 +270,7 @@ public sealed class ScenarioRouteEditor
         _addRouteObjectiveButton = root.Q<Button>("AddRouteObjectiveButton");
         _toggleMapGridButton = root.Q<Button>("ToggleMapGridButton");
         _humanRouteSettings = root.Q<VisualElement>("HumanRouteSettings");
+        _robotRouteSettings = root.Q<VisualElement>("RobotRouteSettings");
         _humanCountField = root.Q<IntegerField>("HumanCountField");
         _humanSpeedField = root.Q<FloatField>("HumanSpeedField");
         _endBehaviorDropdown = root.Q<DropdownField>("EndBehaviorDropdown");
@@ -302,6 +304,7 @@ public sealed class ScenarioRouteEditor
                 _routeList, _addHumanRouteButton, _duplicateHumanRouteButton, _removeHumanRouteButton,
                 _setRouteStartButton, _addRouteObjectiveButton, _toggleMapGridButton,
                 _humanRouteSettings, _humanCountField, _humanSpeedField,
+                _robotRouteSettings,
                 _endBehaviorDropdown, _formationDropdown, _groupSpacingField,
                 _groupSpacingLabel, _groupSpacingHelp,
                 _movementControllerDropdown,
@@ -1329,6 +1332,7 @@ public sealed class ScenarioRouteEditor
         _removeHumanRouteButton.SetEnabled(!active.IsRobot);
         _duplicateHumanRouteButton.SetEnabled(!active.IsRobot);
         _humanRouteSettings.EnableInClassList(HiddenClass, active.IsRobot);
+        _robotRouteSettings.EnableInClassList(HiddenClass, !active.IsRobot);
         _pendingPointIndex = Mathf.Clamp(_pendingPointIndex, 0, Mathf.Max(0, active.Points.Count - 1));
 
         _updatingFields = true;

@@ -48,6 +48,24 @@ namespace RobotSNAP.CameraControl
         private List<Transform> _followableTargets = new List<Transform>();
         private int _currentFollowIndex = -1;
 
+        [Header("Default Focus")]
+        [Tooltip("Hand the focus to the robot as soon as one exists, until the user picks another target.")]
+        public bool focusRobotByDefault = true;
+
+        /// <summary>
+        /// The scenario spawns the robot well after the first frame, so the default focus cannot
+        /// be resolved once in Start. Refreshing the target list is what hands it over; this is how
+        /// long that refresh may be retried, and how often.
+        /// </summary>
+        private const float DefaultFocusTimeout = 60f;
+        private const float DefaultFocusRetryInterval = 0.5f;
+
+        /// <summary>Base links of the robots among the followable targets. A base link does not carry
+        /// the Robot tag itself, so the default focus cannot be found again from the list alone.</summary>
+        private readonly List<Transform> _robotTargets = new List<Transform>();
+        private bool _defaultFocusApplied;
+        private bool _applyingDefaultFocus;
+
         [Header("Follow Settings")]
         public Vector3 followOffset = new Vector3(0, 5, -10);
         public Vector3 topDownOffset = new Vector3(0, 20, 0);
@@ -193,6 +211,9 @@ namespace RobotSNAP.CameraControl
             velocity = Vector3.zero;
             
             SetCameraMode(CameraMode.Free);
+
+            if (focusRobotByDefault)
+                StartCoroutine(FocusRobotWhenAvailable());
         }
         
         #endregion
@@ -317,6 +338,7 @@ namespace RobotSNAP.CameraControl
         public void RefreshFollowableTargets()
         {
             _followableTargets.Clear();
+            _robotTargets.Clear();
             foreach (string tag in followableTags)
             {
                 GameObject[] objects = GameObject.FindGameObjectsWithTag(tag);
@@ -333,11 +355,69 @@ namespace RobotSNAP.CameraControl
                     }
                     if (!_followableTargets.Contains(targetTransform))
                         _followableTargets.Add(targetTransform);
+                    if (tag == "Robot" && !_robotTargets.Contains(targetTransform))
+                        _robotTargets.Add(targetTransform);
                 }
             }
             foreach (LayerMask layer in followableLayers) { /* placeholder */ }
             _followableTargets.Sort((a, b) => string.Compare(a.name, b.name, System.StringComparison.OrdinalIgnoreCase));
             OnTargetsUpdated?.Invoke(_followableTargets);
+
+            // The list just changed: this is the moment to know whether the default focus can
+            // finally be resolved. Runs after the notification so subscribers see the new list.
+            ApplyDefaultFocus();
+        }
+
+        /// <summary>
+        /// Gives the focus to the robot when nothing is focused yet — the simulation should open on
+        /// the robot, without the user picking it in the bar first. Called from every target refresh,
+        /// so a robot spawned later is picked up as soon as it appears.
+        /// </summary>
+        /// <returns>True once a robot holds the focus, false while none is available yet.</returns>
+        public bool ApplyDefaultFocus()
+        {
+            if (_defaultFocusApplied) return _currentFollowTarget != null;
+            if (_currentFollowTarget != null)
+            {
+                // Something is already focused: either the user picked it, or the scene started
+                // with a focus. The robot must not take it back, so the rule settles here.
+                _defaultFocusApplied = true;
+                return true;
+            }
+            if (!focusRobotByDefault || _applyingDefaultFocus || _robotTargets.Count == 0)
+                return false;
+
+            Transform robot = _robotTargets[0];
+            if (robot == null) return false;
+
+            _applyingDefaultFocus = true;
+            _defaultFocusApplied = true;
+            SetFollowTarget(robot);
+
+            // A free-fly camera ignores the focus target, so the view would open on whatever the
+            // scene camera was looking at. Only the untouched default view is upgraded; a mode
+            // the user picked is never replaced.
+            if (_currentModeEnum == CameraMode.Free && mainCamera != null)
+                SetCameraMode(CameraMode.Orbit);
+
+            _applyingDefaultFocus = false;
+            return true;
+        }
+
+        /// <summary>
+        /// Retries the default focus while the scene is still empty. The scenario spawns the robot
+        /// several frames after the UI appears, and nothing else would refresh the target list in
+        /// between. Bounded on purpose: it stops at the first focus, and gives up after
+        /// <see cref="DefaultFocusTimeout"/> seconds so a map without an agent never keeps it alive.
+        /// </summary>
+        private IEnumerator FocusRobotWhenAvailable()
+        {
+            float deadline = Time.unscaledTime + DefaultFocusTimeout;
+            while (_currentFollowTarget == null && Time.unscaledTime < deadline)
+            {
+                RefreshFollowableTargets();
+                yield return new WaitForSecondsRealtime(DefaultFocusRetryInterval);
+            }
         }
         
         public void SetFollowTarget(Transform target)

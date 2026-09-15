@@ -59,9 +59,20 @@ namespace RobotSNAP.CameraControl
         private List<Transform> _followableTargets = new List<Transform>();
         private int _currentFollowIndex = -1;
 
-        [Header("Default Focus")]
-        [Tooltip("Hand the focus to the robot as soon as one exists, until the user picks another target.")]
-        public bool focusRobotByDefault = true;
+        [Header("Orbit View")]
+        [Tooltip("The view opens on an orbit angle rather than a straight top-down one: this is the pitch, in degrees.")]
+        public float orbitPitch = 38f;
+        [Tooltip("Yaw of the default orbit view, in degrees.")]
+        public float orbitYaw = 45f;
+        [Tooltip("Distance from the pivot the view opens at, in metres.")]
+        public float orbitDistance = 14f;
+
+        [Header("Follow Settings")]
+        public Vector3 followOffset = new Vector3(0, 5, -10);
+        public Vector3 topDownOffset = new Vector3(0, 20, 0);
+        public Vector3 firstPersonOffset = new Vector3(0, 1.5f, 0.5f);
+        public Vector3 thirdPersonOffset = new Vector3(0, 2, 5);
+        public Vector3 orbitOffset = new Vector3(0, 5, -10);
 
         [Header("Interaction")]
         [Tooltip("What the left mouse button does in the view: pick an agent, slide, turn or zoom.")]
@@ -70,41 +81,14 @@ namespace RobotSNAP.CameraControl
         public CameraTool ActiveTool => activeTool;
         public event System.Action<CameraTool> OnToolChanged;
 
-        /// <summary>True while an agent is selected. This is the selection, not the camera binding:
-        /// see <see cref="IsFollowingTarget"/> for the state the dashboard badges report.</summary>
+        /// <summary>True while an agent is selected. The dashboard reads this for its badges.</summary>
         public bool IsFollowing => _currentFollowTarget != null;
 
         /// <summary>
-        /// True when the current view really keeps the camera on the selection. A free or top view
-        /// can hold a selected agent that the camera ignores, which is why the selection and the
-        /// binding are two distinct states and every panel reads this one for its "Following" label.
+        /// The point the orbit turns around while no agent is selected. The move tool slides it, so the
+        /// user keeps a place to look at after releasing an agent.
         /// </summary>
-        public bool IsFollowingTarget => _currentFollowTarget != null && ModeUsesTarget(_currentModeEnum);
-
-        /// <summary>The views that bind the camera to the followed agent.</summary>
-        public static bool ModeUsesTarget(CameraMode mode) =>
-            mode is CameraMode.FirstPerson or CameraMode.ThirdPerson or CameraMode.Orbit;
-
-        /// <summary>
-        /// The scenario spawns the robot well after the first frame, so the default focus cannot
-        /// be resolved once in Start. Refreshing the target list is what hands it over; this is how
-        /// long that refresh may be retried, and how often.
-        /// </summary>
-        private const float DefaultFocusTimeout = 60f;
-        private const float DefaultFocusRetryInterval = 0.5f;
-
-        /// <summary>Base links of the robots among the followable targets. A base link does not carry
-        /// the Robot tag itself, so the default focus cannot be found again from the list alone.</summary>
-        private readonly List<Transform> _robotTargets = new List<Transform>();
-        private bool _defaultFocusApplied;
-        private bool _applyingDefaultFocus;
-
-        [Header("Follow Settings")]
-        public Vector3 followOffset = new Vector3(0, 5, -10);
-        public Vector3 topDownOffset = new Vector3(0, 20, 0);
-        public Vector3 firstPersonOffset = new Vector3(0, 1.5f, 0.5f);
-        public Vector3 thirdPersonOffset = new Vector3(0, 2, 5);
-        public Vector3 orbitOffset = new Vector3(0, 5, -10);
+        public Vector3 OrbitPivot { get; set; }
 
         public System.Action<List<Transform>> OnTargetsUpdated;
         public System.Action<Transform> OnFollowTargetChanged;
@@ -266,32 +250,29 @@ namespace RobotSNAP.CameraControl
         /// </summary>
         private void PanBy(Vector2 screenDelta)
         {
-            if (_currentFollowTarget != null) return;
-            if (_currentModeEnum != CameraMode.Free) return;
+            // Sliding the view by hand is the one gesture that releases the agent: the camera stops
+            // being about that agent and becomes a place the user chose to look at.
+            if (_currentFollowTarget != null)
+                ClearFollowTarget();
 
-            Transform camera = mainCamera.transform;
+            Vector3 forward = Vector3.ProjectOnPlane(mainCamera.transform.forward, Vector3.up);
+            Vector3 right = Vector3.ProjectOnPlane(mainCamera.transform.right, Vector3.up);
+            if (forward.sqrMagnitude < 0.0001f) forward = Vector3.forward;
+            if (right.sqrMagnitude < 0.0001f) right = Vector3.right;
+
             float scale = moveSpeed * Time.unscaledDeltaTime * 0.35f;
-            Vector3 shift = (-camera.right * screenDelta.x - camera.up * screenDelta.y) * scale;
-
-            _targetPosition = _targetPosition + shift;
+            OrbitPivot += (-right.normalized * screenDelta.x - forward.normalized * screenDelta.y) * scale;
         }
 
-        /// <summary>Turns the view: free camera looks around, a followed agent is circled.</summary>
+        /// <summary>Turns the view around the pivot — the selected agent, or wherever the move tool left it.</summary>
         private void RotateBy(Vector2 screenDelta)
         {
             float speed = rotateSpeed * Time.unscaledDeltaTime * 0.6f;
             _currentRotationY += screenDelta.x * speed;
             _currentRotationX -= screenDelta.y * speed;
 
-            if (_currentFollowTarget != null)
-            {
-                _currentRotationX = Mathf.Clamp(_currentRotationX, 10f, 80f);
-            }
-            else
-            {
-                _currentRotationX = Mathf.Clamp(_currentRotationX, -90f, 90f);
-                _targetRotation = Quaternion.Euler(_currentRotationX, _currentRotationY, 0f);
-            }
+            // Kept above the ground: the orbit always looks at the pivot from above, never from below.
+            _currentRotationX = Mathf.Clamp(_currentRotationX, 15f, 80f);
         }
 
         /// <summary>Pulls the camera closer or pushes it away, without touching the wheel path.</summary>
@@ -300,13 +281,7 @@ namespace RobotSNAP.CameraControl
             float distance = amount * zoomSpeed * Time.unscaledDeltaTime * 0.35f;
             if (distance == 0f) return;
 
-            if (_currentFollowTarget != null)
-            {
-                PendingZoom -= distance;
-                return;
-            }
-
-            _targetPosition += mainCamera.transform.forward * distance;
+            PendingZoom -= distance;
         }
 
         /// <summary>Focuses the agent under the cursor — what the select tool does on a click.</summary>
@@ -366,11 +341,13 @@ namespace RobotSNAP.CameraControl
             {
                 _targetPosition = mainCamera.transform.position;
                 _targetRotation = mainCamera.transform.rotation;
-                _currentDistance = Vector3.Distance(mainCamera.transform.position, Vector3.zero);
-                
-                Vector3 euler = mainCamera.transform.eulerAngles;
-                _currentRotationY = euler.y;
-                _currentRotationX = euler.x;
+                _currentDistance = orbitDistance;
+
+                // The view opens on the isometric orbit rather than on whatever pose the scene camera
+                // happens to have: the tools are the only way to move it from here.
+                _currentRotationY = orbitYaw;
+                _currentRotationX = orbitPitch;
+                OrbitPivot = GroundPointInFront(mainCamera.transform, orbitDistance);
             }
             
             if (splitViewContainer != null) splitViewContainer.SetActive(false);
@@ -388,11 +365,19 @@ namespace RobotSNAP.CameraControl
             };
 
             velocity = Vector3.zero;
-            
-            SetCameraMode(CameraMode.Free);
 
-            if (focusRobotByDefault)
-                StartCoroutine(FocusRobotWhenAvailable());
+            SetCameraMode(CameraMode.Orbit);
+        }
+
+        /// <summary>Point on the ground the camera looks at by default, so the orbit opens on the map.</summary>
+        private static Vector3 GroundPointInFront(Transform camera, float distance)
+        {
+            Vector3 forward = Vector3.ProjectOnPlane(camera.forward, Vector3.up);
+            if (forward.sqrMagnitude < 0.0001f) forward = Vector3.forward;
+
+            Vector3 point = camera.position + forward.normalized * distance;
+            point.y = 0f;
+            return point;
         }
         
         #endregion
@@ -527,7 +512,6 @@ namespace RobotSNAP.CameraControl
         public void RefreshFollowableTargets()
         {
             _followableTargets.Clear();
-            _robotTargets.Clear();
             foreach (string tag in followableTags)
             {
                 GameObject[] objects = GameObject.FindGameObjectsWithTag(tag);
@@ -544,127 +528,50 @@ namespace RobotSNAP.CameraControl
                     }
                     if (!_followableTargets.Contains(targetTransform))
                         _followableTargets.Add(targetTransform);
-                    if (tag == "Robot" && !_robotTargets.Contains(targetTransform))
-                        _robotTargets.Add(targetTransform);
                 }
             }
             foreach (LayerMask layer in followableLayers) { /* placeholder */ }
             _followableTargets.Sort((a, b) => string.Compare(a.name, b.name, System.StringComparison.OrdinalIgnoreCase));
             OnTargetsUpdated?.Invoke(_followableTargets);
-
-            // The list just changed: this is the moment to know whether the default focus can
-            // finally be resolved. Runs after the notification so subscribers see the new list.
-            ApplyDefaultFocus();
         }
 
-        /// <summary>
-        /// Gives the focus to the robot when nothing is focused yet — the simulation should open on
-        /// the robot, without the user picking it in the bar first. Called from every target refresh,
-        /// so a robot spawned later is picked up as soon as it appears.
-        /// </summary>
-        /// <returns>True once a robot holds the focus, false while none is available yet.</returns>
-        public bool ApplyDefaultFocus()
-        {
-            if (_defaultFocusApplied) return _currentFollowTarget != null;
-            if (_currentFollowTarget != null)
-            {
-                // Something is already focused: either the user picked it, or the scene started
-                // with a focus. The robot must not take it back, so the rule settles here.
-                _defaultFocusApplied = true;
-                return true;
-            }
-            if (!focusRobotByDefault || _applyingDefaultFocus || _robotTargets.Count == 0)
-                return false;
-
-            Transform robot = _robotTargets[0];
-            if (robot == null) return false;
-
-            _applyingDefaultFocus = true;
-            _defaultFocusApplied = true;
-            SetFollowTarget(robot);
-
-            // A free-fly camera ignores the focus target, so the view would open on whatever the
-            // scene camera was looking at. Only the untouched default view is upgraded; a mode
-            // the user picked is never replaced.
-            if (_currentModeEnum == CameraMode.Free && mainCamera != null)
-                SetCameraMode(CameraMode.Orbit);
-
-            _applyingDefaultFocus = false;
-            return true;
-        }
-
-        /// <summary>
-        /// Retries the default focus while the scene is still empty. The scenario spawns the robot
-        /// several frames after the UI appears, and nothing else would refresh the target list in
-        /// between. Bounded on purpose: it stops at the first focus, and gives up after
-        /// <see cref="DefaultFocusTimeout"/> seconds so a map without an agent never keeps it alive.
-        /// </summary>
-        private IEnumerator FocusRobotWhenAvailable()
-        {
-            float deadline = Time.unscaledTime + DefaultFocusTimeout;
-            while (_currentFollowTarget == null && Time.unscaledTime < deadline)
-            {
-                RefreshFollowableTargets();
-                yield return new WaitForSecondsRealtime(DefaultFocusRetryInterval);
-            }
-        }
-        
+        /// <summary>Hands the view to that agent. The orbit angle and distance stay where they are.</summary>
         public void SetFollowTarget(Transform target)
         {
             if (target == null) return;
             _currentFollowTarget = target;
             _currentFollowIndex = _followableTargets.IndexOf(target);
-            _currentRotationY = target.eulerAngles.y + 180f;
-            _currentRotationX = 25f;
             OnFollowTargetChanged?.Invoke(target);
             Debug.Log($"[CameraController] Following target: {target.name}");
         }
 
         /// <summary>
-        /// Hands the camera to that agent and looks at it right away — what the Focus button and the agent
-        /// panel do. Following keeps the position, this one re-frames the view on the agent.
+        /// Selects an agent and makes sure the orbit is the active view — what a click on an agent in
+        /// the scene view and a click on a row in the agent list both do.
         /// </summary>
         public void FocusAgent(Transform target)
         {
             if (target == null) return;
 
             SetFollowTarget(target);
-            SetCameraMode(CameraMode.Orbit);
+            if (_currentModeEnum != CameraMode.Orbit)
+                SetCameraMode(CameraMode.Orbit);
         }
 
         /// <summary>
-        /// Releases the camera: it keeps its position and becomes free again. A scenario that spawns a
-        /// new robot will not grab the focus back, the user asked for no target.
+        /// Releases the agent. The orbit pivot settles on the spot the agent last stood on, so the
+        /// view stays where the user was looking instead of jumping away.
         /// </summary>
         public void ClearFollowTarget()
         {
             if (_currentFollowTarget == null) return;
 
+            Vector3 position = _currentFollowTarget.position;
+            OrbitPivot = new Vector3(position.x, 0f, position.z);
             _currentFollowTarget = null;
             _currentFollowIndex = -1;
-            _defaultFocusApplied = true;
-
-            // Without an agent, a view that needs one has nothing left to look at, so every mode
-            // falls back to the free camera rather than staying attached to a target that is gone.
-            if (_currentModeEnum != CameraMode.Free)
-                SetCameraMode(CameraMode.Free);
 
             OnFollowTargetChanged?.Invoke(null);
-        }
-
-        /// <summary>
-        /// Binds or releases the camera on the current selection without dropping the selection:
-        /// turning the follow off hands the camera back to the free view, the agent stays picked in
-        /// the bar and in the panel. Every "Follow" button goes through here, so they cannot drift
-        /// apart.
-        /// </summary>
-        /// <returns>True when the camera ends up bound to the selection.</returns>
-        public bool ToggleFollow()
-        {
-            if (_currentFollowTarget == null) return false;
-
-            SetCameraMode(IsFollowingTarget ? CameraMode.Free : CameraMode.Orbit);
-            return IsFollowingTarget;
         }
 
         /// <summary>Selects what the left mouse button does. Fires only on an actual change.</summary>

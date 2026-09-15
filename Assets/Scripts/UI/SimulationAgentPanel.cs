@@ -6,13 +6,29 @@ using UnityEngine;
 using UnityEngine.UIElements;
 
 /// <summary>
-/// Right-hand panel of the simulation overlay: the followed-agent card plus the searchable
-/// agent list. Rows are rebuilt from the camera target list on events only, never per frame.
+/// Right-hand panel of the simulation overlay: the agent the camera is on, with its live figures,
+/// then the searchable list of the agents the view can be handed to. Both sections fold away and
+/// the whole panel collapses to its rail.
+///
+/// The camera owns the selection. This panel never decides who is followed: it reflects the current
+/// target and asks the camera for a new one when a row is clicked, which is the same call the click
+/// on an agent in the scene makes. The figures of the selected agent move every frame, so they are
+/// re-read on a slow tick rather than per frame.
 /// </summary>
 public sealed class SimulationAgentPanel
 {
     private const string RobotIconPath = "Icons/robot";
     private const string HumanIconPath = "Icons/humans";
+
+    /// <summary>How often the figures of the selected agent are re-read. Ten times a second reads
+    /// as live, and keeps the panel from rebuilding its rows every frame.</summary>
+    private const float InfoRefreshInterval = 0.1f;
+
+    /// <summary>How often an empty list is re-checked, in case agents appeared without an event.</summary>
+    private const float EmptyListRecheckInterval = 1f;
+
+    private const string ExpandedGlyph = "▾";
+    private const string FoldedGlyph = "▸";
 
     private static Texture2D _robotIcon;
     private static Texture2D _humanIcon;
@@ -22,19 +38,26 @@ public sealed class SimulationAgentPanel
 
     private readonly VisualElement _panel;
     private readonly Button _collapseButton;
+    private readonly Button _selectedHeader;
+    private readonly VisualElement _selectedContent;
+    private readonly Button _listHeader;
+    private readonly VisualElement _listContent;
     private readonly VisualElement _selectedIcon;
     private readonly Label _selectedName;
     private readonly Label _selectedBadge;
     private readonly VisualElement _info;
-    private readonly Button _focusButton;
-    private readonly Button _followButton;
-    private readonly Label _listTitle;
     private readonly TextField _search;
     private readonly VisualElement _list;
 
     private readonly List<Transform> _targets = new List<Transform>();
     private string _filter = string.Empty;
+    private string _listHeadingText = "Agents List";
     private bool _collapsed;
+    private bool _selectedFolded;
+    private bool _listFolded;
+    private float _nextInfoRefresh;
+    private float _nextEmptyCheck;
+    private Transform _describedTarget;
 
     /// <summary>A refresh done from inside a camera event loops back through the panel's own
     /// subscriptions; the outer call is the one that already reads the fresh state.</summary>
@@ -55,43 +78,25 @@ public sealed class SimulationAgentPanel
 
         _panel = Query<VisualElement>(root, "AgentPanel");
         _collapseButton = Query<Button>(root, "AgentPanelCollapseButton");
+        _selectedHeader = Query<Button>(root, "SelectedAgentSectionHeader");
+        _selectedContent = Query<VisualElement>(root, "SelectedAgentSectionContent");
+        _listHeader = Query<Button>(root, "AgentListSectionHeader");
+        _listContent = Query<VisualElement>(root, "AgentListSectionContent");
         _selectedIcon = Query<VisualElement>(root, "SelectedAgentIcon");
         _selectedName = Query<Label>(root, "SelectedAgentName");
         _selectedBadge = Query<Label>(root, "SelectedAgentBadge");
         _info = Query<VisualElement>(root, "SelectedAgentInfo");
-        _focusButton = Query<Button>(root, "PanelFocusButton");
-        _followButton = Query<Button>(root, "PanelFollowButton");
-        _listTitle = Query<Label>(root, "AgentListTitle");
         _search = Query<TextField>(root, "AgentListSearch");
         _list = Query<VisualElement>(root, "AgentList");
 
         if (_collapseButton != null)
             _collapseButton.clicked += ToggleCollapsed;
 
-        if (_focusButton != null)
-        {
-            _focusButton.clicked += () =>
-            {
-                Transform target = CurrentTarget();
-                if (target != null) _camera.FocusAgent(target);
-            };
-        }
+        if (_selectedHeader != null)
+            _selectedHeader.clicked += ToggleSelectedSection;
 
-        if (_followButton != null)
-        {
-            _followButton.clicked += () =>
-            {
-                Transform target = CurrentTarget();
-                if (target == null) return;
-
-                // The button doubles as follow and release. The camera owns that decision so the
-                // bar and this panel can never disagree about what "following" means.
-                if (_camera.GetCurrentFollowTarget() == target && _camera.IsFollowingTarget)
-                    _camera.ToggleFollow();
-                else
-                    _camera.FocusAgent(target);
-            };
-        }
+        if (_listHeader != null)
+            _listHeader.clicked += ToggleListSection;
 
         if (_search != null)
             _search.RegisterValueChangedCallback(evt => OnSearchChanged(evt.newValue));
@@ -100,11 +105,34 @@ public sealed class SimulationAgentPanel
         {
             _camera.OnTargetsUpdated += OnTargetsUpdated;
             _camera.OnFollowTargetChanged += OnFollowTargetChanged;
-            // The card badge reports the camera binding, and picking a view is what changes it.
-            _camera.OnViewChanged += OnViewChanged;
         }
 
+        ApplySectionState();
         Refresh();
+    }
+
+    /// <summary>
+    /// Called every frame. Only the figures of the selected agent are re-read, and only a few times
+    /// a second: the list and the card change on camera events, not on the clock.
+    /// </summary>
+    public void Tick()
+    {
+        if (_camera == null || _info == null) return;
+        if (Time.unscaledTime < _nextInfoRefresh) return;
+
+        _nextInfoRefresh = Time.unscaledTime + InfoRefreshInterval;
+
+        // Safety net: a scenario can spawn agents without the camera list being refreshed by hand.
+        if (_targets.Count == 0 && Time.unscaledTime >= _nextEmptyCheck)
+        {
+            _nextEmptyCheck = Time.unscaledTime + EmptyListRecheckInterval;
+            Refresh();
+        }
+
+        Transform target = _camera.GetCurrentFollowTarget();
+        if (target == null) return;
+
+        BuildInfoRows(target);
     }
 
     /// <summary>Rebuilds the card and the list from the camera's current targets.</summary>
@@ -127,8 +155,8 @@ public sealed class SimulationAgentPanel
     {
         if (_camera == null || _panel == null) return;
 
-        // Reading the targets is also what lets the camera resolve its default focus, so the
-        // list has to be asked for before the current target is read.
+        // Reading the targets is also what lets the camera resolve its list, so the list has to be
+        // asked for before the current target is read.
         _targets.Clear();
         List<Transform> targets = _camera.GetFollowableTargets();
         if (targets != null) _targets.AddRange(targets);
@@ -136,34 +164,70 @@ public sealed class SimulationAgentPanel
         Transform current = _camera.GetCurrentFollowTarget();
 
         UpdateSelectedCard(current);
-        UpdateListTitle();
+        UpdateListHeader();
         BuildAgentRows(current);
     }
 
+    // ==========================================
+    //          SECTIONS AND COLLAPSING
+    // ==========================================
+
+    private void ToggleCollapsed()
+    {
+        _collapsed = !_collapsed;
+        _panel?.EnableInClassList("is-collapsed", _collapsed);
+
+        if (_collapseButton != null)
+            _collapseButton.text = _collapsed ? "‹" : "›";
+    }
+
+    private void ToggleSelectedSection()
+    {
+        _selectedFolded = !_selectedFolded;
+        ApplySectionState();
+    }
+
+    private void ToggleListSection()
+    {
+        _listFolded = !_listFolded;
+        ApplySectionState();
+    }
+
+    /// <summary>The header carries the chevron, so the folded state is readable without a tooltip.</summary>
+    private void ApplySectionState()
+    {
+        SetSection(_selectedHeader, _selectedContent, "Selected Agent", _selectedFolded);
+        SetSection(_listHeader, _listContent, _listHeadingText, _listFolded);
+    }
+
+    private static void SetSection(Button header, VisualElement content, string title, bool folded)
+    {
+        if (header != null)
+            header.text = $"{(folded ? FoldedGlyph : ExpandedGlyph)}  {title}";
+
+        content?.EnableInClassList("is-folded", folded);
+    }
+
+    // ==========================================
+    //          SELECTED AGENT
+    // ==========================================
+
     private void UpdateSelectedCard(Transform target)
     {
+        _describedTarget = target;
         bool hasTarget = target != null;
 
         if (_selectedName != null)
             _selectedName.text = hasTarget ? GetAgentName(target) : "No agent";
 
         if (_selectedBadge != null)
-            _selectedBadge.text = !hasTarget
-                ? "Free camera"
-                : _camera.IsFollowingTarget ? "Following" : "Selected";
+            _selectedBadge.text = hasTarget ? "Selected" : "Nothing selected";
 
         if (_selectedIcon != null)
         {
             // The card icon follows the agent type; without a target the USS colour stands alone.
             Texture2D texture = hasTarget ? GetIconTexture(target.GetComponentInParent<Robot>() != null) : null;
             _selectedIcon.style.backgroundImage = texture != null ? new StyleBackground(texture) : StyleKeyword.None;
-        }
-
-        if (_focusButton != null) _focusButton.SetEnabled(hasTarget);
-        if (_followButton != null)
-        {
-            _followButton.SetEnabled(hasTarget);
-            _followButton.text = hasTarget && _camera.IsFollowingTarget ? "Stop following" : "Follow";
         }
 
         BuildInfoRows(target);
@@ -184,7 +248,7 @@ public sealed class SimulationAgentPanel
 
         _info.Add(CreateInfoRow("Type", robot != null ? "Robot" : human != null ? "Human" : "Agent"));
 
-        Vector3 position = Vector3.zero;
+        Vector3 position;
         if (robot != null)
         {
             position = robot.Position;
@@ -198,27 +262,30 @@ public sealed class SimulationAgentPanel
         {
             position = target.position;
         }
+
         _info.Add(CreateInfoRow("Position", FormatPlanar(position)));
 
-        if (agent != null)
-        {
-            _info.Add(CreateInfoRow("Orientation", FormatYaw(agent.Rotation.eulerAngles.y)));
-            _info.Add(CreateInfoRow("Speed", $"{FormatNumber(agent.Speed)} m/s"));
-            _info.Add(CreateInfoRow("Goal", agent.HasGoal ? FormatPlanar(agent.Goal) : "—"));
-            _info.Add(CreateInfoRow("Status", agent.IsActive ? "Active" : "Idle"));
-        }
-        else
+        if (agent == null)
         {
             // Target without a known agent component: report what the transform alone can tell.
             _info.Add(CreateInfoRow("Orientation", FormatYaw(target.rotation.eulerAngles.y)));
             _info.Add(CreateInfoRow("Status", target.gameObject.activeInHierarchy ? "Active" : "Idle"));
+            return;
         }
+
+        _info.Add(CreateInfoRow("Orientation", FormatYaw(agent.Rotation.eulerAngles.y)));
+        _info.Add(CreateInfoRow("Speed", $"{FormatNumber(agent.Speed)} m/s"));
+        _info.Add(CreateInfoRow("Goal", agent.HasGoal ? FormatPlanar(agent.Goal) : "—"));
+        _info.Add(CreateInfoRow("Goal reached", agent.HasGoal ? "No" : "Yes"));
+        _info.Add(CreateInfoRow("Status", agent.IsActive ? "Active" : "Idle"));
     }
 
-    private void UpdateListTitle()
-    {
-        if (_listTitle == null) return;
+    // ==========================================
+    //          AGENT LIST
+    // ==========================================
 
+    private void UpdateListHeader()
+    {
         int robots = 0;
         int humans = 0;
         foreach (Transform target in _targets)
@@ -228,9 +295,16 @@ public sealed class SimulationAgentPanel
             else if (target.GetComponentInParent<HumanAgent>() != null) humans++;
         }
 
-        _listTitle.text = robots > 0 && humans > 0
-            ? $"Agent list ({_targets.Count} — {robots} robot{Plural(robots)}, {humans} human{Plural(humans)})"
-            : $"Agent list ({_targets.Count})";
+        // The heading stays short: the panel is narrow, and the rows already say what each agent is.
+        _listHeadingText = $"Agents List ({_targets.Count})";
+
+        if (_listHeader != null)
+        {
+            _listHeader.text = $"{(_listFolded ? FoldedGlyph : ExpandedGlyph)}  {_listHeadingText}";
+
+            if (robots > 0 || humans > 0)
+                _listHeader.tooltip = $"{_targets.Count} agents — {robots} robot{Plural(robots)}, {humans} human{Plural(humans)}";
+        }
     }
 
     private static string Plural(int count) => count == 1 ? string.Empty : "s";
@@ -260,6 +334,7 @@ public sealed class SimulationAgentPanel
 
         var row = new VisualElement();
         row.AddToClassList("agent-row");
+        row.tooltip = "Select this agent for the camera view";
         if (current == target) row.AddToClassList("is-selected");
 
         var icon = new VisualElement();
@@ -278,14 +353,8 @@ public sealed class SimulationAgentPanel
         detail.AddToClassList("agent-row-detail");
         row.Add(detail);
 
-        var focusButton = new Button { text = "◎", tooltip = "Focus this agent" };
-        focusButton.AddToClassList("agent-row-action");
-        // The row itself focuses too, and a click on the button bubbles up to it: stop it here
-        // so a single click is acted on once.
-        focusButton.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
-        focusButton.clicked += () => _camera.FocusAgent(target);
-        row.Add(focusButton);
-
+        // The whole row is the target: one click hands the camera to that agent, exactly like a
+        // click on the agent in the scene view.
         row.RegisterCallback<ClickEvent>(_ => _camera.FocusAgent(target));
         return row;
     }
@@ -303,31 +372,9 @@ public sealed class SimulationAgentPanel
 
     private void OnFollowTargetChanged(Transform target) => Refresh();
 
-    private void OnViewChanged() => Refresh();
-
-    private void ToggleCollapsed()
-    {
-        _collapsed = !_collapsed;
-
-        if (_panel != null)
-        {
-            if (_collapsed) _panel.AddToClassList("is-collapsed");
-            else _panel.RemoveFromClassList("is-collapsed");
-        }
-
-        if (_collapseButton != null) _collapseButton.text = _collapsed ? "›" : "‹";
-    }
-
-    private Transform CurrentTarget()
-    {
-        if (_camera == null)
-        {
-            Debug.LogWarning("[SimulationAgentPanel] No CameraController: the action is ignored.");
-            return null;
-        }
-
-        return _camera.GetCurrentFollowTarget();
-    }
+    // ==========================================
+    //          HELPERS
+    // ==========================================
 
     private static VisualElement CreateInfoRow(string label, string value)
     {

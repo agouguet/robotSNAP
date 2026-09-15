@@ -10,6 +10,18 @@
         <ui:VisualElement name="StatusBar" class="status-bar">
             <ui:Label name="StatusMessage" class="status-message"/>
             <ui:Label name="StatusTime" class="status-time"/>
+            <ui:VisualElement name="StatusAgents" class="status-chip">
+                <ui:VisualElement name="StatusAgentsIcon" class="status-chip-icon"/>
+                <ui:Label name="StatusAgentsLabel" text="0 agents" class="status-chip-label"/>
+            </ui:VisualElement>
+            <ui:VisualElement name="StatusRos" class="status-chip">
+                <ui:VisualElement name="StatusRosDot" class="status-ros-dot"/>
+                <ui:Label name="StatusRosLabel" text="ROS 2" tooltip="ROS 2 bridge status" class="status-chip-label"/>
+            </ui:VisualElement>
+            <ui:Button name="AppMenuButton" text="⋯" tooltip="Application menu" class="app-menu-button"/>
+            <ui:VisualElement name="AppMenu" class="app-menu is-hidden">
+                <ui:Button name="QuitAppButton" text="Quit RobotSNAP" class="app-menu-option"/>
+            </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

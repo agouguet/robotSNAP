@@ -19,6 +19,7 @@ public class MainViewController : MonoBehaviour
 
     private VisualElement _contentContainer;
     private SidebarController _sidebarController;
+    private AppStatusBar _appStatusBar;
     private Dictionary<string, VisualElement> _viewCache = new Dictionary<string, VisualElement>();
     private string _currentView = "";
 
@@ -32,11 +33,24 @@ public class MainViewController : MonoBehaviour
             return;
         }
 
+        _appStatusBar ??= new AppStatusBar(uiDocument.rootVisualElement);
+
         _sidebarController = GetComponent<SidebarController>();
         if (_sidebarController != null)
             _sidebarController.OnViewChanged += OnViewChanged;
 
         ShowView("Simulator");
+    }
+
+    private void OnDisable()
+    {
+        _appStatusBar?.Dispose();
+        _appStatusBar = null;
+    }
+
+    private void Update()
+    {
+        _appStatusBar?.Tick();
     }
 
     private void OnViewChanged(string viewName)

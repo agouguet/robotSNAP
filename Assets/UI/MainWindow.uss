@@ -97,12 +97,107 @@
     font-size: 12px;
     color: var(--text-secondary);
     flex-grow: 1;
+    /* The message gives way before the chips do, so a long scenario name never pushes them out. */
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    -unity-text-overflow-position: end;
 }
 
 .status-time {
     font-size: 12px;
     color: var(--text-secondary);
     margin-left: 16px;
+}
+
+/* Quiet chips on the right of the bar: one for the agents, one for the ROS bridge. */
+.status-chip {
+    flex-direction: row;
+    align-items: center;
+    height: 18px;
+    margin-left: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-radius: 9px;
+    background-color: var(--button-bg);
+}
+
+.status-chip-icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 5px;
+    -unity-background-scale-mode: scale-to-fit;
+    opacity: 0.75;
+}
+
+.status-chip-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.status-ros-dot {
+    width: 8px;
+    height: 8px;
+    margin-right: 5px;
+    border-radius: 4px;
+    background-color: var(--text-secondary-muted);
+}
+
+.status-ros-dot.is-online {
+    background-color: rgb(34, 197, 94);
+}
+
+.app-menu-button {
+    width: 24px;
+    height: 24px;
+    margin-left: 8px;
+    padding-left: 0;
+    padding-right: 0;
+    border-width: 0;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--text-secondary);
+    font-size: 14px;
+    -unity-text-align: middle-center;
+}
+
+.app-menu-button:hover {
+    background-color: var(--button-bg);
+    color: var(--text-primary);
+}
+
+/* Opens upwards from the bar, so it sits above the bottom edge of the window. */
+.app-menu {
+    position: absolute;
+    bottom: 30px;
+    right: 12px;
+    padding: 6px;
+    min-width: 180px;
+    background-color: var(--dropdown-bg);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 10px;
+}
+
+.app-menu-option {
+    height: 28px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-width: 0;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--dropdown-text);
+    font-size: 12px;
+    -unity-text-align: middle-left;
+}
+
+.app-menu-option:hover {
+    background-color: var(--button-bg);
+}
+
+.is-hidden {
+    display: none;
 }
 
 /* ===== GENERIC ELEMENTS ===== */

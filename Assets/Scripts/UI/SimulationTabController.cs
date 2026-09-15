@@ -7,8 +7,8 @@ using UnityEngine.UIElements;
 
 /// <summary>
 /// Wires the simulation tab: the play controls of the top bar, the minimap camera, and the widgets
-/// of the HUD. The camera bar itself belongs to <see cref="UICameraController"/>, and the widgets
-/// take the camera controller as their single source of truth for the selection.
+/// of the HUD. The widgets take the camera controller as their single source of truth for the
+/// selection, and the camera itself is driven by the view toolbar and by clicks in the scene.
 /// </summary>
 public class SimulationTabController : MonoBehaviour
 {
@@ -35,7 +35,6 @@ public class SimulationTabController : MonoBehaviour
     private SimulationMinimap _minimap;
     private SimulationAgentPanel _agentPanel;
     private SimulationViewToolbar _viewToolbar;
-    private SimulationStatusBar _statusBar;
 
     private Transform _minimapTarget;
     private SimulationState _currentState = SimulationState.Idle;
@@ -124,8 +123,6 @@ public class SimulationTabController : MonoBehaviour
             _viewToolbar = new SimulationViewToolbar(_root, cameraController);
         }
 
-        _statusBar = new SimulationStatusBar(_root);
-
         if (minimapCamera != null && minimapRenderTexture != null)
         {
             minimapCamera.targetTexture = minimapRenderTexture;
@@ -181,7 +178,7 @@ public class SimulationTabController : MonoBehaviour
         UpdateMinimap();
 
         _minimap?.Tick();
-        _statusBar?.Tick();
+        _agentPanel?.Tick();
     }
 
     // ==========================================
@@ -213,6 +210,10 @@ public class SimulationTabController : MonoBehaviour
 
     private void OnScenarioApplied(ScenarioData scenario)
     {
+        // The scenario spawned or cleared agents: refreshing the target list is what tells the agent
+        // panel and the minimap that the cast changed. This used to live in the camera bar.
+        cameraController?.RefreshFollowableTargets();
+
         _minimap?.SetFocus(_minimapTarget);
 
         if (_minimap == null) return;
@@ -222,6 +223,22 @@ public class SimulationTabController : MonoBehaviour
 
         MapAsset asset = _scenarioLoader != null ? _scenarioLoader.LoadMap(scenario?.Info?.MapImage) : null;
         bool hasGrid = asset != null && asset.Kind == MapAssetKind.Image && asset.Texture != null;
+
+        // Nothing is selected yet, so the orbit opens somewhere useful instead of on whatever the
+        // scene camera happened to face. The robot is preferred over the centre of the map: the
+        // centre of a corridor can sit inside a wall, and a pivot inside geometry collapses the
+        // orbit onto the pivot. Selecting an agent moves the pivot onto it.
+        if (cameraController != null)
+        {
+            RobotSNAP.Agents.Robot robot = FindAnyObjectByType<RobotSNAP.Agents.Robot>();
+            Vector3 pivot = robot != null
+                ? new Vector3(robot.Position.x, 0f, robot.Position.z)
+                : hasGrid
+                    ? new Vector3(asset.Bounds.center.x, 0f, asset.Bounds.center.z)
+                    : cameraController.OrbitPivot;
+
+            cameraController.OrbitPivot = pivot;
+        }
 
         // A prefab or an additive scene has no occupancy image: the minimap then shows the top view
         // of the running camera, which is the only map available.

@@ -68,161 +68,6 @@
     display: none;
 }
 
-/* --------------------------- camera bar --------------------------- */
-
-.camera-bar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 52px;
-    flex-direction: row;
-    align-items: center;
-    padding-left: 14px;
-    padding-right: 14px;
-    background-color: var(--panel-bg);
-    border-bottom-width: 1px;
-    border-bottom-color: var(--border-color);
-    border-top-left-radius: 12px;
-    border-top-right-radius: 12px;
-}
-
-.camera-bar-caption {
-    color: var(--text-secondary);
-    font-size: 13px;
-    margin-right: 10px;
-}
-
-.camera-bar-spacer {
-    flex-grow: 1;
-}
-
-.camera-action {
-    height: 32px;
-    min-width: 78px;
-    margin-left: 8px;
-    padding-left: 12px;
-    padding-right: 12px;
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 16px;
-    background-color: var(--button-bg);
-    color: var(--text-primary);
-    font-size: 12px;
-    -unity-text-align: middle-center;
-}
-
-.camera-action:hover {
-    background-color: var(--button-hover);
-}
-
-.camera-action.is-active {
-    background-color: var(--accent);
-    border-color: var(--accent);
-    color: rgb(255, 255, 255);
-}
-
-.camera-action:disabled {
-    opacity: 0.45;
-}
-
-/* ------------------------ agent selector -------------------------- */
-
-.agent-selector {
-    position: relative;
-    margin-right: 6px;
-}
-
-.agent-selector-button {
-    flex-direction: row;
-    align-items: center;
-    height: 32px;
-    min-width: 220px;
-    padding-left: 10px;
-    padding-right: 10px;
-    border-width: 1px;
-    border-color: var(--accent);
-    border-radius: 16px;
-    background-color: var(--accent-glow);
-}
-
-.agent-selector-button:hover {
-    background-color: var(--accent-glow);
-    border-color: var(--accent-soft);
-}
-
-.selector-icon {
-    width: 16px;
-    height: 16px;
-    margin-right: 8px;
-    background-size: contain;
-}
-
-.selector-label {
-    flex-grow: 1;
-    color: var(--text-primary);
-    font-size: 13px;
-    overflow: hidden;
-    white-space: nowrap;
-    -unity-text-overflow-position: end;
-}
-
-.selector-caret {
-    color: var(--accent);
-    font-size: 11px;
-    margin-left: 8px;
-}
-
-.agent-selector-popup {
-    position: absolute;
-    top: 38px;
-    left: 0;
-    width: 300px;
-    max-height: 340px;
-    padding: 8px;
-    background-color: var(--dropdown-bg);
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 10px;
-}
-
-.agent-selector-scroll {
-    max-height: 260px;
-    flex-grow: 0;
-}
-
-.agent-option-group {
-    color: var(--text-secondary-muted);
-    font-size: 10px;
-    -unity-font-style: bold;
-    letter-spacing: 0.8px;
-    margin-top: 10px;
-    margin-bottom: 4px;
-    margin-left: 6px;
-}
-
-.agent-option {
-    height: 28px;
-    margin-bottom: 2px;
-    padding-left: 10px;
-    border-width: 0;
-    border-radius: 6px;
-    background-color: rgba(0, 0, 0, 0);
-    color: var(--dropdown-text);
-    font-size: 12px;
-    -unity-text-align: middle-left;
-}
-
-.agent-option:hover {
-    background-color: var(--button-bg);
-}
-
-.agent-option.is-selected {
-    background-color: var(--accent-glow);
-    color: var(--accent);
-    -unity-font-style: bold;
-}
-
 /* --------------------------- search field ------------------------- */
 
 .agent-search-row {
@@ -391,9 +236,11 @@
 /* --------------------------- agent panel -------------------------- */
 
 .agent-panel {
-    width: 320px;
+    width: 344px;
+    /* A definite width has to win over the min-content width of the rows inside it. */
+    min-width: 0;
     flex-shrink: 0;
-    flex-direction: row-reverse;
+    flex-direction: row;
     margin-left: 12px;
     background-color: var(--panel-bg);
     border-width: 1px;
@@ -403,17 +250,25 @@
 }
 
 .agent-panel.is-collapsed {
-    width: 34px;
+    width: 40px;
 }
 
 .agent-panel.is-collapsed .agent-panel-content {
     display: none;
 }
 
+/* The rail holds the chevron and stays when every section is folded away. */
+.agent-panel-rail {
+    width: 40px;
+    flex-shrink: 0;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 8px;
+}
+
 .agent-panel-collapse {
     width: 30px;
     height: 30px;
-    margin: 8px 2px 0 2px;
     padding: 0;
     border-width: 0;
     border-radius: 8px;
@@ -430,33 +285,60 @@
 
 .agent-panel-content {
     flex-grow: 1;
-    padding: 12px 12px 12px 4px;
+    padding: 10px 18px 16px 4px;
     min-width: 0;
 }
 
-.agent-panel-title {
+/* Foldable sections: the header carries the chevron and the body folds away. Both sections of the
+   panel share the pair, so they breathe and shrink the same way. */
+.panel-section-header {
+    height: 40px;
+    padding-left: 0;
+    padding-right: 0;
+    margin-top: 4px;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: 15px;
     -unity-font-style: bold;
-    margin-bottom: 8px;
+    -unity-text-align: middle-left;
+    /* A long list heading must not push the panel wider than the column it lives in. */
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    -unity-text-overflow-position: end;
+}
+
+.panel-section-header:hover {
+    color: var(--accent-soft);
+}
+
+.panel-section-content {
+    flex-direction: column;
+    padding-bottom: 10px;
+}
+
+.panel-section-content.is-folded {
+    display: none;
 }
 
 .selected-agent-card {
     flex-direction: row;
     align-items: center;
-    padding: 10px;
+    padding: 12px;
     background-color: var(--card-bg);
     border-width: 1px;
     border-color: var(--border-color);
     border-radius: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
 
 .selected-agent-icon {
-    width: 34px;
-    height: 34px;
-    margin-right: 10px;
-    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    margin-right: 12px;
+    border-radius: 9px;
     background-color: var(--accent-glow);
     background-size: contain;
 }
@@ -467,74 +349,40 @@
 
 .selected-agent-name {
     color: var(--text-primary);
-    font-size: 15px;
+    font-size: 17px;
     -unity-font-style: bold;
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    -unity-text-overflow-position: end;
 }
 
 .selected-agent-badge {
     color: var(--accent);
-    font-size: 11px;
-    margin-top: 2px;
+    font-size: 12px;
+    margin-top: 3px;
 }
 
 .agent-info {
     flex-direction: column;
-    margin-bottom: 10px;
 }
 
 .agent-info-row {
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    height: 22px;
+    height: 26px;
 }
 
 .agent-info-label {
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .agent-info-value {
     color: var(--text-primary);
-    font-size: 12px;
-}
-
-.agent-card-actions {
-    flex-direction: row;
-}
-
-.panel-action {
-    flex-grow: 1;
-    height: 30px;
-    margin-right: 6px;
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 8px;
-    background-color: var(--button-bg);
-    color: var(--text-primary);
-    font-size: 12px;
-    -unity-text-align: middle-center;
-}
-
-.panel-action:hover {
-    background-color: var(--button-hover);
-}
-
-.panel-action.primary-action {
-    background-color: var(--accent);
-    border-color: var(--accent);
-    color: rgb(255, 255, 255);
-}
-
-.panel-action:disabled {
-    opacity: 0.45;
-}
-
-.panel-divider {
-    height: 1px;
-    background-color: var(--border-color);
-    margin-top: 14px;
-    margin-bottom: 14px;
+    font-size: 13px;
 }
 
 .agent-list {
@@ -544,10 +392,10 @@
 .agent-row {
     flex-direction: row;
     align-items: center;
-    height: 34px;
+    height: 38px;
     padding-left: 8px;
     padding-right: 6px;
-    margin-bottom: 2px;
+    margin-bottom: 3px;
     border-radius: 8px;
     border-width: 1px;
     border-color: rgba(0, 0, 0, 0);
@@ -563,186 +411,52 @@
 }
 
 .agent-row-icon {
-    width: 18px;
-    height: 18px;
-    margin-right: 8px;
+    width: 20px;
+    height: 20px;
+    margin-right: 9px;
     background-size: contain;
 }
 
 .agent-row-icon.human {
     background-color: rgba(245, 158, 11, 0.18);
-    border-radius: 9px;
+    border-radius: 10px;
 }
 
 .agent-row-icon.robot {
     background-color: var(--accent-glow);
-    border-radius: 9px;
+    border-radius: 10px;
 }
 
 .agent-row-name {
     flex-grow: 1;
+    min-width: 0;
     color: var(--text-primary);
-    font-size: 12px;
+    font-size: 13px;
     overflow: hidden;
     white-space: nowrap;
     -unity-text-overflow-position: end;
 }
 
 .agent-row-detail {
+    flex-shrink: 0;
     color: var(--text-secondary-muted);
-    font-size: 11px;
+    font-size: 12px;
     margin-right: 8px;
 }
 
 .agent-row-action {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     padding: 0;
     border-width: 0;
     border-radius: 6px;
     background-color: rgba(0, 0, 0, 0);
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 13px;
     -unity-text-align: middle-center;
 }
 
 .agent-row-action:hover {
     background-color: var(--accent-glow);
     color: var(--accent);
-}
-
-/* --------------------------- status bar --------------------------- */
-
-.status-bar {
-    flex-direction: row;
-    align-items: center;
-    height: 46px;
-    flex-shrink: 0;
-    margin-top: 12px;
-    padding-left: 16px;
-    padding-right: 16px;
-    background-color: var(--panel-bg);
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 10px;
-}
-
-/* Small pictograms in front of each figure. They inherit the muted colour of the row so the bar
-   stays a quiet strip under the view. */
-.status-icon {
-    width: 15px;
-    height: 15px;
-    margin-right: 8px;
-    background-size: contain;
-    opacity: 0.75;
-}
-
-.status-item {
-    color: var(--text-secondary);
-    font-size: 13px;
-}
-
-.status-state {
-    color: var(--text-primary);
-}
-
-.status-item.is-online {
-    color: var(--accent);
-}
-
-.status-item.is-offline {
-    color: var(--text-secondary-muted);
-}
-
-.status-divider {
-    width: 1px;
-    height: 16px;
-    margin-left: 14px;
-    margin-right: 14px;
-    background-color: var(--border-color);
-}
-
-.status-spacer {
-    flex-grow: 1;
-}
-
-.status-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 5px;
-    margin-right: 8px;
-    background-color: var(--accent);
-}
-
-.status-dot.is-idle {
-    background-color: var(--text-secondary-muted);
-}
-
-.status-dot.is-running {
-    background-color: rgb(34, 197, 94);
-}
-
-.status-dot.is-paused {
-    background-color: rgb(245, 158, 11);
-}
-
-/* --------------------- view dropdown (top right) ------------------ */
-
-.view-dropdown-container {
-    position: relative;
-    margin-left: 8px;
-}
-
-.view-button {
-    height: 32px;
-    min-width: 78px;
-    padding-left: 12px;
-    padding-right: 12px;
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 16px;
-    background-color: var(--button-bg);
-    color: var(--text-primary);
-    font-size: 12px;
-    -unity-text-align: middle-center;
-}
-
-.view-button:hover {
-    background-color: var(--button-hover);
-}
-
-.view-menu {
-    position: absolute;
-    top: 38px;
-    right: 0;
-    min-width: 160px;
-    padding: 6px;
-    background-color: var(--dropdown-bg);
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 10px;
-}
-
-.menu-option {
-    height: 28px;
-    margin-bottom: 2px;
-    border-width: 0;
-    border-radius: 6px;
-    background-color: rgba(0, 0, 0, 0);
-    color: var(--dropdown-text);
-    font-size: 12px;
-    -unity-text-align: middle-left;
-}
-
-.menu-option:hover {
-    background-color: var(--button-bg);
-}
-
-.menu-option.disabled-option {
-    opacity: 0.4;
-}
-
-.menu-option.is-active {
-    color: var(--accent-soft);
-    -unity-font-style: bold;
 }

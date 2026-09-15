@@ -673,7 +673,6 @@ GameObject:
   - component: {fileID: 732435987}
   - component: {fileID: 732435986}
   - component: {fileID: 732435990}
-  - component: {fileID: 732435988}
   - component: {fileID: 732435989}
   m_Layer: 5
   m_Name: SimulationTab
@@ -733,20 +732,6 @@ MonoBehaviour:
   cameraController: {fileID: 0}
   minimapCamera: {fileID: 1361882084}
   minimapRenderTexture: {fileID: 8400000, guid: ff878838384c9316da30127bffde9d9f, type: 2}
---- !u!114 &732435988
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 732435984}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9f8296221a95da72385d1d92545b09fc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UICameraController
-  uiDocument: {fileID: 1187733928}
-  cameraController: {fileID: 1469723308}
 --- !u!114 &732435989
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1027,6 +1012,7 @@ MonoBehaviour:
   scenarioLoader: {fileID: 4147492}
   columns: 4
   cardSpacingPercent: 0.2
+  logEvents: 1
 --- !u!1 &1185419207
 GameObject:
   m_ObjectHideFlags: 0
@@ -1751,11 +1737,15 @@ MonoBehaviour:
   - Human
   - Agent
   followableLayers: []
+  orbitPitch: 38
+  orbitYaw: 45
+  orbitDistance: 14
   followOffset: {x: 0, y: 30, z: -10}
   topDownOffset: {x: 0, y: 5, z: 0}
   firstPersonOffset: {x: 0, y: 0.3, z: 0}
   thirdPersonOffset: {x: 0, y: 2, z: 5}
   orbitOffset: {x: 0, y: 5, z: -10}
+  activeTool: 0
   enableKeyboardControl: 1
   forwardKey: 119
   backwardKey: 115
@@ -1935,7 +1925,7 @@ MonoBehaviour:
   simulationStartHour: 12
   _timeZoneId: Europe/Paris
   logTimeChanges: 0
-  editorTimeDisplay: 17:29:01
+  editorTimeDisplay: 17:59:26
 --- !u!4 &2049586426
 Transform:
   m_ObjectHideFlags: 0

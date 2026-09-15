@@ -12,7 +12,6 @@ public sealed class SimulationViewToolbar
     private readonly CameraController _camera;
     private readonly Dictionary<CameraController.CameraTool, Button> _buttons = new();
     private readonly List<SimulationToolIcon> _icons = new();
-    private readonly Button _centerButton;
 
     public SimulationViewToolbar(VisualElement root, CameraController camera)
     {
@@ -22,7 +21,6 @@ public sealed class SimulationViewToolbar
         _buttons[CameraController.CameraTool.Move] = root.Q<Button>("ToolMoveButton");
         _buttons[CameraController.CameraTool.Rotate] = root.Q<Button>("ToolRotateButton");
         _buttons[CameraController.CameraTool.Zoom] = root.Q<Button>("ToolZoomButton");
-        _centerButton = root.Q<Button>("CenterToolButton");
 
         if (_camera == null)
         {
@@ -43,22 +41,10 @@ public sealed class SimulationViewToolbar
         Attach(_buttons[CameraController.CameraTool.Move], SimulationToolIcon.Shape.Move);
         Attach(_buttons[CameraController.CameraTool.Rotate], SimulationToolIcon.Shape.Rotate);
         Attach(_buttons[CameraController.CameraTool.Zoom], SimulationToolIcon.Shape.Zoom);
-        Attach(_centerButton, SimulationToolIcon.Shape.Target);
-
-        if (_centerButton != null)
-            _centerButton.clicked += FocusCurrentTarget;
 
         _camera.OnToolChanged += _ => Refresh();
-        _camera.OnFollowTargetChanged += _ => Refresh();
 
         Refresh();
-    }
-
-    private void FocusCurrentTarget()
-    {
-        UnityEngine.Transform target = _camera.GetCurrentFollowTarget();
-        if (target != null)
-            _camera.FocusAgent(target);
     }
 
     private void Refresh()
@@ -69,9 +55,6 @@ public sealed class SimulationViewToolbar
 
             pair.Value.EnableInClassList("is-active", _camera.ActiveTool == pair.Key);
         }
-
-        if (_centerButton != null)
-            _centerButton.SetEnabled(_camera.GetCurrentFollowTarget() != null);
 
         // The icons take their colour from the button, so they have to be redrawn when the active
         // tool changes colour.
@@ -98,8 +81,5 @@ public sealed class SimulationViewToolbar
             if (button != null)
                 button.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
         }
-
-        if (_centerButton != null)
-            _centerButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
     }
 }

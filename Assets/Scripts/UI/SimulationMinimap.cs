@@ -1,14 +1,15 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using RobotSNAP;
 using RobotSNAP.Agents;
 using RobotSNAP.Core.Scenario;
 
 /// <summary>
 /// Owns the runtime minimap of the simulation overlay: the background image (occupancy grid or live
-/// camera render) and one coloured dot per agent. Positions are recomputed every frame in the pixel
-/// space of the dots layer, and the dots themselves are pooled, so a long simulation run does not
-/// allocate a VisualElement per frame.
+/// camera render), one coloured dot per agent, and — over an occupancy grid — a vision cone that
+/// shows where each agent looks. Positions are recomputed every frame in the pixel space of the dots
+/// layer, and the dots and the cones are pooled, so a long run allocates no VisualElement per frame.
 /// </summary>
 public sealed class SimulationMinimap
 {
@@ -25,13 +26,35 @@ public sealed class SimulationMinimap
     /// <summary>Pixel drift tolerated before the map height is recomputed after a panel resize.</summary>
     private const float MapWidthTolerance = 0.5f;
 
+    /// <summary>Humans have no sensor to read, so their cone uses a plain field of view.</summary>
+    private const float HumanConeFov = 70f;
+    private const float HumanConeRadius = 15f;
+
+    /// <summary>Bounds on a drawn cone: small enough not to hide the map, large enough to read.</summary>
+    private const float MinConeRadius = 11f;
+    private const float MaxConeRadius = 34f;
+
+    /// <summary>Metres-to-pixels used while the scene has no occupancy bounds to scale from.</summary>
+    private const float FallbackPixelsPerMetre = 4f;
+
+    private static readonly Color RobotConeFill = new Color(0.23f, 0.51f, 0.96f, 0.30f);
+    private static readonly Color RobotConeStroke = new Color(0.58f, 0.77f, 0.99f, 0.65f);
+    private static readonly Color HumanConeFill = new Color(0.96f, 0.62f, 0.04f, 0.24f);
+    private static readonly Color HumanConeStroke = new Color(0.99f, 0.83f, 0.30f, 0.60f);
+
     private readonly VisualElement _panel;
     private readonly VisualElement _map;
     private readonly Image _image;
     private readonly VisualElement _dots;
+    private readonly VisualElement _cones;
     private readonly Camera _camera;
 
     private readonly List<VisualElement> _dotPool = new();
+    private readonly List<MinimapVisionCone> _conePool = new();
+
+    /// <summary>The robot scanner is read from the agent, so it is cached per robot rather than per frame.</summary>
+    private Robot _scannerOwner;
+    private RaycastLaserScanner _robotScanner;
 
     private Bounds _worldBounds;
     private Transform _focus;
@@ -87,7 +110,17 @@ public sealed class SimulationMinimap
         {
             Debug.LogWarning("SimulationMinimap: no minimap camera assigned, the minimap stays inert.");
             _inert = true;
+            return;
         }
+
+        // The cones sit between the map picture and the dots: under the agent marks, over the walls.
+        _cones = new VisualElement { pickingMode = PickingMode.Ignore };
+        _cones.style.position = Position.Absolute;
+        _cones.style.left = 0f;
+        _cones.style.top = 0f;
+        _cones.style.right = 0f;
+        _cones.style.bottom = 0f;
+        _map.Insert(_map.IndexOf(_dots), _cones);
     }
 
     /// <summary>
@@ -144,6 +177,11 @@ public sealed class SimulationMinimap
 
         for (int index = used; index < _dotPool.Count; index++)
             _dotPool[index].style.display = DisplayStyle.None;
+
+        // The live render already shows which way every agent faces; the cones belong to the
+        // occupancy grid, where the picture alone says nothing about orientation.
+        for (int index = _useOccupancy ? used : 0; index < _conePool.Count; index++)
+            _conePool[index].style.display = DisplayStyle.None;
     }
 
     private int PlaceAgents<TAgent>(IReadOnlyList<TAgent> agents, bool isRobot, Rect imageRect, int used)
@@ -165,10 +203,85 @@ public sealed class SimulationMinimap
             dot.EnableInClassList(HumanClass, !isRobot);
             dot.EnableInClassList(FocusedClass, IsFocused(agent.transform));
             dot.style.display = DisplayStyle.Flex;
+
+            PlaceCone(used, agent, position, imageRect);
             used++;
         }
 
         return used;
+    }
+
+    /// <summary>
+    /// Draws the field of view of one agent under its dot. The robot reads its lidar, so an
+    /// omnidirectional scanner comes out as a detection ring with a needle instead of a cone.
+    /// </summary>
+    private void PlaceCone(int index, BaseAgent agent, Vector2 position, Rect imageRect)
+    {
+        if (!_useOccupancy)
+            return;
+
+        MinimapVisionCone cone = GetCone(index);
+
+        Vector3 forward = agent.Forward;
+        float yaw = forward.sqrMagnitude > 0.0001f
+            ? Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg
+            : agent.Rotation.eulerAngles.y;
+
+        // The occupancy picture runs +x towards world -X and +y towards world +Z, so a world heading
+        // becomes 90 + yaw in the painter's clockwise-from-+x frame.
+        float heading = 90f + yaw;
+
+        RaycastLaserScanner scanner = GetScanner(agent);
+        float radius;
+
+        if (scanner != null)
+        {
+            float span = Mathf.Abs(scanner.angle_max - scanner.angle_min) * Mathf.Rad2Deg;
+            radius = Mathf.Clamp(scanner.range_max * PixelsPerMetre(imageRect), MinConeRadius, MaxConeRadius);
+
+            cone.style.left = position.x - radius;
+            cone.style.top = position.y - radius;
+
+            if (span >= 350f)
+                cone.SetRing(radius, heading, RobotConeFill, RobotConeStroke);
+            else
+                cone.SetCone(radius, heading, Mathf.Max(1f, span), RobotConeFill, RobotConeStroke);
+        }
+        else
+        {
+            radius = HumanConeRadius;
+
+            cone.style.left = position.x - radius;
+            cone.style.top = position.y - radius;
+            cone.SetCone(radius, heading, HumanConeFov, HumanConeFill, HumanConeStroke);
+        }
+
+        cone.style.display = DisplayStyle.Flex;
+    }
+
+    /// <summary>The lidar of the robot, cached: it is the only sensor the cone reads.</summary>
+    private RaycastLaserScanner GetScanner(BaseAgent agent)
+    {
+        if (agent is not Robot robot)
+            return null;
+
+        if (robot != _scannerOwner)
+        {
+            _scannerOwner = robot;
+            _robotScanner = robot.GetLaserScanner();
+        }
+
+        return _robotScanner;
+    }
+
+    /// <summary>Map scale, from the world bounds the occupancy grid was built with.</summary>
+    private float PixelsPerMetre(Rect imageRect)
+    {
+        float span = _worldBounds.size.x;
+        if (span <= 0.0001f || imageRect.width <= 0f)
+            return FallbackPixelsPerMetre;
+
+        return imageRect.width / span;
     }
 
     /// <summary>Projects a world position onto the dots layer, or reports that it has no sensible pixel.</summary>
@@ -303,6 +416,18 @@ public sealed class SimulationMinimap
         _dots.Add(dot);
         _dotPool.Add(dot);
         return dot;
+    }
+
+    /// <summary>Same pooling as the dots: one cone element per agent, reused across frames.</summary>
+    private MinimapVisionCone GetCone(int index)
+    {
+        if (index < _conePool.Count)
+            return _conePool[index];
+
+        var cone = new MinimapVisionCone();
+        _cones.Add(cone);
+        _conePool.Add(cone);
+        return cone;
     }
 
     /// <summary>

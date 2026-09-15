@@ -17,13 +17,15 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
             Color color,
             bool active,
             string name = null,
-            bool planned = false)
+            bool planned = false,
+            IReadOnlyList<bool> markerMask = null)
         {
             Points = points;
             Color = color;
             Active = active;
             Name = name;
             Planned = planned;
+            MarkerMask = markerMask;
         }
 
         public IReadOnlyList<Vector2> Points { get; }
@@ -33,6 +35,15 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
 
         /// <summary>True when the points follow a planned walkable path instead of straight waypoint legs.</summary>
         public bool Planned { get; }
+
+        /// <summary>
+        /// Optional mask aligned index by index on <see cref="Points"/>. A false entry keeps the
+        /// polyline running through the point without drawing the waypoint marker there, which is
+        /// how a goal zone stays readable: the zone shape carries the objective, and a second dot
+        /// on top of it would only suggest a point objective. A null mask, a mask shorter than
+        /// <see cref="Points"/>, or an index outside it draws the marker as before.
+        /// </summary>
+        public IReadOnlyList<bool> MarkerMask { get; }
     }
 
     /// <summary>
@@ -330,8 +341,14 @@ public sealed class OccupancyMapRouteOverlay : VisualElement
             painter.Stroke();
         }
 
+        // A masked index skips its marker only: the polyline above still crosses that point,
+        // so a zone objective keeps the route readable while the zone shape carries the goal.
+        IReadOnlyList<bool> markerMask = route.MarkerMask;
         for (int index = 0; index < route.Points.Count; index++)
         {
+            if (markerMask != null && index < markerMask.Count && !markerMask[index])
+                continue;
+
             Vector2 center = WorldToLocal(route.Points[index]);
             float radius = route.Active ? 8f : 5f;
             Color markerColor = route.Color;

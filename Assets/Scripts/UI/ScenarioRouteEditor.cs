@@ -179,13 +179,19 @@ public sealed class ScenarioRouteEditor
         SpawnModeRandomChoice
     };
 
+    /// <summary>
+    /// Group ids are allocated by the editor, so the dropdown offers the groups that exist and one way to make
+    /// a new one; nobody has to invent an identifier by hand.
+    /// </summary>
+    private const string NoGroupChoice = "No group";
+    private const string NewGroupChoice = "New group...";
+
     private readonly List<RouteDraft> _routes = new();
     private readonly List<EditorSnapshot> _undoStack = new();
     private readonly List<EditorSnapshot> _redoStack = new();
     private readonly List<VisualElement> _pointRows = new();
     private readonly Dictionary<int, CoordinateFields> _pointFields = new();
     private readonly VisualElement _routeList;
-    private readonly VisualElement _groupList;
     private readonly Button _addHumanRouteButton;
     private readonly Button _removeHumanRouteButton;
     private readonly Button _setRouteStartButton;
@@ -196,7 +202,7 @@ public sealed class ScenarioRouteEditor
     private readonly IntegerField _humanCountField;
     private readonly FloatField _humanSpeedField;
     private readonly DropdownField _endBehaviorDropdown;
-    private readonly TextField _groupField;
+    private readonly DropdownField _groupDropdown;
     private readonly DropdownField _movementControllerDropdown;
     private readonly DropdownField _formationDropdown;
     private readonly FloatField _groupSpacingField;
@@ -232,6 +238,7 @@ public sealed class ScenarioRouteEditor
     private readonly VisualElement _pointLabelLayer;
     private readonly List<OccupancyMapRouteOverlay.FormationPreview> _formationPreviews = new();
     private readonly List<OccupancyMapRouteOverlay.ZoneVisual> _zoneVisuals = new();
+    private readonly List<string> _groupChoiceCache = new();
     private readonly Dictionary<int, PlannedGeometry> _plannedGeometry = new();
 
     private Texture2D _mapTexture;
@@ -274,7 +281,6 @@ public sealed class ScenarioRouteEditor
     public ScenarioRouteEditor(VisualElement root)
     {
         _routeList = root.Q<VisualElement>("RouteSelectorList");
-        _groupList = root.Q<VisualElement>("GroupList");
         _addHumanRouteButton = root.Q<Button>("AddHumanRouteButton");
         _removeHumanRouteButton = root.Q<Button>("RemoveHumanRouteButton");
         _setRouteStartButton = root.Q<Button>("SetRouteStartButton");
@@ -285,7 +291,7 @@ public sealed class ScenarioRouteEditor
         _humanCountField = root.Q<IntegerField>("HumanCountField");
         _humanSpeedField = root.Q<FloatField>("HumanSpeedField");
         _endBehaviorDropdown = root.Q<DropdownField>("EndBehaviorDropdown");
-        _groupField = root.Q<TextField>("GroupField");
+        _groupDropdown = root.Q<DropdownField>("GroupDropdown");
         _movementControllerDropdown = root.Q<DropdownField>("MovementControllerDropdown");
         _formationDropdown = root.Q<DropdownField>("FormationDropdown");
         _groupSpacingField = root.Q<FloatField>("GroupSpacingField");
@@ -327,10 +333,10 @@ public sealed class ScenarioRouteEditor
 
         if (new VisualElement[]
             {
-                _routeList, _groupList, _addHumanRouteButton, _removeHumanRouteButton,
+                _routeList, _addHumanRouteButton, _removeHumanRouteButton,
                 _setRouteStartButton, _addRouteObjectiveButton, _toggleMapGridButton,
                 _robotRouteSettings, _humanRouteSettings, _humanCountField, _humanSpeedField,
-                _endBehaviorDropdown, _groupField, _formationDropdown, _groupSpacingField,
+                _endBehaviorDropdown, _groupDropdown, _formationDropdown, _groupSpacingField,
                 _movementControllerDropdown,
                 _formationParameterField, _formationParameterLabel,
                 _formationPreviewLabel,
@@ -403,15 +409,22 @@ public sealed class ScenarioRouteEditor
             PushUndo($"human-controller:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.MovementController = ParseMovementControllerChoice(evt.newValue));
             ApplyGroupLayoutToPeers(ActiveRoute);
-            RefreshGroupList();
+            RefreshFormationPreview();
         });
-        _groupField.RegisterValueChangedCallback(evt =>
+        _groupDropdown.RegisterValueChangedCallback(evt =>
         {
             if (_updatingFields) return;
+            RouteDraft active = ActiveRoute;
+            if (active == null || active.IsRobot)
+                return;
+
             PushUndo($"human-group:{_activeRouteIndex}");
-            UpdateHumanDraft(draft => draft.Group = evt.newValue);
-            ApplyGroupLayoutToPeers(ActiveRoute);
-            RefreshGroupList();
+            string group = ResolveGroupChoice(evt.newValue);
+            UpdateHumanDraft(draft => draft.Group = group);
+            ApplyGroupLayoutToPeers(active);
+            // The choices change when a group appears or disappears, and the row text names the group.
+            RefreshActiveRoute();
+            RefreshRouteList();
         });
         _formationDropdown.RegisterValueChangedCallback(evt =>
         {
@@ -428,7 +441,7 @@ public sealed class ScenarioRouteEditor
             });
             ApplyGroupLayoutToPeers(ActiveRoute);
             RefreshActiveRoute();
-            RefreshGroupList();
+            RefreshFormationPreview();
         });
         _groupSpacingField.RegisterValueChangedCallback(evt =>
         {
@@ -441,7 +454,7 @@ public sealed class ScenarioRouteEditor
             PushUndo($"human-group-spacing:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.GroupSpacing = value);
             ApplyGroupLayoutToPeers(ActiveRoute);
-            RefreshGroupList();
+            RefreshFormationPreview();
         });
         _formationParameterField.RegisterValueChangedCallback(evt =>
         {
@@ -449,7 +462,7 @@ public sealed class ScenarioRouteEditor
             PushUndo($"human-formation-parameter:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.FormationParameter = Mathf.Max(0f, evt.newValue));
             ApplyGroupLayoutToPeers(ActiveRoute);
-            RefreshGroupList();
+            RefreshFormationPreview();
         });
 
         // Step 2 shows the essentials and keeps the rest one click away.
@@ -501,7 +514,19 @@ public sealed class ScenarioRouteEditor
 
             PushUndo($"human-goal-zone:{_activeRouteIndex}:{index}");
             NormalizeZones(active);
-            active.PointZones[index] = evt.newValue ? DefaultZoneAround(active.Points[index]) : null;
+            if (evt.newValue)
+            {
+                // The objective changes nature: it stops being a point and becomes the area around it.
+                active.PointZones[index] = DefaultZoneAround(active.Points[index]);
+            }
+            else
+            {
+                // Back to a point, on the centre of the area the author was looking at, so it does not jump.
+                Rect? wasArea = active.ZoneAt(index);
+                if (wasArea.HasValue)
+                    active.Points[index] = wasArea.Value.center;
+                active.PointZones[index] = null;
+            }
             active.RouteModified = true;
             CancelZonePick();
             RefreshActiveRoute();
@@ -555,6 +580,7 @@ public sealed class ScenarioRouteEditor
         {
             RouteDraft route = _routes[index];
             List<Vector2> points = GetDisplayPoints(index);
+            List<bool> markers = BuildMarkerMask(route, points);
             Color color = RouteColor(index);
             bool active = markAllActive || index == _activeRouteIndex;
             int loopStart = LoopReturnStartOf(index);
@@ -566,7 +592,8 @@ public sealed class ScenarioRouteEditor
                     color,
                     active,
                     route.Id,
-                    IsPathPlanningActive));
+                    IsPathPlanningActive,
+                    markers));
                 continue;
             }
 
@@ -575,7 +602,8 @@ public sealed class ScenarioRouteEditor
                 color,
                 active,
                 route.Id,
-                IsPathPlanningActive));
+                IsPathPlanningActive,
+                markers.GetRange(0, loopStart)));
 
             Color faded = color;
             faded.a *= 0.5f;
@@ -584,10 +612,40 @@ public sealed class ScenarioRouteEditor
                 faded,
                 active,
                 $"{route.Id} · loop back",
-                IsPathPlanningActive));
+                IsPathPlanningActive,
+                markers.GetRange(loopStart - 1, points.Count - loopStart + 1)));
         }
 
         return visuals;
+    }
+
+    /// <summary>
+    /// Which points of a drawn polyline get a marker. A point that falls inside an objective area gets none: the
+    /// objective is an area, so the rectangle is what the author has to see, not a dot drawn inside it. The same
+    /// holds for a scattered start: an arrival is a point OR an area, and one of the two has to be the visible one.
+    /// </summary>
+    private static List<bool> BuildMarkerMask(RouteDraft route, IReadOnlyList<Vector2> points)
+    {
+        var mask = new List<bool>(points.Count);
+        for (int index = 0; index < points.Count; index++)
+            mask.Add(!IsInsideAnyArea(route, points[index]));
+        return mask;
+    }
+
+    private static bool IsInsideAnyArea(RouteDraft route, Vector2 point)
+    {
+        // SpawnZone survives a switch back to a fixed start, so the flag decides, not the leftover rectangle.
+        if (route.SpawnRandom && IsUsableZone(route.SpawnZone) && route.SpawnZone.Contains(point))
+            return true;
+
+        for (int index = 1; index < route.Points.Count; index++)
+        {
+            Rect? zone = route.ZoneAt(index);
+            if (zone.HasValue && zone.Value.Contains(point))
+                return true;
+        }
+
+        return false;
     }
 
     private int LoopReturnStartOf(int routeIndex) =>
@@ -1329,7 +1387,9 @@ public sealed class ScenarioRouteEditor
             _humanSpeedField.SetValueWithoutNotify(active.Speed);
             SetEndBehaviorChoices();
             _endBehaviorDropdown.SetValueWithoutNotify(HumanEndBehaviorParser.ToDisplayName(active.EndBehavior));
-            _groupField.SetValueWithoutNotify(active.Group ?? string.Empty);
+            RefreshGroupChoices();
+            _groupDropdown.SetValueWithoutNotify(
+                string.IsNullOrWhiteSpace(active.Group) ? NoGroupChoice : GroupNaming.ToDisplayName(active.Group));
             _movementControllerDropdown.SetValueWithoutNotify(MovementControllerToDisplay(active.MovementController));
             SetFormationChoices();
             _formationDropdown.SetValueWithoutNotify(FormationToDisplay(active.Formation));
@@ -1453,6 +1513,8 @@ public sealed class ScenarioRouteEditor
 
             NormalizeZones(active);
             active.PointZones[index] = zone;
+            // An objective is a point OR an area: while it is an area, the route runs to the centre of that area.
+            active.Points[index] = zone.center;
         }
 
         active.RouteModified = true;
@@ -1520,6 +1582,8 @@ public sealed class ScenarioRouteEditor
         {
             NormalizeZones(active);
             active.PointZones[_pendingPointIndex] = zone;
+            // An objective is a point OR an area: while it is an area, the route runs to the centre of that area.
+            active.Points[_pendingPointIndex] = zone.center;
         }
 
         active.RouteModified = true;
@@ -1572,6 +1636,7 @@ public sealed class ScenarioRouteEditor
             Rect zone = active.ZoneAt(index).Value;
             NormalizeZones(active);
             active.PointZones[index] = new Rect(zone.x + delta.x, zone.y + delta.y, zone.width, zone.height);
+            active.Points[index] = active.PointZones[index].Value.center;
         }
 
         _zoneDragGrab = worldPosition;
@@ -1636,13 +1701,11 @@ public sealed class ScenarioRouteEditor
             });
             _routeList.Add(row);
         }
-        RebuildGroupList();
     }
 
-    /// <summary>Recomputes the group rows, then the sentence describing the active formation.</summary>
-    private void RefreshGroupList()
+    /// <summary>Recomputes the sentence describing the active formation, then the map that draws its slots.</summary>
+    private void RefreshFormationPreview()
     {
-        RebuildGroupList();
         UpdateFormationPreviewLabel();
         // The map draws the formation slots, so a formation or spacing change must repaint it
         // immediately instead of waiting for the next point move.
@@ -1659,68 +1722,42 @@ public sealed class ScenarioRouteEditor
             if (name != null)
                 name.text = DescribeRoute(_routes[index]);
         }
-        RebuildGroupList();
     }
 
     private void RefreshRouteListSelection()
     {
         for (int index = 0; index < _routeList.childCount && index < _routes.Count; index++)
             _routeList[index].EnableInClassList("selected", index == _activeRouteIndex);
-        RefreshGroupListSelection();
+    }
+
+    /// <summary>Maps the dropdown selection to the group id a scenario stores.</summary>
+    private string ResolveGroupChoice(string choice)
+    {
+        if (string.IsNullOrEmpty(choice) || string.Equals(choice, NoGroupChoice, StringComparison.Ordinal))
+            return null;
+        if (string.Equals(choice, NewGroupChoice, StringComparison.Ordinal))
+            return GroupNaming.NextId(CollectGroupIds());
+        return GroupNaming.ToGroupId(choice);
     }
 
     /// <summary>
-    /// One row per group id used by the human routes. The group is where formation and spacing really
-    /// live, so it gets its own list instead of being buried in each route's settings.
+    /// The groups that already exist, plus the two entries that join one or make a new one. The list is only
+    /// reassigned when it really changed: a dropdown rebuilt on every refresh would drop the open popup.
     /// </summary>
-    private void RebuildGroupList()
+    private void RefreshGroupChoices()
     {
-        _groupList.Clear();
         List<string> groups = CollectGroupIds();
-        if (groups.Count == 0)
-        {
-            var hint = new Label("No group yet. Set a group id on a human route to make agents walk together.");
-            hint.AddToClassList("group-empty-hint");
-            _groupList.Add(hint);
-            return;
-        }
-
+        var choices = new List<string>(groups.Count + 2) { NoGroupChoice };
         foreach (string groupId in groups)
-        {
-            string capturedId = groupId;
-            var row = new VisualElement();
-            row.AddToClassList("group-row");
-            row.EnableInClassList("selected", IsActiveRouteInGroup(groupId));
+            choices.Add(GroupNaming.ToDisplayName(groupId));
+        choices.Add(NewGroupChoice);
 
-            var main = new VisualElement();
-            main.AddToClassList("group-row-main");
-            var name = new Label(groupId);
-            name.AddToClassList("group-row-name");
-            var detail = new Label(DescribeGroup(groupId));
-            detail.AddToClassList("group-row-detail");
-            main.Add(name);
-            main.Add(detail);
+        if (choices.SequenceEqual(_groupChoiceCache, StringComparer.Ordinal))
+            return;
 
-            var ungroup = new Button(() => UngroupAll(capturedId)) { text = "×" };
-            ungroup.AddToClassList("group-row-ungroup");
-            ungroup.tooltip = "Remove this group id from every route";
-
-            row.Add(main);
-            row.Add(ungroup);
-            row.RegisterCallback<PointerDownEvent>(evt =>
-            {
-                SelectFirstRouteOfGroup(capturedId);
-                evt.StopPropagation();
-            });
-            _groupList.Add(row);
-        }
-    }
-
-    private void RefreshGroupListSelection()
-    {
-        List<string> groups = CollectGroupIds();
-        for (int index = 0; index < _groupList.childCount && index < groups.Count; index++)
-            _groupList[index].EnableInClassList("selected", IsActiveRouteInGroup(groups[index]));
+        _groupChoiceCache.Clear();
+        _groupChoiceCache.AddRange(choices);
+        _groupDropdown.choices = new List<string>(choices);
     }
 
     /// <summary>Group ids in first-seen route order, so the list stays stable while editing.</summary>
@@ -1742,64 +1779,29 @@ public sealed class ScenarioRouteEditor
                         string.Equals(route.Group?.Trim(), groupId, StringComparison.OrdinalIgnoreCase))
         .ToList();
 
-    private bool IsActiveRouteInGroup(string groupId)
-    {
-        RouteDraft active = ActiveRoute;
-        return active != null && !active.IsRobot &&
-               string.Equals(active.Group?.Trim(), groupId, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private string DescribeGroup(string groupId)
-    {
-        List<RouteDraft> routes = RoutesOfGroup(groupId);
-        int agents = routes.Sum(route => Mathf.Max(0, route.Count));
-        RouteDraft reference = routes.Count > 0 ? routes[0] : null;
-        string formation = reference != null
-            ? FormationToDisplay(reference.Formation).ToLowerInvariant()
-            : "pair";
-        float spacing = reference != null ? reference.GroupSpacing : 1.5f;
-        string controller = reference != null
-            ? MovementControllerToDisplay(reference.MovementController)
-            : InheritControllerChoice;
-        if (string.Equals(controller, InheritControllerChoice, StringComparison.Ordinal))
-            controller = "controller from config";
-
-        return $"{agents} agent{(agents == 1 ? string.Empty : "s")} · {routes.Count} route" +
-               $"{(routes.Count == 1 ? string.Empty : "s")} · {formation} · {spacing:0.##} m · {controller}";
-    }
-
-    private void SelectFirstRouteOfGroup(string groupId)
-    {
-        int index = _routes.FindIndex(route =>
-            !route.IsRobot &&
-            string.Equals(route.Group?.Trim(), groupId, StringComparison.OrdinalIgnoreCase));
-        if (index < 0 || index == _activeRouteIndex)
-            return;
-
-        SelectRoute(index);
-    }
-
-    /// <summary>Detaches every route of a group, which is how a group is removed.</summary>
-    private void UngroupAll(string groupId)
-    {
-        List<RouteDraft> routes = RoutesOfGroup(groupId);
-        if (routes.Count == 0)
-            return;
-
-        PushUndo();
-        foreach (RouteDraft route in routes)
-            route.Group = null;
-
-        RefreshActiveRoute();
-        _instructionLabel.text = $"Group '{groupId}' removed from every route.";
-    }
-
     private static string DescribeRoute(RouteDraft route)
     {
         if (route.IsRobot)
             return "Robot route";
         int agents = Mathf.Max(0, route.Count);
-        return $"{route.Id} - {agents} agent{(agents == 1 ? string.Empty : "s")}";
+        int objectives = Mathf.Max(0, route.Points.Count - 1);
+        int areas = 0;
+        for (int index = 1; index < route.Points.Count; index++)
+            if (route.ZoneAt(index).HasValue)
+                areas++;
+
+        var parts = new List<string>(4)
+        {
+            route.Id,
+            $"{agents} agent{(agents == 1 ? string.Empty : "s")}",
+            $"{objectives} objective{(objectives == 1 ? string.Empty : "s")}"
+        };
+        if (areas > 0)
+            parts.Add($"{areas} area{(areas == 1 ? string.Empty : "s")}");
+        if (!string.IsNullOrWhiteSpace(route.Group))
+            parts.Add(GroupNaming.ToDisplayName(route.Group));
+
+        return string.Join(" · ", parts);
     }
 
     private void RebuildPointRows()
@@ -1824,24 +1826,30 @@ public sealed class ScenarioRouteEditor
             var name = new Label(RouteMapHitTesting.PointLabel(index));
             name.AddToClassList("route-point-name");
             header.Add(name);
-            if (active.ZoneAt(index).HasValue)
-            {
-                var areaChip = new Label("area");
-                areaChip.AddToClassList("route-point-area-chip");
-                header.Add(areaChip);
-            }
             row.Add(header);
 
             var coordinates = new VisualElement();
             coordinates.AddToClassList("route-point-coordinates");
-            FloatField xField = CreateCoordinateField("X", point.x);
-            FloatField zField = CreateCoordinateField("Z", point.y);
-            xField.RegisterValueChangedCallback(evt => SetPointCoordinate(capturedIndex, true, evt.newValue));
-            zField.RegisterValueChangedCallback(evt => SetPointCoordinate(capturedIndex, false, evt.newValue));
-            coordinates.Add(xField);
-            coordinates.Add(zField);
+            Rect? zone = active.ZoneAt(index);
+            if (zone.HasValue)
+            {
+                // An objective is a point OR an area. An area shows its size, not the coordinates of a point the
+                // author no longer has: the four numeric fields live in the placement section.
+                var summary = new Label($"Area {zone.Value.width:0.#} x {zone.Value.height:0.#} m");
+                summary.AddToClassList("route-point-area-summary");
+                coordinates.Add(summary);
+            }
+            else
+            {
+                FloatField xField = CreateCoordinateField("X", point.x);
+                FloatField zField = CreateCoordinateField("Z", point.y);
+                xField.RegisterValueChangedCallback(evt => SetPointCoordinate(capturedIndex, true, evt.newValue));
+                zField.RegisterValueChangedCallback(evt => SetPointCoordinate(capturedIndex, false, evt.newValue));
+                coordinates.Add(xField);
+                coordinates.Add(zField);
+                _pointFields[index] = new CoordinateFields { X = xField, Z = zField };
+            }
             row.Add(coordinates);
-            _pointFields[index] = new CoordinateFields { X = xField, Z = zField };
 
             if (index > 0)
             {

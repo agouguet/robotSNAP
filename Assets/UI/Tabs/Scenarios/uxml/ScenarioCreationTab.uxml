@@ -129,11 +129,6 @@
                         <ui:Button name="AddHumanRouteButton" text="+ Human route" class="route-management-button"/>
                         <ui:Button name="RemoveHumanRouteButton" text="Remove" class="route-management-button danger-subtle"/>
                     </ui:VisualElement>
-                    <ui:VisualElement class="creation-field">
-                        <ui:Label text="Groups" class="creation-field-label"/>
-                        <ui:Label text="Routes sharing a group id walk together. Select a group to open one of its routes." class="config-panel-subtitle"/>
-                        <ui:VisualElement name="GroupList" class="group-list"/>
-                    </ui:VisualElement>
                     <ui:VisualElement name="RobotRouteSettings" class="route-editor-hidden">
                         <ui:VisualElement class="agent-panel-divider"/>
                         <ui:VisualElement class="config-panel-heading">
@@ -214,8 +209,8 @@
                             <ui:VisualElement name="SectionGroupContent" class="editor-section-content">
                                 <ui:VisualElement class="creation-field">
                                     <ui:Label text="Group" class="creation-field-label"/>
-                                    <ui:TextField name="GroupField" placeholder="No group" max-length="40" class="creation-text-field"/>
-                                    <ui:Label text="Routes sharing a group id walk together in formation." class="field-help"/>
+                                    <ui:DropdownField name="GroupDropdown" class="creation-dropdown"/>
+                                    <ui:Label text="Routes sharing a group walk together in formation. Ids are assigned for you." class="field-help"/>
                                 </ui:VisualElement>
                                 <ui:VisualElement class="creation-field">
                                     <ui:Label text="Group formation" class="creation-field-label"/>

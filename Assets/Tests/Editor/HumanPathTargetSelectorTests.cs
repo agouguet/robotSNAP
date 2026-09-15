@@ -46,6 +46,75 @@ namespace RobotSNAP.Tests.Editor
 
             Assert.That(target, Is.EqualTo(Vector2.zero));
         }
+
+        [Test]
+        public void CountConsumedCorners_TakesEverythingTheAgentHasReached()
+        {
+            // The shape the Default scenario ended up following: a kept path re-anchored on the agent still
+            // carries the waypoints of the detour it has already taken. Steering to one of them turned the
+            // pedestrian around and parked it in a two-metre loop until its route gave up.
+            Vector3[] corners =
+            {
+                new(2.43f, 0f, -0.74f),
+                new(1.08f, 0f, -1.33f),
+                new(1.25f, 0f, -1.08f),
+                new(1.41f, 0f, -1.00f),
+                new(8.46f, 0f, -0.02f)
+            };
+
+            int consumed = HumanPathTargetSelector.CountConsumedCorners(
+                new Vector2(2.43f, -0.74f),
+                corners,
+                1.5f);
+
+            Assert.That(consumed, Is.EqualTo(3),
+                "The anchor and the three reached corners go, the destination stays.");
+        }
+
+        [Test]
+        public void CountConsumedCorners_KeepsEveryoneTheAgentStillHasToWalkTo()
+        {
+            Vector3[] corners =
+            {
+                Vector3.zero,
+                new(5f, 0f, 0f),
+                new(0f, 0f, -10f)
+            };
+
+            Assert.That(
+                HumanPathTargetSelector.CountConsumedCorners(new Vector2(0f, 0f), corners, 1.5f),
+                Is.Zero,
+                "A corner five metres away is still ahead.");
+        }
+
+        [Test]
+        public void CountConsumedCorners_NeverEatsTheDestination()
+        {
+            // Every intermediate corner is within reach: the head and the tail must survive, or the caller ends
+            // up with a path it cannot steer along at all.
+            Vector3[] corners =
+            {
+                Vector3.zero,
+                new(0.4f, 0f, 0f),
+                new(0.8f, 0f, 0.2f),
+                new(1.1f, 0f, 0.4f)
+            };
+
+            Assert.That(
+                HumanPathTargetSelector.CountConsumedCorners(new Vector2(0f, 0f), corners, 1.5f),
+                Is.EqualTo(corners.Length - 2),
+                "Two entries always stay: the anchor and the destination.");
+        }
+
+        [Test]
+        public void CountConsumedCorners_SurvivesAStraightTwoPointPath()
+        {
+            Vector3[] corners = { Vector3.zero, new(10f, 0f, 0f) };
+
+            Assert.That(
+                HumanPathTargetSelector.CountConsumedCorners(new Vector2(1f, 0f), corners, 1.5f),
+                Is.Zero);
+        }
     }
 
     /// <summary>

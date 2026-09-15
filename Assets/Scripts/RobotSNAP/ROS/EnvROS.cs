@@ -201,6 +201,14 @@ namespace RobotSNAP.ROS
         {
             if (!_initialized) return;
             string fullTopic = BuildTopicName(topic);
+
+            // The connector throws when no publisher was registered for the topic, which is what a run
+            // without ROS looks like. Skipping keeps the simulation usable instead of raising one
+            // exception per publisher per frame.
+            RosTopicState topicState = _ros.GetTopic(fullTopic);
+            if (topicState == null || !topicState.IsPublisher)
+                return;
+
             _ros.Publish(fullTopic, message);
             
             if (logPublishEvents)

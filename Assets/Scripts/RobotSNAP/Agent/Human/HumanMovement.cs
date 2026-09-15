@@ -24,6 +24,10 @@ namespace RobotSNAP.Agents
         // References
         private HumanManager _humanManager;
         private int _agentId;
+
+        /// <summary>True while this human is part of the manager's neighbour index.</summary>
+        private bool _registered;
+
         private HumanAgent _avatar;
         private IMovementController _controller;
         private HumanConfig _config;
@@ -165,24 +169,45 @@ namespace RobotSNAP.Agents
 
         private void OnEnable()
         {
-            if (_agentId != 0 && _humanManager != null)
-            {
-                Vector2 currentPos = new Vector2(transform.position.x, transform.position.z);
-                _humanManager.RegisterAgent(_agentId, currentPos, _avatar);
-                _humanManager.UpdateAgent(_agentId, currentPos, _currentVelocity);
-            }
+            TryJoinNeighbourIndex();
         }
 
         private void OnDisable()
         {
-            if (_humanManager != null && _agentId != 0)
-                _humanManager.UnregisterAgent(_agentId);
+            TryLeaveNeighbourIndex();
         }
 
         private void OnDestroy()
         {
-            if (_humanManager != null && _agentId != 0)
-                _humanManager.UnregisterAgent(_agentId);
+            TryLeaveNeighbourIndex();
+        }
+
+        /// <summary>
+        /// Adds this human to the shared neighbour index. Called when it is enabled and again from the
+        /// movement step, so an agent that starts before it knows its manager still ends up in the crowd.
+        /// </summary>
+        private void TryJoinNeighbourIndex()
+        {
+            if (_registered || _humanManager == null || !isActiveAndEnabled)
+                return;
+
+            Vector2 currentPos = new Vector2(transform.position.x, transform.position.z);
+            _humanManager.RegisterAgent(_agentId, currentPos, _avatar);
+            _humanManager.UpdateAgent(_agentId, currentPos, _currentVelocity);
+            _registered = true;
+        }
+
+        /// <summary>
+        /// Leaves the index exactly once. Tracking it here — rather than testing the id — keeps the
+        /// first pooled human, whose id is 0, from staying in the crowd forever.
+        /// </summary>
+        private void TryLeaveNeighbourIndex()
+        {
+            if (!_registered)
+                return;
+
+            _humanManager?.UnregisterAgent(_agentId);
+            _registered = false;
         }
 
         private void InitializeController(MovementControllerType type)
@@ -227,7 +252,16 @@ namespace RobotSNAP.Agents
         /// <summary>True when the velocity of this human comes from outside Unity.</summary>
         public bool IsExternallyControlled => _externalController != null;
 
-        public void SetHumanManager(HumanManager manager) => _humanManager = manager;
+        public void SetHumanManager(HumanManager manager)
+        {
+            if (manager == _humanManager)
+                return;
+
+            // The index belongs to the manager that holds it: leave the old crowd before joining the new one.
+            TryLeaveNeighbourIndex();
+            _humanManager = manager;
+            TryJoinNeighbourIndex();
+        }
 
         /// <summary>
         /// Turns the agent on the spot. The controller only rotates while it is walking, so a freshly spawned
@@ -326,7 +360,11 @@ namespace RobotSNAP.Agents
             UpdateRotation(desiredVelocity);
 
             // Mise à jour du HumanManager
-            _humanManager?.UpdateAgent(_agentId, _currentPosition, _currentVelocity);
+            if (_humanManager != null)
+            {
+                TryJoinNeighbourIndex();
+                _humanManager.UpdateAgent(_agentId, _currentPosition, _currentVelocity);
+            }
 
             // Transmission de la vélocité réelle à l'agent (pour l'animation)
             _avatar?.SetVelocity(finalVelocity3D);
@@ -462,7 +500,10 @@ namespace RobotSNAP.Agents
         /// <summary>
         /// Re-anchors a path that is kept: the current position replaces the stale start and the destination
         /// replaces the last corner, so a slowly moving goal — a formation slot — is followed without paying
-        /// for a search.
+        /// for a search. The corners the agent has already reached are dropped on the way, and that part is what
+        /// keeps the path leading forward: keeping them left a head behind the agent, the steering target
+        /// flipped between that corner and the destination, and the agent looped on the spot until its route
+        /// gave up on it — which is exactly what the Default scenario's pedestrian did.
         /// </summary>
         private void RefreshScenarioPathEnd(Vector2 destination)
         {
@@ -472,6 +513,21 @@ namespace RobotSNAP.Agents
                 out Vector2 walkable)
                 ? walkable
                 : destination;
+
+            float advanceDistance = _config != null
+                ? Mathf.Max(_config.nextNavMinDistance, _config.slowDownDistance)
+                : 1f;
+            int consumed = HumanPathTargetSelector.CountConsumedCorners(
+                _currentPosition,
+                _pathCorners,
+                advanceDistance);
+            if (consumed > 0)
+            {
+                for (int index = consumed; index < _pathCorners.Length; index++)
+                    _pathCorners[index - consumed] = _pathCorners[index];
+
+                System.Array.Resize(ref _pathCorners, _pathCorners.Length - consumed);
+            }
 
             _pathCorners[0] = new Vector3(_currentPosition.x, 0f, _currentPosition.y);
             _pathCorners[^1] = new Vector3(target.x, 0f, target.y);

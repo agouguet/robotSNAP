@@ -39,6 +39,9 @@ namespace RobotSNAP.Agents
         private readonly Dictionary<long, List<int>> _buckets = new Dictionary<long, List<int>>();
         private int _bucketFrame = -1;
 
+        /// <summary>Set once so a broken active range is reported a single time, not once per query.</summary>
+        private bool _warnedAboutCountMismatch;
+
         [Header("Neighbour query")]
         [Tooltip("Side of a spatial-hash cell, in metres. Around the perception radius works best.")]
         [SerializeField] private float _bucketCellSize = 4f;
@@ -62,13 +65,16 @@ namespace RobotSNAP.Agents
             if (owner != null)
                 _agentOwners[id] = owner;
 
-            if (_idToIndex.ContainsKey(id))
+            if (TryGetIndex(id, out _))
             {
                 // L'agent est déjà enregistré, on met à jour sa position
                 UpdateAgent(id, initialPosition, Vector2.zero);
                 if (_logEvents) Debug.Log($"[HumanManager] Agent {id} already registered, updated position.");
                 return;
             }
+
+            // A dictionary entry that no longer points at that agent would shadow the new one.
+            _idToIndex.Remove(id);
 
             // Ajouter un nouvel agent
             if (_activeCount >= _agents.Count)
@@ -95,7 +101,7 @@ namespace RobotSNAP.Agents
         /// </summary>
         public void UpdateAgent(int id, Vector2 position, Vector2 velocity)
         {
-            if (_idToIndex.TryGetValue(id, out int index))
+            if (TryGetIndex(id, out int index))
             {
                 AgentData data = _agents[index];
                 data.Position = position;
@@ -106,9 +112,31 @@ namespace RobotSNAP.Agents
             {
                 // Si l'agent n'est pas enregistré (cas exceptionnel), on l'ajoute
                 if (_logEvents) Debug.LogWarning($"[HumanManager] Agent {id} not found in dictionary, registering now.");
+                _idToIndex.Remove(id);
                 RegisterAgent(id, position);
                 UpdateAgent(id, position, velocity);
             }
+        }
+
+        /// <summary>
+        /// Index of that agent in the live range, or false when the entry is missing or stale. Every
+        /// read and write goes through here, so a mapping that points at another agent — the shape a
+        /// corrupted swap leaves behind — can never reach the list.
+        /// </summary>
+        private bool TryGetIndex(int id, out int index)
+        {
+            index = -1;
+            if (!_idToIndex.TryGetValue(id, out int candidate))
+                return false;
+
+            if (candidate < 0 || candidate >= _activeCount || candidate >= _agents.Count)
+                return false;
+
+            if (!_agents[candidate].Active || _agents[candidate].Id != id)
+                return false;
+
+            index = candidate;
+            return true;
         }
 
         /// <summary>
@@ -122,9 +150,22 @@ namespace RobotSNAP.Agents
                 return;
             }
 
+            // A mapping outside the active range — or pointing at another agent — can only come from a
+            // lifecycle race (two agents swapped, then an id reused). Forgetting the entry keeps the
+            // active range packed instead of letting the swap write past it.
+            if (_activeCount <= 0 || !TryGetIndex(id, out index))
+            {
+                _idToIndex.Remove(id);
+                _agentOwners.Remove(id);
+                InvalidateSpatialIndex();
+                if (_logEvents) Debug.LogWarning($"[HumanManager] Agent {id} had a stale index {index} (active: {_activeCount}).");
+                return;
+            }
+
             // On remplace l'agent à supprimer par le dernier agent actif (swap with last)
             _activeCount--;
             AgentData lastData = _agents[_activeCount];
+            _agents[_activeCount] = default;
             if (index != _activeCount)
             {
                 // On déplace le dernier agent à la place de celui qu'on supprime
@@ -184,7 +225,11 @@ namespace RobotSNAP.Agents
 
                     for (int entry = 0; entry < bucket.Count; entry++)
                     {
-                        AgentData data = _agents[bucket[entry]];
+                        int agentIndex = bucket[entry];
+                        if (agentIndex < 0 || agentIndex >= _activeCount)
+                            continue;
+
+                        AgentData data = _agents[agentIndex];
                         if (data.Id == selfId || !data.Active)
                             continue;
 
@@ -208,6 +253,20 @@ namespace RobotSNAP.Agents
         {
             foreach (List<int> bucket in _buckets.Values)
                 bucket.Clear();
+
+            // The active range is what every query walks. A stale count (an agent destroyed while
+            // another one was being registered) would make those walks index past the list, so it is
+            // clamped once, loudly, instead of throwing on every agent every physics step.
+            if (_activeCount > _agents.Count)
+            {
+                if (!_warnedAboutCountMismatch)
+                {
+                    _warnedAboutCountMismatch = true;
+                    Debug.LogWarning($"[HumanManager] Active count {_activeCount} exceeded the {_agents.Count} known agents; the active range was clamped.");
+                }
+
+                _activeCount = _agents.Count;
+            }
 
             float cellSize = Mathf.Max(1f, _bucketCellSize);
             for (int index = 0; index < _activeCount; index++)
@@ -319,7 +378,7 @@ namespace RobotSNAP.Agents
         // Optionnel : méthode pour obtenir un agent par son ID (pour debug)
         public bool TryGetAgentData(int id, out Vector2 position, out Vector2 velocity)
         {
-            if (_idToIndex.TryGetValue(id, out int index))
+            if (TryGetIndex(id, out int index))
             {
                 AgentData data = _agents[index];
                 position = data.Position;
@@ -338,7 +397,8 @@ namespace RobotSNAP.Agents
             if (!Application.isPlaying) return;
             // Optionnel : afficher les positions des agents enregistrés
             Gizmos.color = Color.green;
-            for (int i = 0; i < _activeCount; i++)
+            int count = Mathf.Min(_activeCount, _agents.Count);
+            for (int i = 0; i < count; i++)
             {
                 AgentData data = _agents[i];
                 Vector3 pos3D = new Vector3(data.Position.x, 0.1f, data.Position.y);

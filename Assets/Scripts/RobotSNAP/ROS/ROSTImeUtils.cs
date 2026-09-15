@@ -1,3 +1,4 @@
+using System;
 using RosMessageTypes.BuiltinInterfaces;
 using RobotSNAP.Core;
 
@@ -32,7 +33,14 @@ namespace RobotSNAP.ROS
         /// </summary>
         public static TimeMsg Now()
         {
-            return MillisecondsToTimeMsg(Clock.Instance.CurrentTimeMillis);
+            // A scene without a Clock (or a publish that happens before its Awake) used to throw here,
+            // once per publisher per frame. The wall clock keeps the stamps usable instead.
+            Clock clock = Clock.Instance;
+            double milliseconds = clock != null
+                ? clock.CurrentTimeMillis
+                : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            return MillisecondsToTimeMsg(milliseconds);
         }
         
         /// <summary>

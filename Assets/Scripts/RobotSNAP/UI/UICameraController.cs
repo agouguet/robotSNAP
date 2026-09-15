@@ -1,70 +1,153 @@
-using RobotSNAP.CameraControl;
-using RobotSNAP;
+using System.Collections.Generic;
 using RobotSNAP.Agents;
+using RobotSNAP.CameraControl;
 using RobotSNAP.Core.Scenario;
 using UnityEngine;
 using UnityEngine.UIElements;
-using System.Collections.Generic;
 
+/// <summary>
+/// The camera bar of the simulation view: it picks which agent the camera works with, offers the
+/// focus, follow and first-person actions, and hosts the view selector in the top-right corner.
+///
+/// This class is the single writer of the bar. The camera makes the focus, the bar only reflects
+/// it, so the view button can never disagree with the agent that is actually followed.
+/// </summary>
 public class UICameraController : MonoBehaviour
 {
     [SerializeField] private UIDocument uiDocument;
     [SerializeField] private CameraController cameraController;
 
-    private DropdownField _agentDropdown;
-    private Button _prevButton, _nextButton, _viewButton;
-    private Label _agentNameLabel, _agentProgressLabel;
-    private VisualElement _viewMenu, _focusStatusDot, _agentProgressBlock, _agentProgressSeparator;
+    private VisualElement _root;
+    private VisualElement _agentSelector;
+    private Button _selectorButton;
+    private Label _selectorIcon;
+    private Label _selectorLabel;
+    private VisualElement _selectorPopup;
+    private TextField _searchField;
+    private Button _freeCameraOption;
+    private VisualElement _robotOptions;
+    private VisualElement _humanOptions;
+    private Button _focusButton;
+    private Button _followButton;
+    private Button _firstPersonButton;
+    private Button _viewButton;
+    private VisualElement _viewMenu;
+
+    private readonly List<Button> _viewMenuButtons = new List<Button>();
+    private readonly Dictionary<Button, CameraController.CameraMode> _viewMenuModes = new Dictionary<Button, CameraController.CameraMode>();
+    private readonly List<string> _optionNames = new List<string>();
     private ScenarioManager _scenarioManager;
 
-    private List<Button> _viewMenuButtons = new List<Button>();
-
-    /// <summary>A target refresh inside <see cref="RefreshUI"/> calls the UI back through
-    /// the camera events; the outer call already reads the fresh state afterwards.</summary>
+    /// <summary>A refresh triggered from a camera event re-enters this class; the outer call is the
+    /// one that ends up writing the fresh values.</summary>
     private bool _refreshing;
+
+    private string _search = string.Empty;
 
     private void Start()
     {
         if (uiDocument == null) uiDocument = GetComponent<UIDocument>();
         if (cameraController == null) cameraController = FindAnyObjectByType<CameraController>();
-        if (cameraController == null) { Debug.LogError("CameraController missing"); return; }
 
-        var root = uiDocument.rootVisualElement;
-        _agentDropdown = root.Q<DropdownField>("AgentDropdown");
-        _prevButton = root.Q<Button>("PrevAgentButton");
-        _nextButton = root.Q<Button>("NextAgentButton");
-        _agentNameLabel = root.Q<Label>("AgentNameLabel");
-        _agentProgressLabel = root.Q<Label>("AgentProgressLabel");
-        _viewButton = root.Q<Button>("ViewButton");
-        _viewMenu = root.Q<VisualElement>("ViewMenu");
-        _focusStatusDot = root.Q<VisualElement>("FocusStatusDot");
-        _agentProgressBlock = root.Q<VisualElement>("AgentProgressBlock");
-        _agentProgressSeparator = root.Q<VisualElement>("AgentProgressSeparator");
+        _root = uiDocument != null ? uiDocument.rootVisualElement : null;
+        if (_root == null || cameraController == null)
+        {
+            Debug.LogWarning("[UICameraController] UI document or camera controller missing; the camera bar stays inert.");
+            return;
+        }
+
+        _agentSelector = _root.Q<VisualElement>("AgentSelector");
+        _selectorButton = _root.Q<Button>("AgentSelectorButton");
+        _selectorIcon = _root.Q<Label>("AgentSelectorIcon");
+        _selectorLabel = _root.Q<Label>("AgentSelectorLabel");
+        _selectorPopup = _root.Q<VisualElement>("AgentSelectorPopup");
+        _searchField = _root.Q<TextField>("AgentSearchField");
+        _freeCameraOption = _root.Q<Button>("FreeCameraOption");
+        _robotOptions = _root.Q<VisualElement>("RobotOptionList");
+        _humanOptions = _root.Q<VisualElement>("HumanOptionList");
+        _focusButton = _root.Q<Button>("FocusAgentButton");
+        _followButton = _root.Q<Button>("FollowAgentButton");
+        _firstPersonButton = _root.Q<Button>("FirstPersonButton");
+        _viewButton = _root.Q<Button>("ViewButton");
+        _viewMenu = _root.Q<VisualElement>("ViewMenu");
+
+        if (_selectorButton == null || _focusButton == null || _viewButton == null || _viewMenu == null)
+        {
+            Debug.LogWarning("[UICameraController] The camera bar is incomplete; it stays inert.");
+            return;
+        }
+
+        // Both popups start hidden. The class keeps them out of the first frame, the inline style is
+        // what the code toggles afterwards — the two agree on the same value.
+        SetPopupDisplay(_selectorPopup, false);
+        SetPopupDisplay(_viewMenu, false);
 
         BuildViewMenu();
-        RefreshUI();
-
-        if (_prevButton != null) _prevButton.clicked += () => { cameraController.CycleFollowTarget(-1); RefreshUI(); };
-        if (_nextButton != null) _nextButton.clicked += () => { cameraController.CycleFollowTarget(1); RefreshUI(); };
-        if (_agentDropdown != null) _agentDropdown.RegisterValueChangedCallback(evt => OnAgentDropdownChanged(evt.newValue));
-        if (_viewButton != null) _viewButton.RegisterCallback<ClickEvent>(evt => ToggleViewMenu());
-
-        cameraController.OnFollowTargetChanged += _ => RefreshUI();
-        // The dropdown tracks the live target list, which grows when a scenario spawns its agents.
-        cameraController.OnTargetsUpdated += _ => RefreshUI();
-
-        // The robot is spawned by the scenario, long after this UI exists. That event is the
-        // signal that a new target appeared, so it is the moment to refresh the target list and
-        // let the camera hand the focus to the robot.
-        _scenarioManager = FindAnyObjectByType<ScenarioManager>();
-        if (_scenarioManager != null)
-            _scenarioManager.OnScenarioApplied += OnScenarioApplied;
+        WireEvents();
+        Refresh();
     }
 
     private void OnDestroy()
     {
         if (_scenarioManager != null)
             _scenarioManager.OnScenarioApplied -= OnScenarioApplied;
+
+        if (cameraController != null)
+        {
+            cameraController.OnFollowTargetChanged -= OnFollowTargetChanged;
+            cameraController.OnTargetsUpdated -= OnTargetsUpdated;
+            cameraController.OnViewChanged -= Refresh;
+            cameraController.OnToolChanged -= OnToolChanged;
+        }
+    }
+
+    private void WireEvents()
+    {
+        if (_selectorButton != null)
+            _selectorButton.clicked += ToggleSelector;
+
+        if (_freeCameraOption != null)
+            _freeCameraOption.clicked += UseFreeCamera;
+
+        if (_focusButton != null)
+            _focusButton.clicked += FocusCurrentTarget;
+
+        if (_followButton != null)
+            _followButton.clicked += ToggleFollow;
+
+        if (_firstPersonButton != null)
+            _firstPersonButton.clicked += UseFirstPerson;
+
+        if (_viewButton != null)
+            _viewButton.clicked += ToggleViewMenu;
+
+        if (_searchField != null)
+            _searchField.RegisterValueChangedCallback(evt =>
+            {
+                _search = evt.newValue ?? string.Empty;
+                RebuildAgentOptions();
+            });
+
+        // A click anywhere else closes the agent list; the selector itself is excluded so its own
+        // button can open it without the same click closing it again.
+        _root.RegisterCallback<ClickEvent>(evt =>
+        {
+            if (evt.target is VisualElement clicked && _agentSelector != null && _agentSelector.Contains(clicked))
+                return;
+
+            SetSelectorOpen(false);
+        });
+
+        cameraController.OnFollowTargetChanged += OnFollowTargetChanged;
+        cameraController.OnTargetsUpdated += OnTargetsUpdated;
+        cameraController.OnViewChanged += Refresh;
+        cameraController.OnToolChanged += OnToolChanged;
+
+        // The robot is spawned by the scenario, long after this UI exists. That event is the signal
+        // that a new target appeared, so it is the moment to refresh the list and hand over the focus.
+        _scenarioManager = FindAnyObjectByType<ScenarioManager>();
+        if (_scenarioManager != null)
+            _scenarioManager.OnScenarioApplied += OnScenarioApplied;
     }
 
     private void OnScenarioApplied(ScenarioData scenario)
@@ -72,63 +155,230 @@ public class UICameraController : MonoBehaviour
         if (cameraController != null) cameraController.RefreshFollowableTargets();
     }
 
-    private void BuildViewMenu()
-    {
-        if (_viewMenu == null) return;
-        _viewMenu.Clear();
-        _viewMenuButtons.Clear();
+    private void OnFollowTargetChanged(Transform target) => Refresh();
 
-        Debug.Log("Building view menu with modes:");
-        Debug.Log($"Current follow target: {(cameraController.GetCurrentFollowTarget() != null ? cameraController.GetCurrentFollowTarget().name : "None")}");
-        Debug.Log("[UICameraController] Mode entries:" + cameraController.ModeEntries);
-        foreach (var pair in cameraController.ModeEntries)
+    private void OnTargetsUpdated(List<Transform> targets) => Refresh();
+
+    private void OnToolChanged(CameraController.CameraTool tool) => Refresh();
+
+    // ==========================================
+    //          AGENT SELECTOR
+    // ==========================================
+
+    private void ToggleSelector() => SetSelectorOpen(_selectorPopup == null || !IsOpen(_selectorPopup));
+
+    private void SetSelectorOpen(bool open)
+    {
+        if (_selectorPopup == null) return;
+
+        SetPopupDisplay(_selectorPopup, open);
+        if (open) RebuildAgentOptions();
+    }
+
+    private void UseFreeCamera()
+    {
+        cameraController.ClearFollowTarget();
+        cameraController.SetCameraMode(CameraController.CameraMode.Free);
+        SetSelectorOpen(false);
+    }
+
+        private void SelectTarget(Transform target)
         {
-            var mode = pair.Key;
-            var entry = pair.Value;
-            var btn = new Button { text = entry.DisplayName };
-            btn.AddToClassList("menu-option");
-            btn.userData = entry; // On stocke l'entrée (pas besoin du mode car on peut récupérer RequiresFocus)
-            btn.clicked += () => OnViewModeSelected(mode.ToString(), entry.DisplayName);
-            _viewMenu.Add(btn);
-            _viewMenuButtons.Add(btn);
+            // Picking a subject is asking the camera to work with it, so the bar can never show a
+            // name the camera then ignores. Releasing the camera goes through the free camera entry.
+            if (target != null)
+                cameraController.FocusAgent(target);
+
+            SetSelectorOpen(false);
         }
-        UpdateViewMenuInteractivity();
+
+    /// <summary>
+    /// Rebuilds the two option groups from the live target list. The list only changes when agents
+    /// spawn or despawn, so the rebuild is skipped while the names stay the same.
+    /// </summary>
+    private void RebuildAgentOptions()
+    {
+        if (_robotOptions == null || _humanOptions == null) return;
+
+        List<Transform> targets = cameraController.GetFollowableTargets();
+        var names = new List<string>(targets.Count);
+        foreach (Transform target in targets)
+            names.Add(GetDisplayName(target));
+
+        if (!SameNames(names))
+        {
+            _optionNames.Clear();
+            _optionNames.AddRange(names);
+
+            _robotOptions.Clear();
+            _humanOptions.Clear();
+
+            foreach (Transform target in targets)
+            {
+                Button option = CreateOption(target);
+                bool isRobot = target.GetComponentInParent<Robot>() != null;
+                (isRobot ? _robotOptions : _humanOptions).Add(option);
+            }
+        }
+
+        ApplySearchFilter();
+        HighlightSelectedOption();
+    }
+
+    private Button CreateOption(Transform target)
+    {
+        var option = new Button { text = GetDisplayName(target) };
+        option.AddToClassList("agent-option");
+        option.userData = target;
+        option.clicked += () => SelectTarget(target);
+        return option;
+    }
+
+    private void ApplySearchFilter()
+    {
+        foreach (VisualElement group in new[] { _robotOptions, _humanOptions })
+        {
+            if (group == null) continue;
+
+            foreach (VisualElement option in group.Children())
+            {
+                bool matches = string.IsNullOrEmpty(_search) ||
+                               option is Button button &&
+                               button.text.IndexOf(_search, System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+                option.style.display = matches ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+
+            bool anyVisible = false;
+            foreach (VisualElement option in group.Children())
+                if (option.style.display != DisplayStyle.None) { anyVisible = true; break; }
+
+            // The group caption lives right before its list in the popup.
+            VisualElement caption = group.parent != null
+                ? group.parent.ElementAt(group.parent.IndexOf(group) - 1)
+                : null;
+
+            if (caption != null && caption.ClassListContains("agent-option-group"))
+                caption.style.display = anyVisible ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+    }
+
+    private void HighlightSelectedOption()
+    {
+        Transform current = cameraController.GetCurrentFollowTarget();
+
+        foreach (VisualElement group in new[] { _robotOptions, _humanOptions })
+        {
+            if (group == null) continue;
+
+            foreach (VisualElement option in group.Children())
+                option.EnableInClassList("is-selected", option.userData as Transform == current);
+        }
+    }
+
+    private bool SameNames(List<string> names)
+    {
+        if (names.Count != _optionNames.Count) return false;
+
+        for (int index = 0; index < names.Count; index++)
+            if (names[index] != _optionNames[index]) return false;
+
+        return true;
+    }
+
+    // ==========================================
+    //          ACTIONS
+    // ==========================================
+
+    private void FocusCurrentTarget()
+    {
+        Transform target = cameraController.GetCurrentFollowTarget();
+        if (target != null)
+            cameraController.FocusAgent(target);
+    }
+
+        /// <summary>
+        /// The follow toggle is about the camera binding, not about the selection: turning it off
+        /// leaves the agent selected in the bar and in the panel, and the camera goes back to free.
+        /// </summary>
+        private void ToggleFollow()
+        {
+            cameraController.ToggleFollow();
+        }
+
+    private void UseFirstPerson()
+    {
+        if (cameraController.GetCurrentFollowTarget() == null) return;
+
+        cameraController.SetCameraMode(CameraController.CameraMode.FirstPerson);
     }
 
     private void ToggleViewMenu()
     {
-        // if (_viewMenu == null) return;
-        // bool isVisible = _viewMenu.style.display == DisplayStyle.Flex;
-        // _viewMenu.style.display = isVisible ? DisplayStyle.None : DisplayStyle.Flex;
+        if (_viewMenu == null) return;
+
+        SetPopupDisplay(_viewMenu, !IsOpen(_viewMenu));
     }
 
-    private void OnViewModeSelected(string modeName, string displayName)
+    private void BuildViewMenu()
     {
-        // Vérification du focus
-        foreach (var pair in cameraController.ModeEntries)
+        if (_viewMenu == null) return;
+
+        _viewMenu.Clear();
+        _viewMenuButtons.Clear();
+        _viewMenuModes.Clear();
+
+        foreach (KeyValuePair<CameraController.CameraMode, CameraModeEntry> pair in cameraController.ModeEntries)
         {
-            if (pair.Key.ToString() == modeName && pair.Value.RequiresFocus && cameraController.GetCurrentFollowTarget() == null)
-            {
-                Debug.LogWarning($"Cannot switch to {displayName}: no agent focused.");
-                return;
-            }
+            CameraController.CameraMode mode = pair.Key;
+            CameraModeEntry entry = pair.Value;
+
+            var button = new Button { text = entry.DisplayName };
+            button.AddToClassList("menu-option");
+            button.userData = entry;
+            button.clicked += () => OnViewModeSelected(mode, entry);
+
+            _viewMenu.Add(button);
+            _viewMenuButtons.Add(button);
+            _viewMenuModes[button] = mode;
         }
-        cameraController.SetCameraMode(modeName);
-        if (_viewButton != null) _viewButton.text = displayName;
-        if (_viewMenu != null) _viewMenu.style.display = DisplayStyle.None;
     }
 
-    private void RefreshUI()
+    private void OnViewModeSelected(CameraController.CameraMode mode, CameraModeEntry entry)
     {
-        // Refreshing the target list is also what lets the camera hand the focus to the robot by
-        // default, so the targets have to be asked for before the current target is read. The
-        // camera events fired from in there re-enter this method; the outer call is the one
-        // that ends up writing the fresh values.
+        if (entry.RequiresFocus && cameraController.GetCurrentFollowTarget() == null)
+        {
+            Debug.LogWarning($"[UICameraController] {entry.DisplayName} needs a focused agent.");
+            return;
+        }
+
+        cameraController.SetCameraMode(mode);
+        SetPopupDisplay(_viewMenu, false);
+        Refresh();
+    }
+
+    private static bool IsOpen(VisualElement popup) => popup.style.display == DisplayStyle.Flex;
+
+    private static void SetPopupDisplay(VisualElement popup, bool open)
+    {
+        if (popup == null) return;
+
+        popup.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
+        popup.EnableInClassList("is-hidden", !open);
+    }
+
+    // ==========================================
+    //          REFRESH
+    // ==========================================
+
+    private void Refresh()
+    {
         if (_refreshing) return;
+
         _refreshing = true;
         try
         {
-            RefreshUIInternal();
+            RefreshInternal();
         }
         finally
         {
@@ -136,122 +386,81 @@ public class UICameraController : MonoBehaviour
         }
     }
 
-    private void RefreshUIInternal()
+    private void RefreshInternal()
     {
-        var targets = cameraController.GetFollowableTargets();
-        var target = cameraController.GetCurrentFollowTarget();
-        bool hasFocus = target != null;
+        Transform target = cameraController.GetCurrentFollowTarget();
+        bool hasTarget = target != null;
+        bool following = cameraController.IsFollowingTarget;
 
-        if (_agentNameLabel != null) _agentNameLabel.text = hasFocus ? GetAgentDisplayName(target) : "No target";
+        if (_selectorLabel != null)
+            _selectorLabel.text = !hasTarget
+                ? "Free camera"
+                : following
+                    ? $"Following: {GetDisplayName(target)}"
+                    : $"Selected: {GetDisplayName(target)}";
 
-        // Camera lock: filled while an agent is followed, muted while there is no focus.
-        if (_focusStatusDot != null)
+        if (_selectorIcon != null)
         {
-            if (hasFocus) _focusStatusDot.RemoveFromClassList("idle");
-            else _focusStatusDot.AddToClassList("idle");
+            string iconName = !hasTarget
+                ? "Icons/agents"
+                : target.GetComponentInParent<Robot>() != null ? "Icons/robot" : "Icons/humans";
+
+            Texture2D icon = Resources.Load<Texture2D>(iconName);
+            if (icon != null) _selectorIcon.style.backgroundImage = new StyleBackground(icon);
         }
 
-        // No progress figure rather than a made-up one: the bar hides the block until the
-        // followed agent actually reports its progress.
-        float progress = 0f;
-        bool hasProgress = hasFocus && TryGetAgentProgress(target, out progress);
-        if (_agentProgressBlock != null)
-            _agentProgressBlock.style.display = hasProgress ? DisplayStyle.Flex : DisplayStyle.None;
-        if (_agentProgressSeparator != null)
-            _agentProgressSeparator.style.display = hasProgress ? DisplayStyle.Flex : DisplayStyle.None;
-        if (_agentProgressLabel != null)
-            _agentProgressLabel.text = hasProgress ? $"{progress * 100:F0}%" : string.Empty;
+        if (_focusButton != null) _focusButton.SetEnabled(hasTarget);
+        if (_firstPersonButton != null) _firstPersonButton.SetEnabled(hasTarget);
 
-        if (targets != null && targets.Count > 0 && _agentDropdown != null)
+        if (_followButton != null)
         {
-            var names = new List<string>();
-            foreach (var t in targets) names.Add(GetAgentDisplayName(t));
-
-            bool needRefresh = false;
-            if (_agentDropdown.choices.Count != names.Count) needRefresh = true;
-            else
-            {
-                for (int i = 0; i < names.Count; i++)
-                    if (_agentDropdown.choices[i] != names[i]) { needRefresh = true; break; }
-            }
-            if (needRefresh) _agentDropdown.choices = names;
-
-            string currentName = hasFocus ? GetAgentDisplayName(target) : "";
-            if (_agentDropdown.value != currentName) _agentDropdown.SetValueWithoutNotify(currentName);
-            _agentDropdown.SetEnabled(hasFocus);
+            _followButton.SetEnabled(hasTarget);
+            _followButton.text = following ? "Following" : "Follow";
+            _followButton.EnableInClassList("is-active", following);
         }
 
         if (_viewButton != null)
-        {
-            string currentMode = cameraController.GetCurrentModeName();
-            foreach (var pair in cameraController.ModeEntries)
-            {
-                if (pair.Key.ToString() == currentMode)
-                {
-                    _viewButton.text = pair.Value.DisplayName;
-                    break;
-                }
-            }
-        }
-        UpdateViewMenuInteractivity();
+            _viewButton.text = $"{cameraController.GetCurrentDisplayName()}  ▾";
+
+        RefreshViewMenuInteractivity(hasTarget);
+        HighlightSelectedOption();
     }
 
-    private void UpdateViewMenuInteractivity()
+    private void RefreshViewMenuInteractivity(bool hasTarget)
     {
-        bool hasFocus = cameraController.GetCurrentFollowTarget() != null;
-        foreach (var btn in _viewMenuButtons)
+        foreach (Button button in _viewMenuButtons)
         {
-            if (btn.userData is CameraModeEntry entry)
-            {
-                bool shouldEnable = !entry.RequiresFocus || hasFocus;
-                btn.SetEnabled(shouldEnable);
-                if (shouldEnable)
-                    btn.RemoveFromClassList("disabled-option");
-                else
-                    btn.AddToClassList("disabled-option");
-            }
+            if (button.userData is not CameraModeEntry entry) continue;
+
+            bool shouldEnable = !entry.RequiresFocus || hasTarget;
+            button.SetEnabled(shouldEnable);
+            button.EnableInClassList("disabled-option", !shouldEnable);
+
+            // The menu carries the same truth as the chip: the view that is actually running.
+            bool isCurrent = _viewMenuModes.TryGetValue(button, out CameraController.CameraMode mode) &&
+                             mode == cameraController.GetCurrentMode();
+            button.text = isCurrent ? $"✓  {entry.DisplayName}" : $"     {entry.DisplayName}";
+            button.EnableInClassList("is-active", isCurrent);
         }
     }
 
-    private void OnAgentDropdownChanged(string selectedName)
+    private string GetDisplayName(Transform target)
     {
-        var targets = cameraController.GetFollowableTargets();
-        foreach (var t in targets)
-        {
-            if (GetAgentDisplayName(t) == selectedName)
-            {
-                cameraController.SetFollowTarget(t);
-                RefreshUI();
-                break;
-            }
-        }
-    }
+        if (target == null) return "Free camera";
 
-    private string GetAgentDisplayName(Transform target)
-    {
-        if (target == null) return "None";
-        var robot = target.GetComponent<Robot>();
-        if (robot != null && !string.IsNullOrEmpty(robot.AgentName))
-            return robot.AgentName;
-        var human = target.GetComponent<HumanAgent>();
-        if (human != null)
-            return $"Agent {human.AgentName}";
+        // A robot is followed through its base link, which does not carry the Robot component.
+        Robot robot = target.GetComponentInParent<Robot>();
+        if (robot != null && !string.IsNullOrEmpty(robot.AgentName)) return robot.AgentName;
+
+        HumanAgent human = target.GetComponentInParent<HumanAgent>();
+        if (human != null && !string.IsNullOrEmpty(human.AgentName)) return human.AgentName;
+
         return target.name;
     }
 
     /// <summary>
-    /// Reads the progress an agent publishes through <see cref="IAgentProgress"/>. Returns false
-    /// when the agent does not implement it, so the bar shows nothing instead of a stand-in value.
+    /// Optional progress an agent can publish. Kept as a public contract for agents that want the
+    /// dashboard to show how far along they are.
     /// </summary>
-    private static bool TryGetAgentProgress(Transform target, out float progress)
-    {
-        progress = 0f;
-        if (target == null) return false;
-        var progressAgent = target.GetComponent<IAgentProgress>();
-        if (progressAgent == null) return false;
-        progress = Mathf.Clamp01(progressAgent.Progress);
-        return true;
-    }
-
     public interface IAgentProgress { float Progress { get; } }
 }

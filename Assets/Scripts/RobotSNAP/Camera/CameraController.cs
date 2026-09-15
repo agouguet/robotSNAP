@@ -24,6 +24,17 @@ namespace RobotSNAP.CameraControl
 
     public class CameraController : MonoBehaviour
     {
+        /// <summary>
+        /// What the left mouse button does in the camera view. The view toolbar picks it.
+        /// </summary>
+        public enum CameraTool
+        {
+            Select,
+            Move,
+            Rotate,
+            Zoom
+        }
+
         [Header("Camera References")]
         public Camera mainCamera;
         public Transform cameraTarget;
@@ -51,6 +62,28 @@ namespace RobotSNAP.CameraControl
         [Header("Default Focus")]
         [Tooltip("Hand the focus to the robot as soon as one exists, until the user picks another target.")]
         public bool focusRobotByDefault = true;
+
+        [Header("Interaction")]
+        [Tooltip("What the left mouse button does in the view: pick an agent, slide, turn or zoom.")]
+        [SerializeField] private CameraTool activeTool = CameraTool.Select;
+
+        public CameraTool ActiveTool => activeTool;
+        public event System.Action<CameraTool> OnToolChanged;
+
+        /// <summary>True while an agent is selected. This is the selection, not the camera binding:
+        /// see <see cref="IsFollowingTarget"/> for the state the dashboard badges report.</summary>
+        public bool IsFollowing => _currentFollowTarget != null;
+
+        /// <summary>
+        /// True when the current view really keeps the camera on the selection. A free or top view
+        /// can hold a selected agent that the camera ignores, which is why the selection and the
+        /// binding are two distinct states and every panel reads this one for its "Following" label.
+        /// </summary>
+        public bool IsFollowingTarget => _currentFollowTarget != null && ModeUsesTarget(_currentModeEnum);
+
+        /// <summary>The views that bind the camera to the followed agent.</summary>
+        public static bool ModeUsesTarget(CameraMode mode) =>
+            mode is CameraMode.FirstPerson or CameraMode.ThirdPerson or CameraMode.Orbit;
 
         /// <summary>
         /// The scenario spawns the robot well after the first frame, so the default focus cannot
@@ -123,6 +156,17 @@ namespace RobotSNAP.CameraControl
         private Transform _currentFollowTarget;
         private Coroutine _cinematicCoroutine;
         private bool _isSplitView = false;
+
+        // View-tool input: what the left button does is chosen by the toolbar, so the gesture is
+        // tracked here rather than in the modes, which keep their own right-drag and wheel handling.
+        private bool _toolDragging;
+        private Vector2 _toolDragStart;
+        private Vector2 _toolDragLast;
+        private bool _toolDragMoved;
+        private const float DragThresholdPixels = 4f;
+
+        /// <summary>Zoom asked for by the zoom tool, in metres. The orbit mode consumes it this frame.</summary>
+        public float PendingZoom { get; set; }
         
         #region Properties for modes
         public Vector3 TargetPosition { get => _targetPosition; set => _targetPosition = value; }
@@ -157,8 +201,143 @@ namespace RobotSNAP.CameraControl
                 int direction = Input.GetKey(KeyCode.LeftShift) ? -1 : 1;
                 CycleFollowTarget(direction);
             }
+
+            HandleToolInput();
             UpdateWallVisibility();
         }
+
+        #region View tools
+
+        /// <summary>
+        /// Applies the gesture the view toolbar selected: pick an agent, slide the view, turn it or
+        /// zoom it. A drag that starts over the HUD is ignored so a panel never moves the camera.
+        /// </summary>
+        private void HandleToolInput()
+        {
+            if (mainCamera == null) return;
+
+            if (Input.GetKeyDown(KeyCode.Mouse0))
+            {
+                _toolDragging = !IsPointerOverHud();
+                _toolDragStart = Input.mousePosition;
+                _toolDragLast = _toolDragStart;
+                _toolDragMoved = false;
+            }
+
+            if (!_toolDragging)
+                return;
+
+            Vector2 mouse = Input.mousePosition;
+            Vector2 delta = mouse - _toolDragLast;
+            _toolDragLast = mouse;
+
+            if (!_toolDragMoved && (mouse - _toolDragStart).magnitude > DragThresholdPixels)
+                _toolDragMoved = true;
+
+            if (_toolDragMoved)
+            {
+                switch (activeTool)
+                {
+                    case CameraTool.Move:
+                        PanBy(delta);
+                        break;
+                    case CameraTool.Rotate:
+                        RotateBy(delta);
+                        break;
+                    case CameraTool.Zoom:
+                        ZoomByDrag(-delta.y);
+                        break;
+                }
+            }
+
+            if (Input.GetKeyUp(KeyCode.Mouse0))
+            {
+                _toolDragging = false;
+
+                // A click that never became a drag means "pick what is under the cursor".
+                if (!_toolDragMoved && activeTool == CameraTool.Select)
+                    PickAgentUnderCursor();
+            }
+        }
+
+        /// <summary>
+        /// Slides the view. Only the free camera owns its position: while an agent is followed the
+        /// camera belongs to it, and the user releases it from the agent bar instead.
+        /// </summary>
+        private void PanBy(Vector2 screenDelta)
+        {
+            if (_currentFollowTarget != null) return;
+            if (_currentModeEnum != CameraMode.Free) return;
+
+            Transform camera = mainCamera.transform;
+            float scale = moveSpeed * Time.unscaledDeltaTime * 0.35f;
+            Vector3 shift = (-camera.right * screenDelta.x - camera.up * screenDelta.y) * scale;
+
+            _targetPosition = _targetPosition + shift;
+        }
+
+        /// <summary>Turns the view: free camera looks around, a followed agent is circled.</summary>
+        private void RotateBy(Vector2 screenDelta)
+        {
+            float speed = rotateSpeed * Time.unscaledDeltaTime * 0.6f;
+            _currentRotationY += screenDelta.x * speed;
+            _currentRotationX -= screenDelta.y * speed;
+
+            if (_currentFollowTarget != null)
+            {
+                _currentRotationX = Mathf.Clamp(_currentRotationX, 10f, 80f);
+            }
+            else
+            {
+                _currentRotationX = Mathf.Clamp(_currentRotationX, -90f, 90f);
+                _targetRotation = Quaternion.Euler(_currentRotationX, _currentRotationY, 0f);
+            }
+        }
+
+        /// <summary>Pulls the camera closer or pushes it away, without touching the wheel path.</summary>
+        private void ZoomByDrag(float amount)
+        {
+            float distance = amount * zoomSpeed * Time.unscaledDeltaTime * 0.35f;
+            if (distance == 0f) return;
+
+            if (_currentFollowTarget != null)
+            {
+                PendingZoom -= distance;
+                return;
+            }
+
+            _targetPosition += mainCamera.transform.forward * distance;
+        }
+
+        /// <summary>Focuses the agent under the cursor — what the select tool does on a click.</summary>
+        private void PickAgentUnderCursor()
+        {
+            if (Camera.main == null) return;
+
+            Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
+            if (!Physics.Raycast(ray, out RaycastHit hit, 500f, ~0, QueryTriggerInteraction.Ignore))
+                return;
+
+            Robot robot = hit.collider.GetComponentInParent<Robot>();
+            if (robot != null)
+            {
+                SetFollowTarget(robot.RobotTransform);
+                return;
+            }
+
+            HumanAgent human = hit.collider.GetComponentInParent<HumanAgent>();
+            if (human != null)
+                SetFollowTarget(human.transform);
+        }
+
+        /// <summary>True while the pointer is over a UI Toolkit panel — the HUD must not drive the camera.</summary>
+        private static bool IsPointerOverHud()
+        {
+            var eventSystem = UnityEngine.EventSystems.EventSystem.current;
+            return eventSystem != null && eventSystem.IsPointerOverGameObject();
+        }
+
+        #endregion
 
         private void UpdateWallVisibility()
         {
@@ -235,6 +414,16 @@ namespace RobotSNAP.CameraControl
                 Debug.LogWarning($"Mode {mode} not found.");
                 return;
             }
+
+            // Hand the current pose over to the next mode. A free camera works from TargetPosition, so
+            // without this the view jumps back to wherever the last free view was instead of carrying on
+            // from here — the incoherence between the follow modes and the free one.
+            if (mainCamera != null)
+            {
+                _targetPosition = mainCamera.transform.position;
+                _targetRotation = mainCamera.transform.rotation;
+            }
+
             if (_currentMode != null) _currentMode.Exit(this);
             _currentModeEnum = mode;
             _currentMode = entry.ModeInstance;
@@ -429,6 +618,62 @@ namespace RobotSNAP.CameraControl
             _currentRotationX = 25f;
             OnFollowTargetChanged?.Invoke(target);
             Debug.Log($"[CameraController] Following target: {target.name}");
+        }
+
+        /// <summary>
+        /// Hands the camera to that agent and looks at it right away — what the Focus button and the agent
+        /// panel do. Following keeps the position, this one re-frames the view on the agent.
+        /// </summary>
+        public void FocusAgent(Transform target)
+        {
+            if (target == null) return;
+
+            SetFollowTarget(target);
+            SetCameraMode(CameraMode.Orbit);
+        }
+
+        /// <summary>
+        /// Releases the camera: it keeps its position and becomes free again. A scenario that spawns a
+        /// new robot will not grab the focus back, the user asked for no target.
+        /// </summary>
+        public void ClearFollowTarget()
+        {
+            if (_currentFollowTarget == null) return;
+
+            _currentFollowTarget = null;
+            _currentFollowIndex = -1;
+            _defaultFocusApplied = true;
+
+            // Without an agent, a view that needs one has nothing left to look at, so every mode
+            // falls back to the free camera rather than staying attached to a target that is gone.
+            if (_currentModeEnum != CameraMode.Free)
+                SetCameraMode(CameraMode.Free);
+
+            OnFollowTargetChanged?.Invoke(null);
+        }
+
+        /// <summary>
+        /// Binds or releases the camera on the current selection without dropping the selection:
+        /// turning the follow off hands the camera back to the free view, the agent stays picked in
+        /// the bar and in the panel. Every "Follow" button goes through here, so they cannot drift
+        /// apart.
+        /// </summary>
+        /// <returns>True when the camera ends up bound to the selection.</returns>
+        public bool ToggleFollow()
+        {
+            if (_currentFollowTarget == null) return false;
+
+            SetCameraMode(IsFollowingTarget ? CameraMode.Free : CameraMode.Orbit);
+            return IsFollowingTarget;
+        }
+
+        /// <summary>Selects what the left mouse button does. Fires only on an actual change.</summary>
+        public void SetTool(CameraTool tool)
+        {
+            if (activeTool == tool) return;
+
+            activeTool = tool;
+            OnToolChanged?.Invoke(tool);
         }
         
         public void CycleFollowTarget(int direction)

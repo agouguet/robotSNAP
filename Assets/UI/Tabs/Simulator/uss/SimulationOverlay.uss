@@ -1,280 +1,748 @@
+/* ---------------------------------------------------------------
+   Simulation HUD
+   The camera view fills the column; the agent panel is a sibling
+   column on the right, the status strip closes the bottom edge.
+   --------------------------------------------------------------- */
+
 .simulation-overlay {
-    padding: 8px;
-    position: relative;
-    margin: 8px;
-    background-color: var(--panel-bg);
-    border-width: 1px;
-    border-style: solid;
-    border-color: var(--accent-glow);
-    border-radius: 12px;
-    transition: border-color 0.2s;
+    flex-grow: 1;
+    flex-direction: column;
+    min-height: 0;
 }
 
-.simulation-overlay:hover {
-    border-color: var(--accent-soft);
+.simulation-body {
+    flex-grow: 1;
+    flex-direction: row;
+    min-height: 0;
+}
+
+.viewport-column {
+    flex-grow: 1;
+    min-width: 0;
+    position: relative;
+}
+
+.camera-container {
+    flex-grow: 1;
+    border-radius: 12px;
+    overflow: hidden;
     background-color: var(--bg-secondary);
 }
 
 .camera-overlay {
-    background-color: rgba(0, 0, 0, 0.6);
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     justify-content: center;
     align-items: center;
 }
 
-.full-screen-button {
-    width: 64px;
-    height: 64px;
-    background-size: contain;
-    background-color: var(--bg-secondary);
-    -unity-background-image-tint-color: var(--icon-tint);
-    border-radius: 8px;
-    border-width: 0;
-    right: 30px;
-    bottom: 30px;
+.camera-overlay.is-hidden {
+    display: none;
 }
 
+.paused-badge {
+    color: var(--text-primary);
+    font-size: 28px;
+    -unity-font-style: bold;
+    background-color: var(--panel-bg);
+    padding: 10px 22px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: var(--border-color);
+}
+
+/* Every floating piece of the HUD lives in this layer. It ignores the
+   mouse itself so the camera keeps receiving drags between the widgets. */
+.overlay-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.is-hidden {
+    display: none;
+}
+
+/* --------------------------- camera bar --------------------------- */
+
+.camera-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 52px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 14px;
+    padding-right: 14px;
+    background-color: var(--panel-bg);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--border-color);
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+}
+
+.camera-bar-caption {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-right: 10px;
+}
+
+.camera-bar-spacer {
+    flex-grow: 1;
+}
+
+.camera-action {
+    height: 32px;
+    min-width: 78px;
+    margin-left: 8px;
+    padding-left: 12px;
+    padding-right: 12px;
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 16px;
+    background-color: var(--button-bg);
+    color: var(--text-primary);
+    font-size: 12px;
+    -unity-text-align: middle-center;
+}
+
+.camera-action:hover {
+    background-color: var(--button-hover);
+}
+
+.camera-action.is-active {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: rgb(255, 255, 255);
+}
+
+.camera-action:disabled {
+    opacity: 0.45;
+}
+
+/* ------------------------ agent selector -------------------------- */
+
+.agent-selector {
+    position: relative;
+    margin-right: 6px;
+}
+
+.agent-selector-button {
+    flex-direction: row;
+    align-items: center;
+    height: 32px;
+    min-width: 220px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-width: 1px;
+    border-color: var(--accent);
+    border-radius: 16px;
+    background-color: var(--accent-glow);
+}
+
+.agent-selector-button:hover {
+    background-color: var(--accent-glow);
+    border-color: var(--accent-soft);
+}
+
+.selector-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    background-size: contain;
+}
+
+.selector-label {
+    flex-grow: 1;
+    color: var(--text-primary);
+    font-size: 13px;
+    overflow: hidden;
+    white-space: nowrap;
+    -unity-text-overflow-position: end;
+}
+
+.selector-caret {
+    color: var(--accent);
+    font-size: 11px;
+    margin-left: 8px;
+}
+
+.agent-selector-popup {
+    position: absolute;
+    top: 38px;
+    left: 0;
+    width: 300px;
+    max-height: 340px;
+    padding: 8px;
+    background-color: var(--dropdown-bg);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 10px;
+}
+
+.agent-selector-scroll {
+    max-height: 260px;
+    flex-grow: 0;
+}
+
+.agent-option-group {
+    color: var(--text-secondary-muted);
+    font-size: 10px;
+    -unity-font-style: bold;
+    letter-spacing: 0.8px;
+    margin-top: 10px;
+    margin-bottom: 4px;
+    margin-left: 6px;
+}
+
+.agent-option {
+    height: 28px;
+    margin-bottom: 2px;
+    padding-left: 10px;
+    border-width: 0;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--dropdown-text);
+    font-size: 12px;
+    -unity-text-align: middle-left;
+}
+
+.agent-option:hover {
+    background-color: var(--button-bg);
+}
+
+.agent-option.is-selected {
+    background-color: var(--accent-glow);
+    color: var(--accent);
+    -unity-font-style: bold;
+}
+
+/* --------------------------- search field ------------------------- */
+
+.agent-search-row {
+    flex-direction: row;
+    align-items: center;
+    height: 30px;
+    padding-left: 8px;
+    padding-right: 6px;
+    margin-bottom: 6px;
+    background-color: var(--button-bg);
+    border-radius: 8px;
+}
+
+.search-glyph {
+    color: var(--text-secondary-muted);
+    font-size: 13px;
+    margin-right: 6px;
+}
+
+.agent-search-field {
+    flex-grow: 1;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.agent-search-field .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    color: var(--text-primary);
+    font-size: 12px;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* --------------------------- view toolbar ------------------------- */
+
+.view-toolbar {
+    position: absolute;
+    top: 68px;
+    left: 14px;
+    flex-direction: column;
+    padding: 6px;
+    background-color: var(--panel-bg);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 12px;
+}
+
+.view-tool {
+    width: 32px;
+    height: 32px;
+    margin: 2px;
+    padding: 0;
+    border-width: 0;
+    border-radius: 8px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--text-secondary);
+    font-size: 14px;
+    -unity-text-align: middle-center;
+}
+
+.view-tool:hover {
+    background-color: var(--button-bg);
+    color: var(--text-primary);
+}
+
+.view-tool.is-active {
+    background-color: var(--accent);
+    color: rgb(255, 255, 255);
+}
+
+.view-tool-divider {
+    height: 1px;
+    margin: 6px 4px;
+    background-color: var(--border-color);
+}
+
+/* ---------------------------- minimap ----------------------------- */
+
+.minimap-panel {
+    position: absolute;
+    left: 14px;
+    bottom: 14px;
+    width: 252px;
+    padding: 8px;
+    background-color: var(--panel-bg);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 12px;
+}
+
+.minimap-title {
+    color: var(--text-secondary);
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+    margin-left: 2px;
+}
+
+.minimap-map {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    background-color: rgb(12, 18, 30);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.minimap-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* An occupancy grid is a black-and-white picture, so it is tinted into the palette of the app
+   instead of flashing pure white inside a dark panel. The rendered top view keeps its own colours,
+   which is why the tint only applies to the grid. */
+.minimap-image.is-grid {
+    -unity-background-image-tint-color: rgb(163, 184, 209);
+}
+
+.minimap-dots {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.minimap-dot {
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    margin-left: -5.5px;
+    margin-top: -5.5px;
+    border-radius: 6px;
+    background-color: var(--accent);
+    border-width: 2px;
+    border-color: rgba(15, 23, 42, 0.75);
+}
+
+.minimap-dot.human {
+    background-color: rgb(245, 158, 11);
+}
+
+.minimap-dot.robot {
+    background-color: rgb(37, 99, 235);
+}
+
+.minimap-dot.is-focused {
+    width: 15px;
+    height: 15px;
+    margin-left: -7.5px;
+    margin-top: -7.5px;
+    border-radius: 8px;
+    border-width: 3px;
+    border-color: rgb(255, 255, 255);
+}
+
+/* --------------------------- agent panel -------------------------- */
+
+.agent-panel {
+    width: 320px;
+    flex-shrink: 0;
+    flex-direction: row-reverse;
+    margin-left: 12px;
+    background-color: var(--panel-bg);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.agent-panel.is-collapsed {
+    width: 34px;
+}
+
+.agent-panel.is-collapsed .agent-panel-content {
+    display: none;
+}
+
+.agent-panel-collapse {
+    width: 30px;
+    height: 30px;
+    margin: 8px 2px 0 2px;
+    padding: 0;
+    border-width: 0;
+    border-radius: 8px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--text-secondary);
+    font-size: 16px;
+    -unity-text-align: middle-center;
+}
+
+.agent-panel-collapse:hover {
+    background-color: var(--button-bg);
+    color: var(--text-primary);
+}
+
+.agent-panel-content {
+    flex-grow: 1;
+    padding: 12px 12px 12px 4px;
+    min-width: 0;
+}
+
+.agent-panel-title {
+    color: var(--text-primary);
+    font-size: 13px;
+    -unity-font-style: bold;
+    margin-bottom: 8px;
+}
+
+.selected-agent-card {
+    flex-direction: row;
+    align-items: center;
+    padding: 10px;
+    background-color: var(--card-bg);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+.selected-agent-icon {
+    width: 34px;
+    height: 34px;
+    margin-right: 10px;
+    border-radius: 8px;
+    background-color: var(--accent-glow);
+    background-size: contain;
+}
+
+.selected-agent-heading {
+    flex-grow: 1;
+}
+
+.selected-agent-name {
+    color: var(--text-primary);
+    font-size: 15px;
+    -unity-font-style: bold;
+}
+
+.selected-agent-badge {
+    color: var(--accent);
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.agent-info {
+    flex-direction: column;
+    margin-bottom: 10px;
+}
+
+.agent-info-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    height: 22px;
+}
+
+.agent-info-label {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.agent-info-value {
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.agent-card-actions {
+    flex-direction: row;
+}
+
+.panel-action {
+    flex-grow: 1;
+    height: 30px;
+    margin-right: 6px;
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 8px;
+    background-color: var(--button-bg);
+    color: var(--text-primary);
+    font-size: 12px;
+    -unity-text-align: middle-center;
+}
+
+.panel-action:hover {
+    background-color: var(--button-hover);
+}
+
+.panel-action.primary-action {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: rgb(255, 255, 255);
+}
+
+.panel-action:disabled {
+    opacity: 0.45;
+}
+
+.panel-divider {
+    height: 1px;
+    background-color: var(--border-color);
+    margin-top: 14px;
+    margin-bottom: 14px;
+}
+
+.agent-list {
+    flex-direction: column;
+}
+
+.agent-row {
+    flex-direction: row;
+    align-items: center;
+    height: 34px;
+    padding-left: 8px;
+    padding-right: 6px;
+    margin-bottom: 2px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+}
+
+.agent-row:hover {
+    background-color: var(--button-bg);
+}
+
+.agent-row.is-selected {
+    background-color: var(--accent-glow);
+    border-color: var(--accent);
+}
+
+.agent-row-icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    background-size: contain;
+}
+
+.agent-row-icon.human {
+    background-color: rgba(245, 158, 11, 0.18);
+    border-radius: 9px;
+}
+
+.agent-row-icon.robot {
+    background-color: var(--accent-glow);
+    border-radius: 9px;
+}
+
+.agent-row-name {
+    flex-grow: 1;
+    color: var(--text-primary);
+    font-size: 12px;
+    overflow: hidden;
+    white-space: nowrap;
+    -unity-text-overflow-position: end;
+}
+
+.agent-row-detail {
+    color: var(--text-secondary-muted);
+    font-size: 11px;
+    margin-right: 8px;
+}
+
+.agent-row-action {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-width: 0;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--text-secondary);
+    font-size: 12px;
+    -unity-text-align: middle-center;
+}
+
+.agent-row-action:hover {
+    background-color: var(--accent-glow);
+    color: var(--accent);
+}
+
+/* --------------------------- status bar --------------------------- */
+
+.status-bar {
+    flex-direction: row;
+    align-items: center;
+    height: 46px;
+    flex-shrink: 0;
+    margin-top: 12px;
+    padding-left: 16px;
+    padding-right: 16px;
+    background-color: var(--panel-bg);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 10px;
+}
+
+/* Small pictograms in front of each figure. They inherit the muted colour of the row so the bar
+   stays a quiet strip under the view. */
+.status-icon {
+    width: 15px;
+    height: 15px;
+    margin-right: 8px;
+    background-size: contain;
+    opacity: 0.75;
+}
+
+.status-item {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.status-state {
+    color: var(--text-primary);
+}
+
+.status-item.is-online {
+    color: var(--accent);
+}
+
+.status-item.is-offline {
+    color: var(--text-secondary-muted);
+}
+
+.status-divider {
+    width: 1px;
+    height: 16px;
+    margin-left: 14px;
+    margin-right: 14px;
+    background-color: var(--border-color);
+}
+
+.status-spacer {
+    flex-grow: 1;
+}
+
+.status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 5px;
+    margin-right: 8px;
+    background-color: var(--accent);
+}
+
+.status-dot.is-idle {
+    background-color: var(--text-secondary-muted);
+}
+
+.status-dot.is-running {
+    background-color: rgb(34, 197, 94);
+}
+
+.status-dot.is-paused {
+    background-color: rgb(245, 158, 11);
+}
+
+/* --------------------- view dropdown (top right) ------------------ */
+
 .view-dropdown-container {
-    top: 32px;
-    left: 32px;
-    position: absolute; 
-    pointer-events: auto;
+    position: relative;
+    margin-left: 8px;
 }
 
 .view-button {
+    height: 32px;
+    min-width: 78px;
+    padding-left: 12px;
+    padding-right: 12px;
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 16px;
     background-color: var(--button-bg);
-    width: 64px;
-    height: 64px;
-    margin: 0;
-    border-radius: 8px;
     color: var(--text-primary);
-    font-size: 20px;
-    border-width: 0;
+    font-size: 12px;
+    -unity-text-align: middle-center;
 }
 
-.view-button.active {
-    background-color: var(--accent);
-    color: white;
+.view-button:hover {
+    background-color: var(--button-hover);
 }
 
 .view-menu {
     position: absolute;
-    top: 100%;
-    left: 0;
-    margin-top: 1px;
-    background-color: var(--bg-secondary);
-    border-radius: 8px;
+    top: 38px;
+    right: 0;
+    min-width: 160px;
+    padding: 6px;
+    background-color: var(--dropdown-bg);
     border-width: 1px;
-    border-style: solid;
     border-color: var(--border-color);
-    min-width: 64px;
-    max-width: 64px;
-    z-index: 10;
-    flex-direction: column;
+    border-radius: 10px;
 }
 
 .menu-option {
-    background-color: transparent;
+    height: 28px;
+    margin-bottom: 2px;
     border-width: 0;
-    padding: 8px 12px;
-    color: var(--text-primary);
-    font-size: 14px;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--dropdown-text);
+    font-size: 12px;
+    -unity-text-align: middle-left;
 }
 
 .menu-option:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--button-bg);
 }
 
 .menu-option.disabled-option {
     opacity: 0.4;
-    pointer-events: none;
-    background-color: var(--button-bg);
-    color: var(--text-secondary);
 }
 
-.minimap-container {
-    top: 32px;
-    right: 32px;
-    position: absolute; 
-    pointer-events: auto;
-    width: 256px;
-    height: 256px;
-    background-color: var(--panel-bg);
-    border-radius: 12px;
-    border-width: 4px;
-    border-style: solid;
-    border-color: var(--border-color);
-    overflow: hidden;
-}
-
-.minimap-title {
-    position: absolute;
-    top: 4px;
-    left: 8px;
-    font-size: 10px;
-    color: var(--text-secondary);
-}
-
-/* A full-width strip along the bottom of the camera view. It is the strip that
-   centres the pill, so the pill stays centred whatever the width of its
-   content; the strip itself is transparent to the mouse and only the pill
-   takes the clicks. */
-.agent-focus-container {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 24px;
-    justify-content: center;
-    align-items: center;
-    pointer-events: none;
-}
-
-.agent-focus-bar {
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    height: 56px;
-    padding-left: 14px;
-    padding-right: 14px;
-    background-color: var(--panel-bg);
-    border-radius: 28px;
-    border-width: 1px;
-    border-style: solid;
-    border-color: var(--border-color);
-    pointer-events: auto;
-    transition: border-color 0.2s;
-}
-
-.agent-focus-bar:hover {
-    border-color: var(--accent-soft);
-}
-
-/* Camera lock: filled while the camera follows an agent, muted when the bar
-   only reports that nothing is focused yet. */
-.focus-status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 4px;
-    background-color: var(--accent);
-    margin-right: 12px;
-    flex-shrink: 0;
-}
-
-.focus-status-dot.idle {
-    background-color: var(--text-secondary-muted);
-    opacity: 0.5;
-}
-
-.focus-block {
-    flex-direction: column;
-    justify-content: center;
-    height: 100%;
-    margin-left: 12px;
-    margin-right: 12px;
-}
-
-.block-label {
-    font-size: 10px;
-    letter-spacing: 0.6px;
-    color: var(--text-secondary-muted);
-    margin-bottom: 2px;
-    align-self: flex-start;
+.menu-option.is-active {
+    color: var(--accent-soft);
     -unity-font-style: bold;
-}
-
-.block-value {
-    font-size: 18px;
-    color: var(--text-primary);
-    align-self: flex-start;
-    -unity-font-style: bold;
-}
-
-/* The agent name is the headline of the bar: it may be long, so it is capped
-   and elided instead of stretching the pill off centre. */
-.agent-name {
-    max-width: 180px;
-    white-space: nowrap;
-    overflow: hidden;
-    -unity-text-overflow-position: end;
-}
-
-.agent-progress {
-    color: var(--accent);
-}
-
-.separator-vertical {
-    width: 1px;
-    height: 32px;
-    background-color: var(--border-color);
-    flex-shrink: 0;
-}
-
-.focus-controls {
-    flex-direction: row;
-    align-items: center;
-}
-
-.agent-nav-button {
-    background-color: var(--button-bg);
-    border-width: 0;
-    border-radius: 15px;
-    width: 30px;
-    height: 30px;
-    color: var(--text-secondary);
-    font-size: 12px;
-    padding: 0;
-    margin: 0 4px;
-}
-
-.agent-nav-button:hover {
-    background-color: var(--button-hover);
-    color: var(--text-primary);
-}
-
-.agent-dropdown {
-    background-color: var(--button-bg);
-    border-radius: 15px;
-    color: var(--text-primary);
-    font-size: 13px;
-    padding: 0 0;
-    border-width: 0;
-    min-width: 132px;
-    max-width: 132px;
-    height: 30px;
-    margin: 0 2px;
-}
-
-.agent-dropdown:hover {
-    background-color: var(--button-hover);
-}
-
-.agent-dropdown:disabled {
-    opacity: 0.5;
-}
-
-.agent-dropdown .unity-base-field__input {
-    background-color: rgba(0, 0, 0, 0);
-    border-width: 0;
-    height: 100%;
-    padding: 0 0;
-}
-
-.agent-dropdown .unity-base-popup-field__arrow {
-    display: none;
-}
-
-.agent-dropdown .unity-base-popup-field__text {
-    height: 100%;
-    min-width: 0;
-    color: var(--text-primary);
-    -unity-text-align: middle-center;
-    -unity-text-overflow-position: end;
-}
-
-.agent-dropdown .unity-base-text-field__input {
-    color: var(--text-primary);
-    -unity-text-align: middle-center;
-}
-
-.agent-dropdown .unity-popup-field__arrow {
-    color: var(--text-secondary);
 }

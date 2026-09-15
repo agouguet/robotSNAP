@@ -1,10 +1,15 @@
+using RobotSNAP;
+using RobotSNAP.CameraControl;
+using RobotSNAP.Core;
+using RobotSNAP.Core.Scenario;
 using UnityEngine;
 using UnityEngine.UIElements;
-using RobotSNAP;
-using RobotSNAP.Core;
-using RobotSNAP.CameraControl;
-using RobotSNAP.Core.Scenario;
 
+/// <summary>
+/// Wires the simulation tab: the play controls of the top bar, the minimap camera, and the widgets
+/// of the HUD. The camera bar itself belongs to <see cref="UICameraController"/>, and the widgets
+/// take the camera controller as their single source of truth for the selection.
+/// </summary>
 public class SimulationTabController : MonoBehaviour
 {
     [SerializeField] private UIDocument uiDocument;
@@ -17,44 +22,43 @@ public class SimulationTabController : MonoBehaviour
     [SerializeField] private RenderTexture minimapRenderTexture;
 
     private Supervisor _supervisor;
-    private bool _isInitialized = false;
+    private ScenarioLoader _scenarioLoader;
+    private bool _isInitialized;
+    private bool _subscribed;
 
     private VisualElement _root;
-    private Button _viewButton;
-    private VisualElement _viewMenu;
-    private Button _fullscreenButton;
     private Button _loadScenarioButton;
     private Button _startStopButton;
     private Button _pauseResumeButton;
     private VisualElement _cameraOverlay;
 
-    private MinimapRenderer _minimapRenderer;
-    private Transform _minimapTarget;
+    private SimulationMinimap _minimap;
+    private SimulationAgentPanel _agentPanel;
+    private SimulationViewToolbar _viewToolbar;
+    private SimulationStatusBar _statusBar;
 
+    private Transform _minimapTarget;
     private SimulationState _currentState = SimulationState.Idle;
 
     private void OnEnable()
     {
         MainViewController.OnViewLoaded += OnViewLoaded;
-        if (uiDocument != null && uiDocument.rootVisualElement.Q<Button>("ViewButton") != null)
-            TryInitialize();
+        TryInitialize();
+        Subscribe();
     }
 
     private void OnDisable()
     {
         MainViewController.OnViewLoaded -= OnViewLoaded;
-        EventBus.Instance.Unsubscribe<SimulationStateChangedEvent>(OnStateChanged);
-
-        if (_loadScenarioButton != null)
-            _loadScenarioButton.clicked -= OnLoadScenarioClicked;
-        if (cameraController != null)
-            cameraController.OnFollowTargetChanged -= OnFollowTargetChanged;
+        Unsubscribe();
     }
 
     private void OnViewLoaded(string viewName)
     {
-        if (viewName == "Simulator")
-            TryInitialize();
+        if (viewName != "Simulator") return;
+
+        TryInitialize();
+        Subscribe();
     }
 
     private void TryInitialize()
@@ -67,217 +71,179 @@ public class SimulationTabController : MonoBehaviour
         if (uiDocument == null) return;
 
         _root = uiDocument.rootVisualElement;
-        _viewButton = _root.Q<Button>("ViewButton");
-        _viewMenu = _root.Q<VisualElement>("ViewMenu");
-        _fullscreenButton = _root.Q<Button>("FullScreenButton");
+        if (_root == null) return;
+
         _loadScenarioButton = _root.Q<Button>("LoadScenarioButton");
         _startStopButton = _root.Q<Button>("StartStopButton");
         _pauseResumeButton = _root.Q<Button>("PauseResumeButton");
         _cameraOverlay = _root.Q<VisualElement>("CameraOverlay");
 
-        if (_viewButton == null || _viewMenu == null ||
-            _startStopButton == null || _pauseResumeButton == null)
+        if (_startStopButton == null || _pauseResumeButton == null)
         {
-            Debug.LogWarning("SimulationTabController: certains éléments UI sont manquants.");
+            Debug.LogWarning("[SimulationTabController] The simulation view is incomplete; it stays inert.");
             return;
         }
 
         _supervisor = Supervisor.Instance;
-        if (_supervisor == null)
-        {
-            Debug.LogError("Supervisor introuvable.");
-            return;
-        }
 
         if (scenarioManager == null)
             scenarioManager = FindAnyObjectByType<ScenarioManager>();
         if (scenarioManager == null)
-        {
-            Debug.LogError("ScenarioManager introuvable.");
-            return;
-        }
+            Debug.LogError("[SimulationTabController] ScenarioManager missing.");
 
         if (scenarioSelectionController == null)
             scenarioSelectionController = GetComponent<ScenarioSelectionController>();
         if (scenarioSelectionController == null)
             scenarioSelectionController = FindAnyObjectByType<ScenarioSelectionController>();
-        
+
         if (cameraController == null)
             cameraController = FindAnyObjectByType<CameraController>();
         if (cameraController == null)
-            Debug.LogWarning("CameraController non trouvé dans la scène.");
+            Debug.LogWarning("[SimulationTabController] CameraController missing.");
+
+        _scenarioLoader = FindAnyObjectByType<ScenarioLoader>();
+
+        BuildHud();
+        WirePlayControls();
+        UpdateUI();
 
         _isInitialized = true;
-        Initialize();
         MainViewController.OnViewLoaded -= OnViewLoaded;
     }
 
-    private void Initialize()
+    /// <summary>
+    /// Builds the widgets that own the HUD panels. They are plain classes reading the same visual
+    /// tree, which keeps every panel independent of the others.
+    /// </summary>
+    private void BuildHud()
     {
-        // === Menu de sélection de vue ===
-        _viewButton.clicked += () =>
-        {
-            _viewMenu.style.display = (_viewMenu.style.display == DisplayStyle.Flex) ? DisplayStyle.None : DisplayStyle.Flex;
-        };
-
-        foreach (var option in _viewMenu.Children())
-        {
-            if (option is Button btn)
-            {
-                btn.clicked += () =>
-                {
-                    _viewButton.text = btn.text;
-                    _viewMenu.style.display = DisplayStyle.None;
-                    OnViewChanged(btn.text);
-                };
-            }
-        }
-
-        _root.RegisterCallback<ClickEvent>(evt =>
-        {
-            if (_viewMenu.style.display != DisplayStyle.Flex) return;
-            VisualElement target = evt.target as VisualElement;
-            if (target != _viewButton && !_viewMenu.Contains(target))
-                _viewMenu.style.display = DisplayStyle.None;
-        });
-
-        // === Plein écran ===
-        if (_fullscreenButton != null)
-            _fullscreenButton.clicked += ToggleFullscreen;
-
-        // === Load Scenario ===
-        _loadScenarioButton.clicked += OnLoadScenarioClicked;
-
-        // === Start / Stop ===
-        _startStopButton.clicked += OnStartStopClicked;
-
-        // === Pause / Resume ===
-        _pauseResumeButton.clicked += OnPauseResumeClicked;
-
-        SetupMinimap();
-
-        // === Abonnement aux événements de changement de cible ===
         if (cameraController != null)
         {
-            cameraController.OnFollowTargetChanged += OnFollowTargetChanged;
-            // Initialiser la cible avec la valeur actuelle
-            if (cameraController.CurrentFollowTarget != null)
-                _minimapTarget = cameraController.CurrentFollowTarget;
+            _minimap = new SimulationMinimap(_root, minimapCamera);
+            _agentPanel = new SimulationAgentPanel(_root, cameraController);
+            _viewToolbar = new SimulationViewToolbar(_root, cameraController);
         }
 
-        // === Abonnement aux événements d'état ===
-        EventBus.Instance.Subscribe<SimulationStateChangedEvent>(OnStateChanged);
+        _statusBar = new SimulationStatusBar(_root);
 
-        // === État initial ===
-        UpdateUI();
-    }
-
-    private void SetupMinimap()
-    {
-        var minimapContainer = _root.Q<VisualElement>("MinimapContainer");
-        if (minimapContainer == null)
-        {
-            Debug.LogWarning("MinimapContainer non trouvé.");
-            return;
-        }
-
-        // Cacher l'ancien élément (MinimapImage)
-        var minimapImage = minimapContainer.Q<VisualElement>("MinimapImage");
-        if (minimapImage != null)
-            minimapImage.style.display = DisplayStyle.None;
-
-        // Créer le renderer ImmediateModeElement
-        _minimapRenderer = new MinimapRenderer
-        {
-            minimapRT = minimapRenderTexture,
-            style =
-            {
-                position = Position.Absolute,
-                top = 8,
-                left = 8,
-                right = 8,
-                bottom = 8
-            }
-        };
-        // _minimapRenderer.AddToClassList("minimap-image");
-        // minimapContainer.Add(_minimapRenderer);
-
-        // Configurer la caméra de minicarte
-        if (minimapCamera != null)
+        if (minimapCamera != null && minimapRenderTexture != null)
         {
             minimapCamera.targetTexture = minimapRenderTexture;
             minimapCamera.orthographic = true;
-            minimapCamera.orthographicSize = 15f; // Ajustez
-            minimapCamera.transform.rotation = Quaternion.Euler(90, 180, 0);
+            minimapCamera.orthographicSize = 15f;
+            minimapCamera.transform.rotation = Quaternion.Euler(90f, 180f, 0f);
         }
+    }
+
+    private void WirePlayControls()
+    {
+        if (_loadScenarioButton != null)
+            _loadScenarioButton.clicked += OnLoadScenarioClicked;
+
+        _startStopButton.clicked += OnStartStopClicked;
+        _pauseResumeButton.clicked += OnPauseResumeClicked;
+    }
+
+    private void Subscribe()
+    {
+        if (!_isInitialized || _subscribed) return;
+        _subscribed = true;
+
+        EventBus.Instance.Subscribe<SimulationStateChangedEvent>(OnStateChanged);
+
+        if (cameraController != null)
+        {
+            cameraController.OnFollowTargetChanged += OnFollowTargetChanged;
+            _minimapTarget = cameraController.GetCurrentFollowTarget();
+            _minimap?.SetFocus(_minimapTarget);
+        }
+
+        if (scenarioManager != null)
+            scenarioManager.OnScenarioApplied += OnScenarioApplied;
+    }
+
+    private void Unsubscribe()
+    {
+        if (!_subscribed) return;
+        _subscribed = false;
+
+        EventBus.Instance.Unsubscribe<SimulationStateChangedEvent>(OnStateChanged);
+
+        if (cameraController != null)
+            cameraController.OnFollowTargetChanged -= OnFollowTargetChanged;
+
+        if (scenarioManager != null)
+            scenarioManager.OnScenarioApplied -= OnScenarioApplied;
     }
 
     private void Update()
     {
         UpdateMinimap();
+
+        _minimap?.Tick();
+        _statusBar?.Tick();
     }
 
+    // ==========================================
+    //          MINIMAP
+    // ==========================================
+
+    /// <summary>
+    /// The render-texture minimap follows the agent, so the view stays on the crowd; the occupancy
+    /// map, when the scenario has one, shows the whole map instead.
+    /// </summary>
     private void UpdateMinimap()
     {
-        if (minimapCamera == null || _minimapRenderer == null) return;
+        if (minimapCamera == null) return;
 
-        Vector3 targetPos;
+        Vector3 position;
         if (_minimapTarget != null)
         {
-            // Suivre la cible
-            targetPos = _minimapTarget.position;
-            targetPos.y = 30f; // Hauteur fixe de la caméra de minicarte
+            position = _minimapTarget.position;
         }
         else
         {
-            // Fallback : suivre la caméra principale (projetée au sol)
-            Camera mainCam = Camera.main;
-            if (mainCam != null)
-            {
-                targetPos = mainCam.transform.position;
-                targetPos.y = 30f;
-            }
-            else
-            {
-                // Position par défaut (centre de la scène)
-                targetPos = new Vector3(0, 30, 0);
-            }
+            Camera view = Camera.main;
+            position = view != null ? view.transform.position : Vector3.zero;
         }
 
-        minimapCamera.transform.position = targetPos;
+        position.y = 30f;
+        minimapCamera.transform.position = position;
     }
+
+    private void OnScenarioApplied(ScenarioData scenario)
+    {
+        _minimap?.SetFocus(_minimapTarget);
+
+        if (_minimap == null) return;
+
+        if (_scenarioLoader == null)
+            _scenarioLoader = FindAnyObjectByType<ScenarioLoader>();
+
+        MapAsset asset = _scenarioLoader != null ? _scenarioLoader.LoadMap(scenario?.Info?.MapImage) : null;
+        bool hasGrid = asset != null && asset.Kind == MapAssetKind.Image && asset.Texture != null;
+
+        // A prefab or an additive scene has no occupancy image: the minimap then shows the top view
+        // of the running camera, which is the only map available.
+        _minimap.SetEnvironment(hasGrid ? asset.Texture : null, hasGrid ? asset.Bounds : default);
+    }
+
+    private void OnFollowTargetChanged(Transform newTarget)
+    {
+        _minimapTarget = newTarget;
+        _minimap?.SetFocus(newTarget);
+    }
+
+    // ==========================================
+    //          PLAY CONTROLS
+    // ==========================================
 
     private void OnLoadScenarioClicked()
     {
         if (scenarioSelectionController != null)
             scenarioSelectionController.OpenPopup();
         else
-            Debug.LogWarning("[SimulationTabController] ScenarioSelectionController non trouvé.");
-    }
-
-    private void OnFollowTargetChanged(Transform newTarget)
-    {
-        _minimapTarget = newTarget;
-        Debug.Log($"[Minimap] Suivi de : {newTarget?.name ?? "aucune cible"}");
-    }
-
-    private void OnStateChanged(SimulationStateChangedEvent evt)
-    {
-        _currentState = evt.NewState;
-        UpdateUI();
-    }
-
-    private void OnViewChanged(string viewName)
-    {
-        Camera cam = GetComponent<Camera>();
-        if (cam != null)
-        {
-            switch (viewName)
-            {
-                case "3D": cam.orthographic = false; break;
-                case "2D": cam.orthographic = true; break;
-            }
-        }
+            Debug.LogWarning("[SimulationTabController] ScenarioSelectionController missing.");
     }
 
     private void OnStartStopClicked()
@@ -303,16 +269,16 @@ public class SimulationTabController : MonoBehaviour
             EventBus.Instance.Publish(new ResumeSimulationCommand());
     }
 
-    private void ToggleFullscreen()
+    private void OnStateChanged(SimulationStateChangedEvent evt)
     {
-        Screen.fullScreen = !Screen.fullScreen;
-        Debug.Log($"[SimulationTabController] Fullscreen: {Screen.fullScreen}");
+        _currentState = evt.NewState;
+        UpdateUI();
     }
 
     private void UpdateUI()
     {
-        var startIcon = _startStopButton?.Q<VisualElement>("StartStopIcon");
-        var startLabel = _startStopButton?.Q<Label>("StartStopLabel");
+        Label startLabel = _startStopButton?.Q<Label>("StartStopLabel");
+        VisualElement startIcon = _startStopButton?.Q<VisualElement>("StartStopIcon");
 
         switch (_currentState)
         {
@@ -338,27 +304,27 @@ public class SimulationTabController : MonoBehaviour
                 break;
         }
 
-        bool isRunningOrPaused = (_currentState == SimulationState.Running || _currentState == SimulationState.Paused);
-        _startStopButton?.EnableInClassList("running", isRunningOrPaused);
+        bool isRunningOrPaused = _currentState is SimulationState.Running or SimulationState.Paused;
+        _startStopButton.EnableInClassList("running", isRunningOrPaused);
 
-        if (_cameraOverlay != null)
-            _cameraOverlay.style.display = (_currentState == SimulationState.Paused) ? DisplayStyle.Flex : DisplayStyle.None;
+        _cameraOverlay?.EnableInClassList("is-hidden", _currentState != SimulationState.Paused);
     }
 
     private void SetPauseResumeText(string text, string iconName)
     {
-        var label = _pauseResumeButton?.Q<Label>("PauseResumeLabel");
-        var icon = _pauseResumeButton?.Q<VisualElement>("PauseResumeIcon");
+        Label label = _pauseResumeButton?.Q<Label>("PauseResumeLabel");
+        VisualElement icon = _pauseResumeButton?.Q<VisualElement>("PauseResumeIcon");
+
         if (label != null) label.text = text;
         if (icon != null) SetIcon(icon, iconName);
     }
 
     private void SetIcon(VisualElement iconElement, string iconName)
     {
-        Texture2D tex = Resources.Load<Texture2D>($"Icons/{iconName}");
-        if (tex != null)
-            iconElement.style.backgroundImage = new StyleBackground(tex);
+        Texture2D texture = Resources.Load<Texture2D>($"Icons/{iconName}");
+        if (texture != null)
+            iconElement.style.backgroundImage = new StyleBackground(texture);
         else
-            Debug.LogWarning($"[SimulationTabController] Icône non trouvée: Icons/{iconName}");
+            Debug.LogWarning($"[SimulationTabController] Missing icon: Icons/{iconName}");
     }
 }

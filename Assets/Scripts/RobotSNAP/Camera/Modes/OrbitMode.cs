@@ -42,8 +42,16 @@ namespace RobotSNAP.CameraControl
             if (scroll != 0)
             {
                 _currentDistance -= scroll * c.zoomSpeed * Time.deltaTime;
-                _currentDistance = Mathf.Clamp(_currentDistance, c.minDistance, c.maxDistance);
             }
+
+            // The zoom tool drags the same distance the wheel does, so both gestures end up here.
+            if (c.PendingZoom != 0f)
+            {
+                _currentDistance += c.PendingZoom;
+                c.PendingZoom = 0f;
+            }
+
+            _currentDistance = Mathf.Clamp(_currentDistance, c.minDistance, c.maxDistance);
         }
 
         private void UpdateFreeCamera(CameraController c)

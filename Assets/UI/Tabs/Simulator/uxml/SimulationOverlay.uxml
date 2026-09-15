@@ -1,44 +1,117 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <Style src="project://database/Assets/UI/Tabs/Simulator/uss/SimulationOverlay.uss?fileID=7433441132597879392&amp;guid=27c54c89d70da1b40a74fd39beaa1d66&amp;type=3#SimulationOverlay"/>
-    <ui:VisualElement class="simulation-overlay" style="flex-grow: 1;">
-        <ui:VisualElement name="CameraContainer" style="flex-grow: 1; border-radius: 16px; overflow: hidden;">
-            <ui:VisualElement name="CameraOverlay" class="camera-overlay" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; justify-content: center; align-items: center; flex-grow: 1;">
-                <ui:Label text="PAUSED" style="color: white; font-size: 32px; unity-font-style: bold; background-color: rgba(0, 0, 0, 0.7); padding: 12px 24px; border-radius: 8px;"/>
-            </ui:VisualElement>
-        </ui:VisualElement>
-        <ui:VisualElement style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none;">
-            <ui:VisualElement name="ViewDropdownContainer" class="view-dropdown-container">
-                <ui:Button name="ViewButton" text="3D" class="view-button"/>
-                <ui:VisualElement name="ViewMenu" class="view-menu" style="display: none; flex-direction: column;"/>
-            </ui:VisualElement>
-            <ui:VisualElement name="MinimapContainer" class="minimap-container" style="background-image: url(&quot;project://database/Assets/UI/Tabs/Simulator/MinimapRenderTexture.renderTexture?fileID=8400000&amp;guid=ff878838384c9316da30127bffde9d9f&amp;type=2#MinimapRenderTexture&quot;);">
-                <ui:Label class="minimap-title"/>
-            </ui:VisualElement>
-            <!-- <ui:Button name="FullScreenButton" class="full-screen-button" style="position: absolute; pointer-events: auto; background-image: url(&quot;project://database/Assets/Resources/Icons/fullscreen.png?fileID=2800000&amp;guid=573a03db3500544a4a9653eed5db98df&amp;type=3#fullscreen&quot;);"/> -->
-            <ui:VisualElement name="AgentFocusBarContainer" class="agent-focus-container">
-                <ui:VisualElement name="AgentFocusBar" class="agent-focus-bar">
-                    <ui:VisualElement name="FocusStatusDot" class="focus-status-dot idle"/>
-                    <ui:VisualElement class="focus-block">
-                        <ui:Label text="AGENT ID" class="block-label"/>
-                        <ui:Label name="AgentNameLabel" text="No target" class="block-value agent-name"/>
+    <ui:VisualElement class="simulation-overlay">
+        <ui:VisualElement name="SimulationBody" class="simulation-body">
+            <ui:VisualElement name="ViewportColumn" class="viewport-column">
+                <ui:VisualElement name="CameraContainer" class="camera-container">
+                    <ui:VisualElement name="CameraOverlay" class="camera-overlay is-hidden">
+                        <ui:Label text="PAUSED" class="paused-badge"/>
                     </ui:VisualElement>
-                    <ui:VisualElement name="AgentProgressSeparator" class="separator-vertical"/>
-                    <ui:VisualElement name="AgentProgressBlock" class="focus-block">
-                        <ui:Label text="PROGRESS" class="block-label"/>
-                        <ui:Label name="AgentProgressLabel" text="—" class="block-value agent-progress"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="OverlayLayer" class="overlay-layer" picking-mode="Ignore">
+                    <ui:VisualElement name="CameraBar" class="camera-bar">
+                        <ui:Label text="Camera:" class="camera-bar-caption"/>
+                        <ui:VisualElement name="AgentSelector" class="agent-selector">
+                            <ui:Button name="AgentSelectorButton" class="agent-selector-button"
+                                       tooltip="Choose the agent the camera works with">
+                                <ui:Label name="AgentSelectorIcon" class="selector-icon"/>
+                                <ui:Label name="AgentSelectorLabel" text="Free camera" class="selector-label"/>
+                                <ui:Label text="▾" class="selector-caret"/>
+                            </ui:Button>
+                            <ui:VisualElement name="AgentSelectorPopup" class="agent-selector-popup is-hidden">
+                                <ui:VisualElement class="agent-search-row">
+                                    <ui:Label text="⌕" class="search-glyph"/>
+                                    <ui:TextField name="AgentSearchField" placeholder="Search agent..." class="agent-search-field"/>
+                                </ui:VisualElement>
+                                <ui:ScrollView class="agent-selector-scroll">
+                                    <ui:Button name="FreeCameraOption" text="Free camera" class="agent-option"/>
+                                    <ui:Label text="ROBOTS" class="agent-option-group"/>
+                                    <ui:VisualElement name="RobotOptionList" class="agent-option-list"/>
+                                    <ui:Label text="HUMANS" class="agent-option-group"/>
+                                    <ui:VisualElement name="HumanOptionList" class="agent-option-list"/>
+                                </ui:ScrollView>
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:Button name="FocusAgentButton" text="Focus" class="camera-action"
+                                   tooltip="Centre the camera on the selected agent"/>
+                        <ui:Button name="FollowAgentButton" text="Follow" class="camera-action"
+                                   tooltip="Keep the camera locked on the selected agent"/>
+                        <ui:Button name="FirstPersonButton" text="First person" class="camera-action"
+                                   tooltip="Look through the eyes of the selected agent"/>
+                        <ui:VisualElement class="camera-bar-spacer"/>
+                        <ui:VisualElement name="ViewDropdownContainer" class="view-dropdown-container">
+                            <ui:Button name="ViewButton" text="Free" class="view-button"/>
+                            <ui:VisualElement name="ViewMenu" class="view-menu is-hidden"/>
+                        </ui:VisualElement>
                     </ui:VisualElement>
-                    <ui:VisualElement class="separator-vertical"/>
-                    <ui:VisualElement class="focus-block">
-                        <ui:Label text="FOCUS" class="block-label"/>
-                        <ui:VisualElement class="focus-controls">
-                            <ui:Button name="PrevAgentButton" text="◀" class="agent-nav-button"/>
-                            <ui:DropdownField name="AgentDropdown" label="" class="agent-dropdown"/>
-                            <ui:Button name="NextAgentButton" text="▶" class="agent-nav-button"/>
+
+                    <ui:VisualElement name="ViewToolbar" class="view-toolbar">
+                        <ui:Button name="ToolSelectButton" text="➤" class="view-tool is-active"
+                                   tooltip="Select: click an agent to work with it"/>
+                        <ui:Button name="ToolMoveButton" text="✥" class="view-tool"
+                                   tooltip="Move: drag to slide the view over the map"/>
+                        <ui:Button name="ToolRotateButton" text="↻" class="view-tool"
+                                   tooltip="Rotate: drag to turn around the scene"/>
+                        <ui:Button name="ToolZoomButton" text="⌕" class="view-tool"
+                                   tooltip="Zoom: drag up and down, or use the wheel"/>
+                        <ui:VisualElement class="view-tool-divider"/>
+                        <ui:Button name="CenterToolButton" text="◎" class="view-tool"
+                                   tooltip="Centre the view on the selected agent"/>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement name="MinimapPanel" class="minimap-panel">
+                        <ui:Label name="MinimapTitle" text="Top view" class="minimap-title"/>
+                        <ui:VisualElement name="MinimapMap" class="minimap-map">
+                            <ui:Image name="MinimapImage" class="minimap-image"/>
+                            <ui:VisualElement name="MinimapDots" class="minimap-dots" picking-mode="Ignore"/>
                         </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
+
+            <ui:VisualElement name="AgentPanel" class="agent-panel">
+                <ui:Button name="AgentPanelCollapseButton" text="›" class="agent-panel-collapse"
+                           tooltip="Collapse or expand this panel"/>
+                <ui:ScrollView name="AgentPanelContent" class="agent-panel-content">
+                    <ui:Label name="AgentPanelTitle" text="Selected agent" class="agent-panel-title"/>
+                    <ui:VisualElement name="SelectedAgentCard" class="selected-agent-card">
+                        <ui:VisualElement name="SelectedAgentIcon" class="selected-agent-icon"/>
+                        <ui:VisualElement class="selected-agent-heading">
+                            <ui:Label name="SelectedAgentName" text="No agent" class="selected-agent-name"/>
+                            <ui:Label name="SelectedAgentBadge" text="Free camera" class="selected-agent-badge"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="SelectedAgentInfo" class="agent-info"/>
+                    <ui:VisualElement class="agent-card-actions">
+                        <ui:Button name="PanelFocusButton" text="Focus" class="panel-action primary-action"/>
+                        <ui:Button name="PanelFollowButton" text="Follow" class="panel-action"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="panel-divider"/>
+                    <ui:Label name="AgentListTitle" text="Agent list (0)" class="agent-panel-title"/>
+                    <ui:VisualElement class="agent-search-row">
+                        <ui:Label text="⌕" class="search-glyph"/>
+                        <ui:TextField name="AgentListSearch" placeholder="Search agent..." class="agent-search-field"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="AgentList" class="agent-list"/>
+                </ui:ScrollView>
+            </ui:VisualElement>
         </ui:VisualElement>
-        <ui:Label text="Simulation" class="panel-title-corner"/>
+
+        <ui:VisualElement name="StatusBar" class="status-bar">
+            <ui:VisualElement name="StatusScenarioIcon" class="status-icon"/>
+            <ui:Label name="StatusScenario" text="Scenario: —" class="status-item"/>
+            <ui:VisualElement class="status-divider"/>
+            <ui:VisualElement name="StatusTimeIcon" class="status-icon"/>
+            <ui:Label name="StatusTime" text="Time: 00:00" class="status-item"/>
+            <ui:VisualElement class="status-divider"/>
+            <ui:VisualElement name="StatusAgentsIcon" class="status-icon"/>
+            <ui:Label name="StatusAgents" text="Agents: 0" class="status-item"/>
+            <ui:VisualElement class="status-spacer"/>
+            <ui:VisualElement name="StatusStateDot" class="status-dot is-idle"/>
+            <ui:Label name="StatusStateLabel" text="Idle" class="status-item status-state"/>
+            <ui:VisualElement class="status-divider"/>
+            <ui:VisualElement name="StatusRosIcon" class="status-icon"/>
+            <ui:Label name="StatusRos" text="ROS 2" class="status-item"/>
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

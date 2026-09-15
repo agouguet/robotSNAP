@@ -1258,7 +1258,9 @@ public sealed class ScenarioRouteEditor
         PushUndo();
         RouteDraft copy = CreateDraftFromSnapshot(source);
         copy.Id = NextRouteCopyId(source.Id);
-        // The copy starts as a new route: saving it as a fresh entry is the point of duplicating.
+        // The copy starts as a new route, on its own: saving it as a fresh entry is the point of duplicating,
+        // and a group inherited from the original would silently make both routes walk as one formation.
+        copy.Group = null;
         copy.RouteModified = true;
         copy.Source = null;
         _routes.Add(copy);

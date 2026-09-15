@@ -211,7 +211,7 @@
 //             CreateSectionHeader(content, "HUMAN");
 //             uiScript.humanDefaultSpeedInput = CreateInputField(content, "Default Speed", "0.8");
 //             uiScript.humanMaxSpeedInput = CreateInputField(content, "Max Speed", "1.0");
-//             uiScript.humanControllerTypeDropdown = CreateDropdown(content, "Controller Type", new[] { "SFM", "ONNX", "Hybrid" });
+//             uiScript.humanControllerTypeDropdown = CreateDropdown(content, "Controller Type", new[] { "SFM", "External" });
 //             uiScript.humanInteractionRadiusSlider = CreateSlider(content, "Interaction Radius", 1f, 10f, 5f);
             
 //             // Find value label for slider

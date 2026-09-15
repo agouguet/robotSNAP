@@ -140,6 +140,12 @@ namespace RobotSNAP.Agents
                 return;
 
             _lastTickFrame = Time.frameCount;
+
+            // A group driven from outside Unity walks on the velocity the Python API commands: the formation
+            // slots must stand down instead of steering the members back into shape behind its back.
+            if (_members[0] != null && _members[0].IsExternallyControlled)
+                return;
+
             float deltaTime = Time.deltaTime;
 
             AdvanceReference(deltaTime);

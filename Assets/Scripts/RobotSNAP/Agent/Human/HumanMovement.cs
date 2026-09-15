@@ -40,6 +40,10 @@ namespace RobotSNAP.Agents
         private Vector2 _plannedGoal;
         private bool _scenarioPathInUse;
 
+        // Set when the human walks on a velocity commanded from outside Unity (the Python API).
+        private ExternalControlController _externalController;
+        private bool _warnedAboutExternalCommand;
+
         /// <summary>Destination move that makes the current path obsolete, in metres.</summary>
         private const float GoalChangeTolerance = 0.5f;
 
@@ -88,7 +92,12 @@ namespace RobotSNAP.Agents
 
         private void FixedUpdate()
         {
-            if (_isPlaying && _avatar != null && _avatar.hasDestination)
+            if (!_isPlaying || _avatar == null)
+                return;
+
+            // An externally driven human owns no goal: the Python API commands its velocity, so the movement
+            // step has to run even though nobody ever gave the agent a destination.
+            if (_avatar.hasDestination || IsExternallyControlled)
                 Move();
         }
 
@@ -143,6 +152,7 @@ namespace RobotSNAP.Agents
             _config = config;
             _agentId = avatar.agentId;
             _currentControllerType = config.controllerType;
+            _warnedAboutExternalCommand = false;
             InitializeController(_currentControllerType);
         }
 
@@ -151,7 +161,7 @@ namespace RobotSNAP.Agents
             if (_agentId != 0 && _humanManager != null)
             {
                 Vector2 currentPos = new Vector2(transform.position.x, transform.position.z);
-                _humanManager.RegisterAgent(_agentId, currentPos);
+                _humanManager.RegisterAgent(_agentId, currentPos, _avatar);
                 _humanManager.UpdateAgent(_agentId, currentPos, _currentVelocity);
             }
         }
@@ -172,20 +182,43 @@ namespace RobotSNAP.Agents
         {
             switch (type)
             {
-                case MovementControllerType.SFM:
-                    _controller = new SFMController(_config, _avatar);
+                case MovementControllerType.External:
+                    _externalController = new ExternalControlController(_config);
+                    _controller = _externalController;
                     break;
-                case MovementControllerType.ONNXPrediction:
-                    _controller = new ONNXPredictionController(_config);
-                    break;
-                case MovementControllerType.Hybrid:
-                    _controller = new HybridController(_config);
-                    break;
-                default:
+                default: // SFM, and any value a scene still carries from an older build.
+                    _externalController = null;
                     _controller = new SFMController(_config, _avatar);
                     break;
             }
         }
+
+        /// <summary>
+        /// Desired velocity of a human driven from outside Unity, in world units per second. It is ignored —
+        /// with a warning — when the agent is not configured with the external controller.
+        /// </summary>
+        public void SetExternalVelocity(Vector2 velocity)
+        {
+            if (_externalController == null)
+            {
+                if (!_warnedAboutExternalCommand)
+                {
+                    _warnedAboutExternalCommand = true;
+                    Debug.LogWarning(
+                        "[HumanMovement] External velocity ignored: this human does not use the External " +
+                        "controller. Set movement_controller.type to 'external' in the scenario.");
+                }
+                return;
+            }
+
+            _externalController.SetCommand(velocity);
+        }
+
+        /// <summary>Stops a human driven from outside Unity, and forgets its command.</summary>
+        public void ClearExternalVelocity() => _externalController?.ClearCommand();
+
+        /// <summary>True when the velocity of this human comes from outside Unity.</summary>
+        public bool IsExternallyControlled => _externalController != null;
 
         public void SetHumanManager(HumanManager manager) => _humanManager = manager;
 
@@ -327,6 +360,11 @@ namespace RobotSNAP.Agents
         private void UpdateNavMeshPath()
         {
             if (_config == null) return;
+
+            // Nothing to plan for an externally driven human: the controller ignores the goal, so planning
+            // towards the authored route — or towards the (0,0) placeholder — would only burn grid searches.
+            if (IsExternallyControlled) return;
+
             if (Time.time - _lastPathUpdate < _config.pathUpdateInterval) return;
             _lastPathUpdate = Time.time;
 
@@ -544,6 +582,7 @@ namespace RobotSNAP.Agents
             _plannedPath.Clear();
             _plannedGoal = Vector2.zero;
             _scenarioPathInUse = false;
+            _externalController?.ClearCommand();
             _neighborPositions.Clear();
             _neighborVelocities.Clear();
             _tempObstacles.Clear();
@@ -558,7 +597,8 @@ namespace RobotSNAP.Agents
 
         public void SetControllerType(int type)
         {
-            MovementControllerType controllerType = (MovementControllerType)Mathf.Clamp(type, 0, 2);
+            MovementControllerType controllerType =
+                (MovementControllerType)Mathf.Clamp(type, 0, (int)MovementControllerType.External);
             if (_currentControllerType != controllerType)
                 SwitchController(controllerType);
         }

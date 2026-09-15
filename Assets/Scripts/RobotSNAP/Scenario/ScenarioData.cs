@@ -333,22 +333,16 @@ namespace RobotSNAP.Core.Scenario
     }
 
     /// <summary>
-    /// Configuration du contrôleur de mouvement (SFM, ONNX, Hybride)
+    /// Configuration du contrôleur de mouvement (SFM, External)
     /// </summary>
     [YamlObject]
     public partial class MovementControllerConfig
     {
         [YamlMember("type")]
         public string Type { get; set; } = "SFM";
-        
-        [YamlMember("onnx_model")]
-        public string OnnxModel { get; set; }
-        
+
         [YamlMember("sfm_params")]
         public SFMParams SFMParameters { get; set; }
-        
-        [YamlMember("hybrid_weights")]
-        public HybridWeights HybridWeights { get; set; }
     }
 
     /// <summary>
@@ -374,22 +368,6 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("interaction_radius")]
         public float InteractionRadius { get; set; } = 2f;
-    }
-
-    /// <summary>
-    /// Poids hybrides pour le contrôleur mixte
-    /// </summary>
-    [YamlObject]
-    public partial class HybridWeights
-    {
-        [YamlMember("onnx_weight")]
-        public float OnnxWeight { get; set; } = 0.7f;
-        
-        [YamlMember("sfm_weight")]
-        public float SfmWeight { get; set; } = 0.3f;
-        
-        [YamlMember("adaptation_rate")]
-        public float AdaptationRate { get; set; } = 0.1f;
     }
 
     /// <summary>

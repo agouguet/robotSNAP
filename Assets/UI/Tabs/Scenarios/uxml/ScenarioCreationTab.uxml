@@ -188,7 +188,7 @@
                         <ui:VisualElement class="creation-field">
                             <ui:Label text="Movement controller" class="creation-field-label"/>
                             <ui:DropdownField name="MovementControllerDropdown" class="creation-dropdown"/>
-                            <ui:Label text="SFM follows social forces, ONNX uses the learned policy, Hybrid blends both. Inherit keeps the setting of the agent configuration asset. Routes sharing a group id share the choice." class="field-help"/>
+                            <ui:Label text="SFM follows social forces, External is driven by the Python API. Inherit keeps the setting of the agent configuration asset. Routes sharing a group id share the choice." class="field-help"/>
                         </ui:VisualElement>
                         <ui:VisualElement class="creation-field">
                             <ui:Label text="Group formation" class="creation-field-label"/>

@@ -54,12 +54,20 @@ namespace RobotSNAP.Tests.Editor
         [TestCase("SFM", MovementControllerType.SFM)]
         [TestCase("sfm", MovementControllerType.SFM)]
         [TestCase("social force", MovementControllerType.SFM)]
-        [TestCase("ONNX", MovementControllerType.ONNXPrediction)]
-        [TestCase("onnx_prediction", MovementControllerType.ONNXPrediction)]
-        [TestCase("Hybrid", MovementControllerType.Hybrid)]
+        [TestCase("social forces", MovementControllerType.SFM)]
         [TestCase("SFM (social forces)", MovementControllerType.SFM)]
-        [TestCase("ONNX (learned)", MovementControllerType.ONNXPrediction)]
-        [TestCase("Hybrid (SFM + ONNX)", MovementControllerType.Hybrid)]
+        [TestCase("External", MovementControllerType.External)]
+        [TestCase("external", MovementControllerType.External)]
+        [TestCase("external control", MovementControllerType.External)]
+        [TestCase("Python API", MovementControllerType.External)]
+        [TestCase("External (Python API)", MovementControllerType.External)]
+        // The ONNX and hybrid controllers are gone; scenarios saved with those values still load, as SFM.
+        [TestCase("ONNX", MovementControllerType.SFM)]
+        [TestCase("ONNX (learned)", MovementControllerType.SFM)]
+        [TestCase("onnx_prediction", MovementControllerType.SFM)]
+        [TestCase("Hybrid", MovementControllerType.SFM)]
+        [TestCase("Hybrid (SFM + ONNX)", MovementControllerType.SFM)]
+        [TestCase("hybrid", MovementControllerType.SFM)]
         public void MovementController_Parse_ReadsYamlValuesAndDisplayNames(
             string value,
             MovementControllerType expected)
@@ -71,7 +79,7 @@ namespace RobotSNAP.Tests.Editor
         [TestCase(null)]
         [TestCase("")]
         [TestCase("   ")]
-        [TestCase("curious")]
+        [TestCase("banana")]
         public void MovementController_Parse_LeavesUnknownValuesToTheConfigAsset(string value)
         {
             Assert.That(HumanMovementControllerParser.TryParse(value, out _), Is.False);
@@ -83,8 +91,7 @@ namespace RobotSNAP.Tests.Editor
             foreach (MovementControllerType controller in new[]
                      {
                          MovementControllerType.SFM,
-                         MovementControllerType.ONNXPrediction,
-                         MovementControllerType.Hybrid
+                         MovementControllerType.External
                      })
             {
                 string yaml = HumanMovementControllerParser.ToYamlValue(controller);

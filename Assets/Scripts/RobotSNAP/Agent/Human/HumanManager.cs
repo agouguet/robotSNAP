@@ -26,6 +26,8 @@ namespace RobotSNAP.Agents
         // Données internes
         private List<AgentData> _agents = new List<AgentData>();
         private Dictionary<int, int> _idToIndex = new Dictionary<int, int>(); // Id -> index dans la liste
+        // The agent itself, not just its numbers, so an external driver (the Python API) can act on it by id.
+        private readonly Dictionary<int, HumanAgent> _agentOwners = new Dictionary<int, HumanAgent>();
         private int _activeCount = 0;
 
         // Caches pour les requêtes (évite les allocations)
@@ -55,8 +57,11 @@ namespace RobotSNAP.Agents
         /// Enregistre un agent dans le manager (appelé quand l'agent est activé ou créé).
         /// Si l'ID existe déjà, met à jour la position.
         /// </summary>
-        public void RegisterAgent(int id, Vector2 initialPosition)
+        public void RegisterAgent(int id, Vector2 initialPosition, HumanAgent owner = null)
         {
+            if (owner != null)
+                _agentOwners[id] = owner;
+
             if (_idToIndex.ContainsKey(id))
             {
                 // L'agent est déjà enregistré, on met à jour sa position
@@ -128,6 +133,7 @@ namespace RobotSNAP.Agents
             }
 
             _idToIndex.Remove(id);
+            _agentOwners.Remove(id);
             InvalidateSpatialIndex();
 
             if (_logEvents) Debug.Log($"[HumanManager] Agent {id} unregistered. Active count: {_activeCount}");
@@ -237,10 +243,72 @@ namespace RobotSNAP.Agents
         {
             _agents.Clear();
             _idToIndex.Clear();
+            _agentOwners.Clear();
             _activeCount = 0;
             _tempPositions.Clear();
             _tempVelocities.Clear();
             if (_logEvents) Debug.Log("[HumanManager] Cleared all agent data.");
+        }
+
+        // ==========================================
+        //          EXTERNAL CONTROL (Python API)
+        // ==========================================
+
+        /// <summary>
+        /// Looks a human up by the id it was registered with, so an external driver can act on it. The id is
+        /// the one the agent exposes as <see cref="HumanAgent.agentId"/>, stable for the whole scenario.
+        /// </summary>
+        public bool TryGetAgent(int id, out HumanAgent agent) => _agentOwners.TryGetValue(id, out agent);
+
+        /// <summary>
+        /// Drives a human from outside Unity, in world units per second. Returns false when no active agent
+        /// carries that id.
+        /// </summary>
+        public bool SetExternalVelocity(int id, Vector2 velocity)
+        {
+            if (!_agentOwners.TryGetValue(id, out HumanAgent agent) || agent == null)
+                return false;
+
+            agent.SetExternalVelocity(velocity);
+            return true;
+        }
+
+        /// <summary>Stops the human with that id. Returns false when no active agent carries it.</summary>
+        public bool ClearExternalVelocity(int id)
+        {
+            if (!_agentOwners.TryGetValue(id, out HumanAgent agent) || agent == null)
+                return false;
+
+            agent.ClearExternalVelocity();
+            return true;
+        }
+
+        /// <summary>
+        /// Copies the ids of the active agents into <paramref name="destination"/>, so an external driver can
+        /// enumerate the crowd without allocating a fresh list on every tick.
+        /// </summary>
+        public void GetAgentIds(List<int> destination)
+        {
+            if (destination == null)
+                return;
+
+            destination.Clear();
+            foreach (int id in _agentOwners.Keys)
+                destination.Add(id);
+        }
+
+        /// <summary>How many active agents currently take their velocity from outside Unity.</summary>
+        public int ExternallyControlledCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (HumanAgent agent in _agentOwners.Values)
+                    if (agent != null && agent.IsExternallyControlled)
+                        count++;
+
+                return count;
+            }
         }
 
         /// <summary>

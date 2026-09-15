@@ -107,9 +107,7 @@ humans:
   group: 5
   movement_controller: 
     type: SFM
-    onnx_model: null
     sfm_params: null
-    hybrid_weights: null
   behavior: normal
   speed: 1
   color: null
@@ -136,9 +134,7 @@ humans:
   group: null
   movement_controller: 
     type: SFM
-    onnx_model: null
     sfm_params: null
-    hybrid_weights: null
   behavior: normal
   speed: 1
   color: null
@@ -171,9 +167,7 @@ humans:
   group: null
   movement_controller: 
     type: SFM
-    onnx_model: null
     sfm_params: null
-    hybrid_weights: null
   behavior: normal
   speed: 1
   color: null

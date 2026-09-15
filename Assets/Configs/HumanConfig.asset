@@ -15,8 +15,6 @@ MonoBehaviour:
   showMovementParameters: 1
   showMovementController: 1
   showSFMParameters: 1
-  showONNXParameters: 1
-  showHybridParameters: 1
   showAnimationParameters: 1
   showNavigationParameters: 1
   showVisualizationParameters: 1
@@ -51,11 +49,6 @@ MonoBehaviour:
   lateralDampening: 0.001
   robotRepulsionDampeningMin: 0.5
   robotRepulsionDampeningMax: 1
-  onnxModelConfig: {fileID: 0}
-  predictionWeight: 0.6
-  navigationWeight: 0.4
-  useAdaptiveWeighting: 1
-  hybridAdaptationRate: 0.05
   goalReachedDistance: 0.2
   pathUpdateInterval: 0.2
   nextNavMinDistance: 0.3

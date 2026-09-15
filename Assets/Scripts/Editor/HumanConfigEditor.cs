@@ -12,8 +12,6 @@ namespace RobotSNAP.Human
         private SerializedProperty showMovementParameters;
         private SerializedProperty showMovementController;
         private SerializedProperty showSFMParameters;
-        private SerializedProperty showONNXParameters;
-        private SerializedProperty showHybridParameters;
         private SerializedProperty showAnimationParameters;
         private SerializedProperty showNavigationParameters;
         private SerializedProperty showVisualizationParameters;
@@ -67,15 +65,6 @@ namespace RobotSNAP.Human
         private SerializedProperty robotRepulsionDampeningMin;
         private SerializedProperty robotRepulsionDampeningMax;
 
-        // ONNX
-        private SerializedProperty onnxModelConfig;
-
-        // Hybrid
-        private SerializedProperty predictionWeight;
-        private SerializedProperty navigationWeight;
-        private SerializedProperty useAdaptiveWeighting;
-        private SerializedProperty hybridAdaptationRate;
-
         // Navigation
         private SerializedProperty goalReachedDistance;
         private SerializedProperty pathUpdateInterval;
@@ -93,16 +82,12 @@ namespace RobotSNAP.Human
         private SerializedProperty predictionColor;
         private SerializedProperty trajectoryColor;
 
-        private HumanConfig config;
-
         private void OnEnable()
         {
             // Toggles
             showMovementParameters = serializedObject.FindProperty("showMovementParameters");
             showMovementController = serializedObject.FindProperty("showMovementController");
             showSFMParameters = serializedObject.FindProperty("showSFMParameters");
-            showONNXParameters = serializedObject.FindProperty("showONNXParameters");
-            showHybridParameters = serializedObject.FindProperty("showHybridParameters");
             showAnimationParameters = serializedObject.FindProperty("showAnimationParameters");
             showNavigationParameters = serializedObject.FindProperty("showNavigationParameters");
             showVisualizationParameters = serializedObject.FindProperty("showVisualizationParameters");
@@ -156,15 +141,6 @@ namespace RobotSNAP.Human
             robotRepulsionDampeningMin = serializedObject.FindProperty("robotRepulsionDampeningMin");
             robotRepulsionDampeningMax = serializedObject.FindProperty("robotRepulsionDampeningMax");
 
-            // ONNX
-            onnxModelConfig = serializedObject.FindProperty("onnxModelConfig");
-
-            // Hybrid
-            predictionWeight = serializedObject.FindProperty("predictionWeight");
-            navigationWeight = serializedObject.FindProperty("navigationWeight");
-            useAdaptiveWeighting = serializedObject.FindProperty("useAdaptiveWeighting");
-            hybridAdaptationRate = serializedObject.FindProperty("hybridAdaptationRate");
-
             // Navigation
             goalReachedDistance = serializedObject.FindProperty("goalReachedDistance");
             pathUpdateInterval = serializedObject.FindProperty("pathUpdateInterval");
@@ -181,8 +157,6 @@ namespace RobotSNAP.Human
             showPredictionGizmos = serializedObject.FindProperty("showPredictionGizmos");
             predictionColor = serializedObject.FindProperty("predictionColor");
             trajectoryColor = serializedObject.FindProperty("trajectoryColor");
-
-            config = (HumanConfig)target;
         }
 
         public override void OnInspectorGUI()
@@ -277,29 +251,6 @@ namespace RobotSNAP.Human
                 EditorGUILayout.Space();
             }
 
-            // ==================== ONNX ====================
-            showONNXParameters.boolValue = EditorGUILayout.Foldout(showONNXParameters.boolValue, "ONNX Model Parameters", true);
-            if (showONNXParameters.boolValue)
-            {
-                EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(onnxModelConfig);
-                EditorGUI.indentLevel--;
-                EditorGUILayout.Space();
-            }
-
-            // ==================== HYBRID ====================
-            showHybridParameters.boolValue = EditorGUILayout.Foldout(showHybridParameters.boolValue, "Hybrid Parameters", true);
-            if (showHybridParameters.boolValue)
-            {
-                EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(predictionWeight);
-                EditorGUILayout.PropertyField(navigationWeight);
-                EditorGUILayout.PropertyField(useAdaptiveWeighting);
-                EditorGUILayout.PropertyField(hybridAdaptationRate);
-                EditorGUI.indentLevel--;
-                EditorGUILayout.Space();
-            }
-
             // ==================== ANIMATION ====================
             showAnimationParameters.boolValue = EditorGUILayout.Foldout(showAnimationParameters.boolValue, "Animation Parameters", true);
             if (showAnimationParameters.boolValue)
@@ -337,16 +288,6 @@ namespace RobotSNAP.Human
                 EditorGUI.indentLevel--;
                 EditorGUILayout.Space();
             }
-
-            // ==================== READ-ONLY PROPERTIES ====================
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Read-only Properties (from ONNX config)", EditorStyles.boldLabel);
-            EditorGUI.BeginDisabledGroup(true);
-            EditorGUILayout.TextField("ONNX Model Path", config.onnxModelPath);
-            EditorGUILayout.Toggle("ONNX Use GPU", config.onnxUseGPU);
-            EditorGUILayout.IntField("Prediction Samples", config.predictionSamples);
-            EditorGUILayout.FloatField("Prediction Update Rate", config.predictionUpdateRate);
-            EditorGUI.EndDisabledGroup();
 
             serializedObject.ApplyModifiedProperties();
         }

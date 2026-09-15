@@ -1,5 +1,4 @@
 using UnityEngine;
-using RobotSNAP.Movement.Predictors;
 
 namespace RobotSNAP.Agents
 {
@@ -10,8 +9,6 @@ namespace RobotSNAP.Agents
         [SerializeField] private bool showMovementParameters = true;
         [SerializeField] private bool showMovementController = true;
         [SerializeField] private bool showSFMParameters = true;
-        [SerializeField] private bool showONNXParameters = true;
-        [SerializeField] private bool showHybridParameters = true;
         [SerializeField] private bool showAnimationParameters = true;
         [SerializeField] private bool showNavigationParameters = true;
         [SerializeField] private bool showVisualizationParameters = true;
@@ -29,8 +26,8 @@ namespace RobotSNAP.Agents
 
         // ==================== CONTROLLER SELECTION ====================
         [Header("Controller Selection")]
-        [Tooltip("Type de contrôleur utilisé : SFM, ONNX ou Hybride")]
-        public MovementControllerType controllerType = MovementControllerType.Hybrid;
+        [Tooltip("Type de contrôleur utilisé : SFM ou External")]
+        public MovementControllerType controllerType = MovementControllerType.SFM;
 
         // ==================== SFM PARAMETERS ====================
         [Header("SFM - Agent Physical Properties")]
@@ -125,33 +122,6 @@ namespace RobotSNAP.Agents
         [Tooltip("Amortissement max de répulsion des robots")]
         public float robotRepulsionDampeningMax = 1.0f;
 
-        // ==================== ONNX PARAMETERS ====================
-        [Header("ONNX Model")]
-        [Tooltip("Configuration du modèle ONNX (asset)")]
-        public ONNXModelConfig onnxModelConfig;
-
-        // Propriétés en lecture seule (déléguées à onnxModelConfig)
-        public string onnxModelPath => onnxModelConfig != null ? onnxModelConfig.modelPath : "Models/policy_lstm";
-        public bool onnxUseGPU => onnxModelConfig != null ? onnxModelConfig.useGPU : true;
-        public int predictionSamples => onnxModelConfig != null ? onnxModelConfig.numSamples : 5;
-        public float predictionUpdateRate => onnxModelConfig != null ? onnxModelConfig.updateRate : 10f;
-
-        // ==================== HYBRID PARAMETERS ====================
-        [Header("Hybrid Controller")]
-        [Range(0f, 1f)]
-        [Tooltip("Poids donné à la prédiction ONNX (vs SFM)")]
-        public float predictionWeight = 0.6f;
-
-        [Range(0f, 1f)]
-        [Tooltip("Poids donné à la navigation (waypoint vs but direct)")]
-        public float navigationWeight = 0.4f;
-
-        [Tooltip("Activer l'adaptation dynamique des poids")]
-        public bool useAdaptiveWeighting = true;
-
-        [Tooltip("Taux d'adaptation pour les poids dynamiques")]
-        public float hybridAdaptationRate = 0.05f;
-
         // ==================== NAVIGATION ====================
         [Header("Navigation")]
         [Tooltip("Distance pour considérer le but atteint")]
@@ -202,16 +172,12 @@ namespace RobotSNAP.Agents
             goalReachedDistance = Mathf.Max(0.05f, goalReachedDistance);
             pathUpdateInterval = Mathf.Max(0.05f, pathUpdateInterval);
             angularSpeed = Mathf.Max(10f, angularSpeed);
-
-            if (onnxModelConfig != null)
-                onnxModelConfig.Validate();
         }
     }
 
     public enum MovementControllerType
     {
-        SFM,            // Social Force Model
-        ONNXPrediction, // Réseau de neurones ONNX
-        Hybrid          // Fusion adaptative SFM+ONNX
+        SFM = 0,       // Social Force Model
+        External = 1   // vitesse commandée depuis l'extérieur (API Python)
     }
 }

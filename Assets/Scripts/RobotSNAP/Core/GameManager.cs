@@ -27,6 +27,7 @@ namespace RobotSNAP.Core
         private bool _isInitialized;
         private bool _isResetting = false;
         private Coroutine _currentResetCoroutine = null;
+        private HumanManager _humanManager;
 
         // Properties (publiques pour ScenarioManager)
         public int EnvironmentId => _environmentId;
@@ -34,6 +35,23 @@ namespace RobotSNAP.Core
         public EnvironmentBuilder EnvironmentBuilder => _environmentBuilder;
         public NavMeshManager NavMeshManager => _navMeshManager;
         public HumanPoolManager HumanPool => _humanPool;
+
+        /// <summary>
+        /// The crowd registry, and the entry point of an external driver (the Python API): it carries the stable
+        /// ids of the active humans together with their positions and velocities, and receives their commanded
+        /// velocities. Resolved from the hierarchy when the scene did not wire it, so a bridge never has to
+        /// search for it itself.
+        /// </summary>
+        public HumanManager HumanManager
+        {
+            get
+            {
+                if (_humanManager == null)
+                    _humanManager = GetComponentInChildren<HumanManager>(true);
+
+                return _humanManager;
+            }
+        }
 
         #region Unity Lifecycle
 

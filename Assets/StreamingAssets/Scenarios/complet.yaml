@@ -87,8 +87,7 @@ humans:
       personal_space: 0.6
       reaction_time: 0.2
     movement_controller:
-      type: "Hybrid"
-      onnx_model: "models/follower_2024.onnx"
+      type: "SFM"
       sfm_params:
         force_strength: 8.0
         social_force: 4.0
@@ -96,10 +95,6 @@ humans:
         goal_force: 10.0
         relaxation_time: 0.4
         interaction_radius: 2.5
-      hybrid_weights:
-        onnx_weight: 0.8
-        sfm_weight: 0.2
-        adaptation_rate: 0.05
 
   # Groupe 3 : rassemblement erratique (wander) dans une zone
   - id: "loiterers"
@@ -118,9 +113,7 @@ humans:
       personal_space: 1.2
       reaction_time: 0.8
     movement_controller:
-      type: "ONNX"
-      onnx_model: "models/wander_net.onnx"
-      # Pas de sfm_params ni hybrid_weights nécessaires
+      type: "SFM"
 
   # Groupe 4 : immobile (stay) à un point précis
   - id: "guards"

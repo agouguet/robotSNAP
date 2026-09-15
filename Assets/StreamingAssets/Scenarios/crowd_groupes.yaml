@@ -14,16 +14,16 @@ scenario_info:
   duration: 0
 points: 
   robot_start: 
-    x: -6.74
+    x: -6.49
     y: 0
-    z: -0.1
+    z: 0
     yaw: 0
     center: null
     size: null
   robot_goal: 
-    x: 6.89
+    x: 6.6
     y: 0
-    z: 0.3
+    z: 0
     yaw: null
     center: null
     size: null
@@ -125,9 +125,7 @@ humans:
   group: 1
   movement_controller: 
     type: SFM
-    onnx_model: null
     sfm_params: null
-    hybrid_weights: null
   behavior: normal
   speed: 1.2
   color: null

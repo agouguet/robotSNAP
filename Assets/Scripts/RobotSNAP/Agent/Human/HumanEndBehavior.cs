@@ -79,16 +79,18 @@ namespace RobotSNAP.Agents
     public static class HumanMovementControllerParser
     {
         public const string SfmValue = "SFM";
-        public const string OnnxValue = "ONNX";
-        public const string HybridValue = "Hybrid";
+        public const string ExternalValue = "External";
 
         public const string SfmDisplayName = "SFM (social forces)";
-        public const string OnnxDisplayName = "ONNX (learned)";
-        public const string HybridDisplayName = "Hybrid (SFM + ONNX)";
+        public const string ExternalDisplayName = "External (Python API)";
+
+        // Labels the editor wrote into scenarios while the ONNX and hybrid controllers still existed.
+        private const string LegacyOnnxDisplayName = "ONNX (learned)";
+        private const string LegacyHybridDisplayName = "Hybrid (SFM + ONNX)";
 
         public static bool TryParse(string value, out MovementControllerType controller)
         {
-            controller = MovementControllerType.Hybrid;
+            controller = MovementControllerType.SFM;
             if (string.IsNullOrWhiteSpace(value))
                 return false;
 
@@ -99,14 +101,15 @@ namespace RobotSNAP.Agents
                 controller = MovementControllerType.SFM;
                 return true;
             }
-            if (string.Equals(text, OnnxDisplayName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(text, ExternalDisplayName, StringComparison.OrdinalIgnoreCase))
             {
-                controller = MovementControllerType.ONNXPrediction;
+                controller = MovementControllerType.External;
                 return true;
             }
-            if (string.Equals(text, HybridDisplayName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(text, LegacyOnnxDisplayName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(text, LegacyHybridDisplayName, StringComparison.OrdinalIgnoreCase))
             {
-                controller = MovementControllerType.Hybrid;
+                controller = MovementControllerType.SFM;
                 return true;
             }
 
@@ -115,20 +118,31 @@ namespace RobotSNAP.Agents
                 case "sfm":
                 case "social force":
                 case "socialforce":
+                case "social forces":
                     controller = MovementControllerType.SFM;
                     return true;
+                case "external":
+                case "external control":
+                case "python":
+                case "python api":
+                case "api":
+                case "ros":
+                case "remote":
+                    controller = MovementControllerType.External;
+                    return true;
+
+                // Historic values of the removed ONNX and hybrid controllers. Scenarios already saved on
+                // disk may still carry them, so they keep loading and fall back to the SFM controller.
                 case "onnx":
                 case "onnx_prediction":
                 case "onnxprediction":
                 case "neural":
                 case "prediction":
                 case "model":
-                    controller = MovementControllerType.ONNXPrediction;
-                    return true;
                 case "hybrid":
                 case "mixed":
                 case "adaptive":
-                    controller = MovementControllerType.Hybrid;
+                    controller = MovementControllerType.SFM;
                     return true;
                 default:
                     return false;
@@ -139,9 +153,8 @@ namespace RobotSNAP.Agents
         {
             switch (controller)
             {
-                case MovementControllerType.SFM: return SfmValue;
-                case MovementControllerType.ONNXPrediction: return OnnxValue;
-                default: return HybridValue;
+                case MovementControllerType.External: return ExternalValue;
+                default: return SfmValue;
             }
         }
 
@@ -150,9 +163,8 @@ namespace RobotSNAP.Agents
         {
             switch (controller)
             {
-                case MovementControllerType.SFM: return SfmDisplayName;
-                case MovementControllerType.ONNXPrediction: return OnnxDisplayName;
-                default: return HybridDisplayName;
+                case MovementControllerType.External: return ExternalDisplayName;
+                default: return SfmDisplayName;
             }
         }
     }

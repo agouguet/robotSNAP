@@ -80,6 +80,19 @@ namespace RobotSNAP.Agents
         /// <summary>True while the member has stepped out of its slot to let somebody pass.</summary>
         public bool IsYielding => Time.time < _yieldUntil;
 
+        /// <summary>True when the velocity of this human is commanded from outside Unity.</summary>
+        public bool IsExternallyControlled => _movement != null && _movement.IsExternallyControlled;
+
+        /// <summary>
+        /// Drives the human from outside Unity, in world units per second, in the X/Z plane. The command has to
+        /// be refreshed at the rate of the external loop: it expires after a second without an update, so a
+        /// bridge that stops leaves the crowd standing instead of walking on its own.
+        /// </summary>
+        public void SetExternalVelocity(Vector2 velocity) => _movement?.SetExternalVelocity(velocity);
+
+        /// <summary>Stops the human and forgets the last external command.</summary>
+        public void ClearExternalVelocity() => _movement?.ClearExternalVelocity();
+
         /// <summary>Lateral offset added to its slot while the member yields; zero otherwise.</summary>
         public Vector2 YieldOffset => IsYielding ? _yieldOffset : Vector2.zero;
 
@@ -254,7 +267,9 @@ namespace RobotSNAP.Agents
 
         private void AdvanceRouteIfReached()
         {
-            if (!_followingRoute || !hasDestination)
+            // An externally driven human is not walking its authored route: the Python API owns its motion, so
+            // the route must not advance underneath it (nor trigger its end behaviour on its own).
+            if (!_followingRoute || !hasDestination || IsExternallyControlled)
                 return;
 
             float arrivalRadius = ArrivalRadius;

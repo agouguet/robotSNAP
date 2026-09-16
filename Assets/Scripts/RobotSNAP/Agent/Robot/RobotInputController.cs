@@ -32,7 +32,6 @@ namespace RobotSNAP
         [SerializeField] private Supervisor _supervisor;
 
         private Robot _robot;
-        private bool _isRosSubscribed;
         private string _fullCmdVelTopic;
         private float _lastRosCommandTime;
         private float _targetLinear;
@@ -49,7 +48,7 @@ namespace RobotSNAP
             _robot = GetComponent<Robot>();
             if (_robot == null) { Debug.LogError("Robot component missing"); enabled = false; return; }
             _supervisor ??= Supervisor.Instance;
-            _envROS ??= FindFirstObjectByType<EnvROS>();
+            _envROS ??= FindAnyObjectByType<EnvROS>();
             if (_envROS != null && (controlMode == ControlMode.ROS || controlMode == ControlMode.Hybrid))
                 SubscribeToROS();
         }
@@ -108,7 +107,6 @@ namespace RobotSNAP
             else if (!string.IsNullOrEmpty(customPrefix)) prefix = customPrefix;
             _fullCmdVelTopic = string.IsNullOrEmpty(prefix) ? cmdVelTopic : $"/{prefix.TrimStart('/')}{cmdVelTopic}";
             _envROS.RegisterSubscriber<RosMessageTypes.Geometry.TwistMsg>(_fullCmdVelTopic, OnRosCommandReceived);
-            _isRosSubscribed = true;
         }
 
         private void OnRosCommandReceived(RosMessageTypes.Geometry.TwistMsg msg)

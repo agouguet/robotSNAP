@@ -15,7 +15,6 @@ public class ScenarioSelectionController : MonoBehaviour
     [Header("Pop-up settings")]
     [SerializeField] private int _columns = 4;
     [SerializeField] private float _cardSpacingPercent = 1f;
-    [SerializeField] private string _searchPlaceholder = "Search a scenario...";
 
     // Éléments UI du popup
     private VisualElement _root;
@@ -31,6 +30,12 @@ public class ScenarioSelectionController : MonoBehaviour
 
     public event Action<string> OnScenarioSelected;
     public event Action OnPopupClosed;
+
+    /// <summary>
+    /// The user asked for a brand new scenario. Writing one belongs to the Scenarios tab, so the
+    /// popup reports the intent and lets the shell take the user there.
+    /// </summary>
+    public event Action OnNewScenarioRequested;
 
     // ==========================================
     //          CYCLE DE VIE
@@ -203,7 +208,7 @@ public class ScenarioSelectionController : MonoBehaviour
 
     private void OnNewScenarioClicked()
     {
-        Debug.Log("[ScenarioSelectionController] Nouveau scénario - à implémenter.");
         ClosePopup();
+        OnNewScenarioRequested?.Invoke();
     }
 }

@@ -16,8 +16,6 @@ namespace RobotSNAP.ROS
     public class EnvROS : MonoBehaviour
     {
         [Header("ROS Configuration")]
-        [SerializeField] private string rosServiceName = "ros";
-        [SerializeField] private string robotName = "robot";
         [SerializeField] private bool logPublishEvents = false;
         [SerializeField] private bool autoInitialize = true;
         

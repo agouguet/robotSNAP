@@ -16,7 +16,6 @@ public class ScenarioListView : VisualElement
 
     // === Événements ===
     public event Action<string> OnScenarioSelected;
-    public event Action<string> OnScenarioDoubleClicked;
 
     private int _columns = 2;
     private float _cardSpacingPercent = 2f;

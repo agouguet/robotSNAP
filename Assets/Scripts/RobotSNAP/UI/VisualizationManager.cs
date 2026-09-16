@@ -61,13 +61,13 @@ namespace RobotSNAP.UI
         public GameObject floorObject;
         
         // Agent data tracking
-        private Dictionary<int, Queue<Vector3>> _positionHistory = new Dictionary<int, Queue<Vector3>>();
-        private Dictionary<int, LineRenderer> _trajectoryRenderers = new Dictionary<int, LineRenderer>();
-        private Dictionary<int, LineRenderer> _pathRenderers = new Dictionary<int, LineRenderer>();
-        private Dictionary<int, GameObject> _goalMarkers = new Dictionary<int, GameObject>();
-        private Dictionary<int, LineRenderer> _velocityVectors = new Dictionary<int, LineRenderer>();
-        private Dictionary<int, GameObject> _interactionRadiusVisuals = new Dictionary<int, GameObject>();
-        private Dictionary<int, TextMesh> _agentIdLabels = new Dictionary<int, TextMesh>();
+        private Dictionary<EntityId, Queue<Vector3>> _positionHistory = new Dictionary<EntityId, Queue<Vector3>>();
+        private Dictionary<EntityId, LineRenderer> _trajectoryRenderers = new Dictionary<EntityId, LineRenderer>();
+        private Dictionary<EntityId, LineRenderer> _pathRenderers = new Dictionary<EntityId, LineRenderer>();
+        private Dictionary<EntityId, GameObject> _goalMarkers = new Dictionary<EntityId, GameObject>();
+        private Dictionary<EntityId, LineRenderer> _velocityVectors = new Dictionary<EntityId, LineRenderer>();
+        private Dictionary<EntityId, GameObject> _interactionRadiusVisuals = new Dictionary<EntityId, GameObject>();
+        private Dictionary<EntityId, TextMesh> _agentIdLabels = new Dictionary<EntityId, TextMesh>();
         
         private Material _wireframeMaterial;
         private Dictionary<Renderer, Material[]> _originalMaterials = new Dictionary<Renderer, Material[]>();
@@ -248,17 +248,17 @@ namespace RobotSNAP.UI
             Robot robot = FindAnyObjectByType<Robot>();
             if (robot != null)
             {
-                AddPositionToHistory(robot.GetInstanceID(), robot.Position);
+                AddPositionToHistory(robot.GetEntityId(), robot.Position);
             }
             // Update humans history
-            HumanAgent[] humans = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
+            HumanAgent[] humans = FindObjectsByType<HumanAgent>();
             foreach (var human in humans)
             {
-                AddPositionToHistory(human.GetInstanceID(), human.transform.position);
+                AddPositionToHistory(human.GetEntityId(), human.transform.position);
             }
         }
         
-        private void AddPositionToHistory(int id, Vector3 pos)
+        private void AddPositionToHistory(EntityId id, Vector3 pos)
         {
             if (!_positionHistory.ContainsKey(id))
                 _positionHistory[id] = new Queue<Vector3>();
@@ -268,7 +268,7 @@ namespace RobotSNAP.UI
                 queue.Dequeue();
         }
         
-        private List<Vector3> GetPositionHistory(int id)
+        private List<Vector3> GetPositionHistory(EntityId id)
         {
             if (_positionHistory.TryGetValue(id, out var queue))
                 return new List<Vector3>(queue);
@@ -302,7 +302,7 @@ namespace RobotSNAP.UI
             Robot robot = FindAnyObjectByType<Robot>();
             if (robot == null) return;
             
-            int id = robot.GetInstanceID();
+            EntityId id = robot.GetEntityId();
             Vector3 robotPos = robot.Position; // baseLink position
             
             // Trajectory
@@ -360,10 +360,10 @@ namespace RobotSNAP.UI
         
         private void UpdateHumanVisualizations()
         {
-            HumanAgent[] humans = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
+            HumanAgent[] humans = FindObjectsByType<HumanAgent>();
             foreach (var human in humans)
             {
-                int id = human.GetInstanceID();
+                EntityId id = human.GetEntityId();
                 Vector3 pos = human.transform.position;
                 Color humanColor = GetHumanColor(human);
                 
@@ -441,7 +441,7 @@ namespace RobotSNAP.UI
         {
             if (wireframeMode)
             {
-                foreach (var renderer in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                foreach (var renderer in FindObjectsByType<Renderer>())
                 {
                     if (!_originalMaterials.ContainsKey(renderer))
                     {
@@ -465,7 +465,7 @@ namespace RobotSNAP.UI
         
         #region Helper Methods for Renderers
         
-        private LineRenderer GetOrCreateLineRenderer(Dictionary<int, LineRenderer> dict, int id, string name, Color color, float width)
+        private LineRenderer GetOrCreateLineRenderer(Dictionary<EntityId, LineRenderer> dict, EntityId id, string name, Color color, float width)
         {
             if (!dict.ContainsKey(id))
             {
@@ -483,12 +483,12 @@ namespace RobotSNAP.UI
             return dict[id];
         }
         
-        private void HideRenderer(Dictionary<int, LineRenderer> dict, int id)
+        private void HideRenderer(Dictionary<EntityId, LineRenderer> dict, EntityId id)
         {
             if (dict.ContainsKey(id)) dict[id].enabled = false;
         }
         
-        private void UpdateTrajectoryRenderer(int id, LineRenderer renderer)
+        private void UpdateTrajectoryRenderer(EntityId id, LineRenderer renderer)
         {
             var history = GetPositionHistory(id);
             if (history.Count < 2)
@@ -519,7 +519,7 @@ namespace RobotSNAP.UI
             }
         }
         
-        private GameObject GetOrCreateGoalMarker(int id, Color color)
+        private GameObject GetOrCreateGoalMarker(EntityId id, Color color)
         {
             if (!_goalMarkers.ContainsKey(id))
             {
@@ -541,7 +541,7 @@ namespace RobotSNAP.UI
             return _goalMarkers[id];
         }
         
-        private GameObject GetOrCreateInteractionRadius(int id)
+        private GameObject GetOrCreateInteractionRadius(EntityId id)
         {
             if (!_interactionRadiusVisuals.ContainsKey(id))
             {
@@ -569,13 +569,13 @@ namespace RobotSNAP.UI
             return _interactionRadiusVisuals[id];
         }
         
-        private void HideInteractionRadius(int id)
+        private void HideInteractionRadius(EntityId id)
         {
             if (_interactionRadiusVisuals.ContainsKey(id))
                 _interactionRadiusVisuals[id].SetActive(false);
         }
         
-        private TextMesh GetOrCreateAgentIdLabel(int id, string defaultText, Color color)
+        private TextMesh GetOrCreateAgentIdLabel(EntityId id, string defaultText, Color color)
         {
             if (!_agentIdLabels.ContainsKey(id))
             {
@@ -687,7 +687,7 @@ namespace RobotSNAP.UI
         
         private void DrawBoundingBoxes()
         {
-            var agents = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
+            var agents = FindObjectsByType<HumanAgent>();
             foreach (var a in agents)
             {
                 Vector3 center = a.transform.position;
@@ -727,11 +727,11 @@ namespace RobotSNAP.UI
             // optional: distance between robot and each human
             Robot robot = FindAnyObjectByType<Robot>();
             if (robot == null) return;
-            var humans = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
+            var humans = FindObjectsByType<HumanAgent>();
             foreach (var h in humans)
             {
                 float dist = Vector3.Distance(robot.Position, h.transform.position);
-                var label = GetOrCreateAgentIdLabel(h.GetInstanceID(), "dist", Color.white);
+                var label = GetOrCreateAgentIdLabel(h.GetEntityId(), "dist", Color.white);
                 label.transform.position = (robot.Position + h.transform.position) / 2f + Vector3.up * 1.2f;
                 label.text = $"{dist:F1}m";
                 label.color = Color.white;

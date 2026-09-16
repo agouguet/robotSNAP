@@ -16,7 +16,6 @@ namespace RobotSNAP.Core
     {
         [Header("Config Persistence")]
         [SerializeField] private bool _autoSaveOnQuit = false;
-        [SerializeField] private string _configSavePath = "Assets/Configs/SavedConfig.asset";
         [SerializeField] private string _configsFolderPath = "Assets/Configs/";
         
         [Header("Settings")]

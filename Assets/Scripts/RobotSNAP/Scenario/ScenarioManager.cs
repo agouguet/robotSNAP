@@ -23,12 +23,6 @@ namespace RobotSNAP.Core.Scenario
         public ScenarioLoader Loader => _scenarioLoader;
 
         [Header("Settings")]
-        [Tooltip("Nom du scénario par défaut (sans extension)")]
-        [SerializeField] private string _defaultScenarioName = "default";
-
-        [Tooltip("Applique automatiquement le scénario après chargement")]
-        [SerializeField] private bool _autoApplyAfterLoad = true;
-
         [Tooltip("Délai avant application (secondes)")]
         [SerializeField] private float _applyDelay = 0.5f;
 

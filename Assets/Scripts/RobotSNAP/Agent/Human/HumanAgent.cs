@@ -28,7 +28,6 @@ namespace RobotSNAP.Agents
         private HumanMovement _movement;
         private Animator _animator;
         private Supervisor _supervisor;
-        private bool _wasPlaying = true;
         private bool _wasPaused;
 
         // Ordered route: the agent walks from the first point to the last one, then applies its end behavior.

@@ -97,7 +97,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _loader: {fileID: 0}
-  _environmentBuilder: {fileID: 2853346668875565706}
   _robotPrefab: {fileID: 7195339433518795282, guid: a7f37e81683a824d98ee39033e995bda, type: 3}
   _clearExistingHumans: 1
   _resetRobotPosition: 1
@@ -614,6 +613,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.Agents.HumanManager
   _initialCapacity: 50
+  _bucketCellSize: 4
   _logEvents: 0
 --- !u!1 &8390315431583928309
 GameObject:
@@ -627,7 +627,6 @@ GameObject:
   - component: {fileID: 8141991226361718380}
   - component: {fileID: 3071133837995206150}
   - component: {fileID: 4526805004899623130}
-  - component: {fileID: 2314152864834323734}
   - component: {fileID: 6716019574547653924}
   m_Layer: 0
   m_Name: Main Camera
@@ -754,25 +753,6 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
---- !u!114 &2314152864834323734
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8390315431583928309}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9b28a5db1083fb418a82007a591d5028, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  displayIndex: 1
-  target: {fileID: 0}
-  smoothTime: 0.3
-  zoomSpeed: 5
-  zoomStep: 1
-  minZoom: 1
-  maxZoom: 20
 --- !u!114 &6716019574547653924
 MonoBehaviour:
   m_ObjectHideFlags: 0

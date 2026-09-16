@@ -157,6 +157,9 @@ public class SimulationTabController : MonoBehaviour
 
         if (scenarioManager != null)
             scenarioManager.OnScenarioApplied += OnScenarioApplied;
+
+        if (scenarioSelectionController != null)
+            scenarioSelectionController.OnNewScenarioRequested += OnNewScenarioRequested;
     }
 
     private void Unsubscribe()
@@ -171,6 +174,9 @@ public class SimulationTabController : MonoBehaviour
 
         if (scenarioManager != null)
             scenarioManager.OnScenarioApplied -= OnScenarioApplied;
+
+        if (scenarioSelectionController != null)
+            scenarioSelectionController.OnNewScenarioRequested -= OnNewScenarioRequested;
     }
 
     private void Update()
@@ -238,6 +244,12 @@ public class SimulationTabController : MonoBehaviour
                     : cameraController.OrbitPivot;
 
             cameraController.OrbitPivot = pivot;
+
+            // A freshly applied scenario replaces the whole cast, so whatever was selected before is
+            // gone: the robot takes the view and the selection, and the panel opens on it rather than
+            // on "No agent".
+            if (robot != null)
+                cameraController.FocusAgent(robot.RobotTransform);
         }
 
         // A prefab or an additive scene has no occupancy image: the minimap then shows the top view
@@ -290,6 +302,38 @@ public class SimulationTabController : MonoBehaviour
     {
         _currentState = evt.NewState;
         UpdateUI();
+
+        // A run is about the robot: starting one hands it the view and the selection, the way every
+        // simulation tool opens on its subject. Only when nothing is selected, so a user who went
+        // and picked a pedestrian keeps that choice.
+        if (_currentState == SimulationState.Running)
+            FocusRobot();
+    }
+
+    /// <summary>
+    /// The popup asked for a new scenario. The creation workflow lives in the Scenarios tab, so the
+    /// shell switches there — loading it first, which is what builds the tab's widgets — and then
+    /// opens the first step of a blank scenario.
+    /// </summary>
+    private void OnNewScenarioRequested()
+    {
+        SidebarController sidebar = FindAnyObjectByType<SidebarController>();
+        sidebar?.ShowView("Scenarios");
+
+        FindAnyObjectByType<ScenariosTabController>()?.OpenNewScenario();
+    }
+
+    /// <summary>
+    /// Points the camera at the robot and selects it, unless the user has already chosen an agent.
+    /// The robot is the subject of the run and the only agent the scenario guarantees.
+    /// </summary>
+    private void FocusRobot()
+    {
+        if (cameraController == null || cameraController.IsFollowing) return;
+
+        RobotSNAP.Agents.Robot robot = FindAnyObjectByType<RobotSNAP.Agents.Robot>();
+        if (robot != null)
+            cameraController.FocusAgent(robot.RobotTransform);
     }
 
     private void UpdateUI()

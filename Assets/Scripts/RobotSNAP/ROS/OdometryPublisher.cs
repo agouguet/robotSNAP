@@ -40,7 +40,7 @@ namespace RobotSNAP.ROS
         private void Start()
         {
             // Find EnvROS
-            _envROS ??= FindFirstObjectByType<EnvROS>();
+            _envROS ??= FindAnyObjectByType<EnvROS>();
             
             if (_envROS == null)
             {

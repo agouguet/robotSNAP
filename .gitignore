@@ -100,3 +100,11 @@ InitTestScene*.unity*
 
 
 .vscode/
+
+# Scratch files and screenshots taken while working on the UI.
+/[Aa]ssets/[Tt]emp/
+
+# Scenarios the application moves aside when they are deleted: they stay on disk for the user, and
+# they are not part of the project's history.
+/[Aa]ssets/StreamingAssets/Scenarios/DeletedScenarios/
+/[Aa]ssets/StreamingAssets/Scenarios/DeletedScenarios.meta

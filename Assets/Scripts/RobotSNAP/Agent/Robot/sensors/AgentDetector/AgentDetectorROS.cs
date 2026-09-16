@@ -69,7 +69,7 @@ namespace RobotSNAP
                 return;
             }
             
-            _envROS ??= FindFirstObjectByType<EnvROS>();
+            _envROS ??= FindAnyObjectByType<EnvROS>();
             if (_envROS == null)
             {
                 Debug.LogWarning($"[{name}] EnvROS not found, will not publish");
@@ -150,7 +150,7 @@ namespace RobotSNAP
                 relVel = transform.InverseTransformDirection(rb.linearVelocity);
             var fluVel = relVel.To<FLU>();     // type: Vector3<FLU>
             
-            string id = agent.GetInstanceID().ToString();
+            string id = agent.GetEntityId().ToString();
             
             var jsonObj = new Dictionary<string, object>
             {

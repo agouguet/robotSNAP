@@ -61,12 +61,6 @@ public sealed class MinimapVisionCone : VisualElement
         SetState(radius, headingDegrees, FullTurnDegrees, fill, stroke);
     }
 
-    /// <summary>Empties the state, so the element stays painted with nothing until the next call.</summary>
-    public void Clear()
-    {
-        SetState(0f, 0f, 0f, Color.clear, Color.clear);
-    }
-
     /// <summary>
     /// Stores the drawing state, resizes the element to the bounding box it needs and asks for a
     /// repaint. Nothing but the styles is touched here, so the owner keeps control of the position.

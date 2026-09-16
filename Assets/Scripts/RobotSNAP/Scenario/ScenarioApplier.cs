@@ -230,7 +230,7 @@ namespace RobotSNAP.Core.Scenario
             }
             else
             {
-                var humans = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
+                var humans = FindObjectsByType<HumanAgent>();
                 foreach (var h in humans)
                     Destroy(h.gameObject);
                 if (_logEvents) Debug.Log($"[ScenarioApplier] Destroyed {humans.Length} humans directly.");

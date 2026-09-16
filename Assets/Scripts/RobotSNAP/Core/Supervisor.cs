@@ -31,9 +31,6 @@ namespace RobotSNAP
 
         #region Serialized Fields
 
-        [Header("Startup")]
-        [SerializeField] private bool _startPaused = true;
-
         [Header("Configuration")]
         [Tooltip("Configuration par défaut (ScriptableObject)")]
         [SerializeField] private SimulationConfig _defaultConfig;

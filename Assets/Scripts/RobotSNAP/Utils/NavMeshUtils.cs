@@ -5,16 +5,15 @@ namespace RobotSNAP.Utils
 {
     public static class NavMeshUtils
     {
-        // Returns -1 if no complete path, otherwise the path length
+        /// <summary>
+        /// Returns -1 if no complete path, otherwise the path length.
+        ///
+        /// The filter is not consulted: every caller ends up on the unfiltered path below. Kept as a
+        /// parameter because that is the shape callers expect, should the filtered walk ever come back.
+        /// </summary>
         public static float GetNavMeshPathLength(Vector3 start, Vector3 end, NavMeshQueryFilter filter)
         {
             return GetNavMeshPathLengthSimple(start, end);
-            NavMeshPath p = new NavMeshPath();
-            bool found = NavMesh.CalculatePath(start, end, filter, p);
-            if (!found || p.status != NavMeshPathStatus.PathComplete) return -1f;
-            float total = 0f;
-            for (int i = 1; i < p.corners.Length; i++) total += Vector3.Distance(p.corners[i - 1], p.corners[i]);
-            return total;
         }
 
         public static float GetNavMeshPathLengthSimple(Vector3 start, Vector3 end)

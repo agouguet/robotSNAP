@@ -46,7 +46,6 @@ namespace RobotSNAP.Core.Scenario
 
         public event Action<ScenarioData> OnScenarioLoaded;
         public event Action<string> OnScenarioError;
-        public event Action<string, Texture2D> OnMapLoaded;
         public event Action OnPathsUpdated;
 
         private void Awake()

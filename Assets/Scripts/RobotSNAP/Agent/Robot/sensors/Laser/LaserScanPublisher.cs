@@ -36,7 +36,7 @@ namespace RobotSNAP
         public void Initialize()
         {
             // Find EnvROS
-            _envROS ??= FindFirstObjectByType<EnvROS>();
+            _envROS ??= FindAnyObjectByType<EnvROS>();
             
             if (_envROS == null)
             {

@@ -47,7 +47,7 @@ namespace RobotSNAP
                 return;
             }
             
-            _envROS ??= FindFirstObjectByType<EnvROS>();
+            _envROS ??= FindAnyObjectByType<EnvROS>();
             if (_envROS == null)
             {
                 Debug.LogWarning($"[{name}] EnvROS not found, odometry will not be published");

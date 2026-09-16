@@ -466,7 +466,12 @@ public class ScenariosTabController : MonoBehaviour
         }
     }
 
-    private void OpenNewScenario()
+    /// <summary>
+    /// Opens the creation workflow on a blank scenario. Public because the "New Scenario" button of
+    /// the scenario popup lands here: creating a scenario is this tab's job, wherever the request
+    /// comes from.
+    /// </summary>
+    public void OpenNewScenario()
     {
         _editingScenarioId = null;
         _editingScenario = null;

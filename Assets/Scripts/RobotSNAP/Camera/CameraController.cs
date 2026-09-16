@@ -1,6 +1,5 @@
 // CameraController.cs
 using UnityEngine;
-using System.Collections;
 using System.Collections.Generic;
 using RobotSNAP;
 using RobotSNAP.Agents;
@@ -8,21 +7,6 @@ using UnityEngine.UIElements;
 
 namespace RobotSNAP.CameraControl
 {
-    // Structure regroupant les informations d'un mode
-    public class CameraModeEntry
-    {
-        public ICameraMode ModeInstance { get; set; }
-        public string DisplayName { get; set; }
-        public bool RequiresFocus { get; set; }
-
-        public CameraModeEntry(ICameraMode modeInstance, string displayName, bool requiresFocus)
-        {
-            ModeInstance = modeInstance;
-            DisplayName = displayName;
-            RequiresFocus = requiresFocus;
-        }
-    }
-
     public class CameraController : MonoBehaviour
     {
         /// <summary>
@@ -38,8 +22,7 @@ namespace RobotSNAP.CameraControl
 
         [Header("Camera References")]
         public Camera mainCamera;
-        public Transform cameraTarget;
-        
+
         [Header("Camera Settings")]
         public float moveSpeed = 10f;
         public float rotateSpeed = 100f;
@@ -56,7 +39,6 @@ namespace RobotSNAP.CameraControl
         
         [Header("Follow Mode Settings")]
         public List<string> followableTags = new List<string> { "Robot", "Human", "Agent" };
-        public List<LayerMask> followableLayers = new List<LayerMask>();
         private List<Transform> _followableTargets = new List<Transform>();
         private int _currentFollowIndex = -1;
 
@@ -73,7 +55,6 @@ namespace RobotSNAP.CameraControl
         public Vector3 topDownOffset = new Vector3(0, 20, 0);
         public Vector3 firstPersonOffset = new Vector3(0, 1.5f, 0.5f);
         public Vector3 thirdPersonOffset = new Vector3(0, 2, 5);
-        public Vector3 orbitOffset = new Vector3(0, 5, -10);
 
         [Header("Interaction")]
         [Tooltip("What the left mouse button does in the view: pick an agent, slide, turn or zoom.")]
@@ -117,10 +98,6 @@ namespace RobotSNAP.CameraControl
         public KeyCode rotateKey = KeyCode.Mouse1;
         public KeyCode fastMoveKey = KeyCode.LeftShift;
         
-        [Header("Split View")]
-        public List<Camera> splitViewCameras = new List<Camera>();
-        public GameObject splitViewContainer;
-        
         public event System.Action OnViewChanged;
         
         public enum CameraMode
@@ -129,30 +106,23 @@ namespace RobotSNAP.CameraControl
             TopDown,
             FirstPerson,
             ThirdPerson,
-            Orbit,
-            MultiTarget,
-            Cinematic
+            Orbit
         }
         
         private CameraMode _currentModeEnum = CameraMode.Free;
         private ICameraMode _currentMode;
-        // Dictionnaire unique : clé = enum, valeur = entrée (instance + métadonnées)
-        private Dictionary<CameraMode, CameraModeEntry> _modeEntries;
-        public IEnumerable<KeyValuePair<CameraMode, CameraModeEntry>> ModeEntries => _modeEntries;
+        // Dictionnaire unique : clé = enum, valeur = instance du mode
+        private Dictionary<CameraMode, ICameraMode> _modes;
         
         // Variables d’état partagées
         public Vector3 velocity;
         private Vector3 _targetPosition;
         private Quaternion _targetRotation;
-        private float _currentDistance;
-        private float _currentHeight;
         private float _currentRotationY;
         private float _currentRotationX;
         private bool _isRotating = false;
         private Vector3 _lastMousePosition;
         private Transform _currentFollowTarget;
-        private Coroutine _cinematicCoroutine;
-        private bool _isSplitView = false;
 
         // View-tool input: what the left button does is chosen by the toolbar, so the gesture is
         // tracked here rather than in the modes, which keep their own right-drag and wheel handling.
@@ -168,14 +138,11 @@ namespace RobotSNAP.CameraControl
         #region Properties for modes
         public Vector3 TargetPosition { get => _targetPosition; set => _targetPosition = value; }
         public Quaternion TargetRotation { get => _targetRotation; set => _targetRotation = value; }
-        public float CurrentDistance { get => _currentDistance; set => _currentDistance = value; }
-        public float CurrentHeight { get => _currentHeight; set => _currentHeight = value; }
         public float CurrentRotationY { get => _currentRotationY; set => _currentRotationY = value; }
         public float CurrentRotationX { get => _currentRotationX; set => _currentRotationX = value; }
         public bool IsRotating { get => _isRotating; set => _isRotating = value; }
         public Vector3 LastMousePosition { get => _lastMousePosition; set => _lastMousePosition = value; }
         public Transform CurrentFollowTarget { get => _currentFollowTarget; set => _currentFollowTarget = value; }
-        public bool IsSplitView { get => _isSplitView; set => _isSplitView = value; }
         #endregion
         
         #region Unity Lifecycle
@@ -198,7 +165,6 @@ namespace RobotSNAP.CameraControl
             // focus navigation of UI Toolkit, which is how the agent filter used to steal typing.
             PointerOverView = ComputePointerOverView();
             HandleToolInput();
-            UpdateWallVisibility();
         }
 
         #region View tools
@@ -307,15 +273,16 @@ namespace RobotSNAP.CameraControl
             return (-right.normalized * screenDelta.x - forward.normalized * screenDelta.y) * perPixel;
         }
 
-        /// <summary>Turns the view around the pivot — the selected agent, or wherever the move tool left it.</summary>
+        /// <summary>
+        /// Turns the view around the pivot — the selected agent, or wherever the move tool left it.
+        ///
+        /// Only the turn is offered. Tilting the shot up and down is what made the gesture feel
+        /// wrong: the view slid between a corridor eye-level and a map, when the pitch the orbit was
+        /// authored with is the one that frames the scene.
+        /// </summary>
         private void RotateBy(Vector2 screenDelta)
         {
-            float speed = rotateSpeed * Time.unscaledDeltaTime * 0.6f;
-            _currentRotationY += screenDelta.x * speed;
-            _currentRotationX -= screenDelta.y * speed;
-
-            // Kept above the ground: the orbit always looks at the pivot from above, never from below.
-            _currentRotationX = Mathf.Clamp(_currentRotationX, 15f, 80f);
+            _currentRotationY += screenDelta.x * rotateSpeed * Time.unscaledDeltaTime * 0.6f;
         }
 
         /// <summary>Pulls the camera closer or pushes it away, without touching the wheel path.</summary>
@@ -522,20 +489,6 @@ namespace RobotSNAP.CameraControl
 
         #endregion
 
-        private void UpdateWallVisibility()
-        {
-            // Récupère tous les colliders proches de la caméra
-            // Collider[] hitColliders = Physics.OverlapSphere(mainCamera.transform.position, 5f, obstacleMask);
-            // foreach (var col in hitColliders)
-            // {
-            //     // Active un indicateur sur le mur (ex: un enfant avec un renderer)
-            //     var wallIndicator = col.GetComponentInChildren<WallIndicator>();
-            //     if (wallIndicator != null)
-            //         wallIndicator.Show();
-            // }
-            // Désactiver les indicateurs trop loin ? (à gérer avec un système de pooling ou de durée)
-        }
-        
         #endregion
         
         #region Initialization
@@ -549,7 +502,6 @@ namespace RobotSNAP.CameraControl
             {
                 _targetPosition = mainCamera.transform.position;
                 _targetRotation = mainCamera.transform.rotation;
-                _currentDistance = orbitDistance;
 
                 // The view opens on the isometric orbit rather than on whatever pose the scene camera
                 // happens to have: the tools are the only way to move it from here.
@@ -557,19 +509,14 @@ namespace RobotSNAP.CameraControl
                 _currentRotationX = orbitPitch;
                 OrbitPivot = GroundPointInFront(mainCamera.transform, orbitDistance);
             }
-            
-            if (splitViewContainer != null) splitViewContainer.SetActive(false);
-            
-            // Création du dictionnaire unique
-            _modeEntries = new Dictionary<CameraMode, CameraModeEntry>
+
+            _modes = new Dictionary<CameraMode, ICameraMode>
             {
-                { CameraMode.Free, new CameraModeEntry(new FreeCameraMode(), "Free", false) },
-                { CameraMode.TopDown, new CameraModeEntry(new TopDownMode(), "Top", false) },
-                { CameraMode.FirstPerson, new CameraModeEntry(new FirstPersonMode(), "First", true) },
-                { CameraMode.ThirdPerson, new CameraModeEntry(new ThirdPersonMode(), "Third", true) },
-                { CameraMode.Orbit, new CameraModeEntry(new OrbitMode(), "Orbit", false) },
-                // { CameraMode.MultiTarget, new CameraModeEntry(new MultiTargetMode(), "Multi", false) },
-                // { CameraMode.Cinematic, new CameraModeEntry(new CinematicMode(), "Cinematic", false) }
+                { CameraMode.Free, new FreeCameraMode() },
+                { CameraMode.TopDown, new TopDownMode() },
+                { CameraMode.FirstPerson, new FirstPersonMode() },
+                { CameraMode.ThirdPerson, new ThirdPersonMode() },
+                { CameraMode.Orbit, new OrbitMode() }
             };
 
             velocity = Vector3.zero;
@@ -591,20 +538,16 @@ namespace RobotSNAP.CameraControl
         #endregion
         
         #region Public Methods
-        
-        public void SetCameraMode(int mode) => SetCameraMode((CameraMode)mode);
-        
-        public void SetCameraMode(string modeName)
+
+        /// <summary>
+        /// Hands the view over to a mode. The session opens on the orbit; nothing else picks a mode
+        /// while it runs, so this stays the one place that knows how a switch is carried out.
+        /// </summary>
+        private void SetCameraMode(CameraMode mode)
         {
-            if (System.Enum.TryParse(modeName, out CameraMode mode))
-                SetCameraMode(mode);
-        }
-        
-        public void SetCameraMode(CameraMode mode)
-        {
-            if (!_modeEntries.TryGetValue(mode, out var entry))
+            if (!_modes.TryGetValue(mode, out ICameraMode next))
             {
-                Debug.LogWarning($"Mode {mode} not found.");
+                Debug.LogWarning($"[CameraController] The view has no {mode} mode.");
                 return;
             }
 
@@ -619,104 +562,12 @@ namespace RobotSNAP.CameraControl
 
             if (_currentMode != null) _currentMode.Exit(this);
             _currentModeEnum = mode;
-            _currentMode = entry.ModeInstance;
+            _currentMode = next;
             _currentMode.Enter(this);
             OnViewChanged?.Invoke();
             Debug.Log($"[CameraController] Mode changed to: {mode}");
         }
-        
-        public CameraMode GetCurrentMode() => _currentModeEnum;
-        public string GetCurrentModeName() => _currentModeEnum.ToString();
-        
-        public string GetCurrentDisplayName()
-        {
-            if (_modeEntries.TryGetValue(_currentModeEnum, out var entry))
-                return entry.DisplayName;
-            return _currentModeEnum.ToString();
-        }
-        
-        public bool GetModeRequiresFocus(CameraMode mode)
-        {
-            return _modeEntries.TryGetValue(mode, out var entry) && entry.RequiresFocus;
-        }
-        
-        public void ResetToDefaultView()
-        {
-            SetCameraMode(CameraMode.Free);
-            OnViewChanged?.Invoke();
-        }
-        
-        public void SetSplitView(bool enable, int mode)
-        {
-            _isSplitView = enable;
-            if (splitViewContainer != null) splitViewContainer.SetActive(enable);
-            if (enable)
-                SetupSplitView(mode);
-            else
-            {
-                foreach (var cam in splitViewCameras)
-                    if (cam != null && cam != mainCamera) cam.gameObject.SetActive(false);
-                mainCamera.rect = new Rect(0, 0, 1, 1);
-            }
-            OnViewChanged?.Invoke();
-        }
-        
-        private void SetupSplitView(int mode) { /* Garder le code existant inchangé */ }
-        private void SetupCameraForRect(int index, Rect rect) { /* Garder le code existant inchangé */ }
-        
-        public void FocusOnAgent(int agentId)
-        {
-            GameObject[] agents = GameObject.FindGameObjectsWithTag("Human");
-            foreach (var agent in agents)
-            {
-                var humanComponent = agent.GetComponent<HumanAgent>();
-                if (humanComponent != null && humanComponent.agentId == agentId)
-                {
-                    SetCameraMode(CameraMode.Orbit);
-                    _currentFollowTarget = agent.transform;
-                    _currentRotationY = agent.transform.eulerAngles.y + 180f;
-                    _currentRotationX = 30f;
-                    OnViewChanged?.Invoke();
-                    return;
-                }
-            }
-            Debug.LogWarning($"[CameraController] Agent with ID {agentId} not found");
-        }
-        
-        public void CycleToNextView()
-        {
-            int nextMode = ((int)_currentModeEnum + 1) % System.Enum.GetValues(typeof(CameraMode)).Length;
-            SetCameraMode(nextMode);
-        }
-        
-        public void SetCameraTransform(Vector3 position, Quaternion rotation)
-        {
-            SetCameraMode(CameraMode.Free);
-            _targetPosition = position;
-            _targetRotation = rotation;
-            Vector3 euler = rotation.eulerAngles;
-            _currentRotationY = euler.y;
-            _currentRotationX = euler.x;
-            OnViewChanged?.Invoke();
-        }
-        
-        public void StartCinematicSequence(Transform[] waypoints, float duration)
-        {
-            if (_cinematicCoroutine != null) StopCoroutine(_cinematicCoroutine);
-            _cinematicCoroutine = StartCoroutine(CinematicSequence(waypoints, duration));
-        }
-        
-        private IEnumerator CinematicSequence(Transform[] waypoints, float duration)
-        {
-            SetCameraMode(CameraMode.Cinematic);
-            var cinematicMode = _currentMode as CinematicMode;
-            if (cinematicMode != null)
-            {
-                yield return cinematicMode.PlaySequence(this, waypoints, duration);
-            }
-            SetCameraMode(CameraMode.Free);
-        }
-        
+
         public void RefreshFollowableTargets()
         {
             _followableTargets.Clear();
@@ -738,7 +589,6 @@ namespace RobotSNAP.CameraControl
                         _followableTargets.Add(targetTransform);
                 }
             }
-            foreach (LayerMask layer in followableLayers) { /* placeholder */ }
             _followableTargets.Sort((a, b) => string.Compare(a.name, b.name, System.StringComparison.OrdinalIgnoreCase));
             OnTargetsUpdated?.Invoke(_followableTargets);
         }
@@ -811,7 +661,6 @@ namespace RobotSNAP.CameraControl
         }
         
         public Transform GetCurrentFollowTarget() => _currentFollowTarget;
-        public bool IsSplitViewActive() => _isSplitView;
 
         /// <summary>
         /// Ajuste une position désirée pour éviter les obstacles en effectuant un raycast depuis un point d'origine.

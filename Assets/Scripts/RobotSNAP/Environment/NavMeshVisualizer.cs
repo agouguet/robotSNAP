@@ -16,7 +16,6 @@ namespace RobotSNAP.Core
         [Header("Visual Settings")]
         [SerializeField] private Color surfaceColor = new Color(0, 1, 0, 0.4f);
         [SerializeField] private float yOffset = 0f; // Décalage vertical pour éviter la superposition
-        [SerializeField] private bool showWireframe = false;
         [SerializeField] private Color wireframeColor = Color.white;
         
         [Header("Runtime")]

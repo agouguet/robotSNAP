@@ -256,23 +256,55 @@ namespace RobotSNAP.CameraControl
         }
 
         /// <summary>
-        /// Slides the view. Only the free camera owns its position: while an agent is followed the
-        /// camera belongs to it, and the user releases it from the agent bar instead.
+        /// Slides the view across the map, one visible span of ground per screen: the gesture means
+        /// the same thing at every zoom level, and the same thing on every frame rate. Only the free
+        /// camera owns its position — while an agent is followed the camera belongs to it, and the
+        /// user releases it from the agent bar instead.
+        ///
+        /// The pivot is not the only thing that moves. Nudging the pivot alone leaves the camera
+        /// looking at a spot it has not reached yet, and the orbit's smoothing then turns the shot
+        /// while it catches up — the swing the translation tool used to show. The camera is carried
+        /// by the same offset instead, so its angle relative to the pivot never changes during a pan.
         /// </summary>
         private void PanBy(Vector2 screenDelta)
         {
+            if (mainCamera == null || screenDelta == Vector2.zero) return;
+
             // Sliding the view by hand is the one gesture that releases the agent: the camera stops
             // being about that agent and becomes a place the user chose to look at.
             if (_currentFollowTarget != null)
                 ClearFollowTarget();
+
+            Vector3 shift = GroundShiftFromDrag(screenDelta);
+
+            OrbitPivot += shift;
+            mainCamera.transform.position += shift;
+        }
+
+        /// <summary>
+        /// The ground a drag of that many pixels is worth, in the direction the view faces.
+        ///
+        /// The scale comes from the ground the camera can see rather than from a fixed constant, so
+        /// a pan covers the same share of the screen whether the view is close or far. It is a
+        /// distance per pixel and not per second: multiplying a mouse displacement by a frame time
+        /// would make the same drag travel twice as far on a machine twice as fast.
+        /// </summary>
+        private Vector3 GroundShiftFromDrag(Vector2 screenDelta)
+        {
+            float distance = Vector3.Distance(mainCamera.transform.position, OrbitPivot);
+            float pitch = Mathf.Max(5f, Mathf.Abs(_currentRotationX)) * Mathf.Deg2Rad;
+
+            float visibleGround =
+                2f * distance * Mathf.Tan(mainCamera.fieldOfView * 0.5f * Mathf.Deg2Rad) / Mathf.Sin(pitch);
+            float perPixel = visibleGround / Mathf.Max(1f, Screen.height);
 
             Vector3 forward = Vector3.ProjectOnPlane(mainCamera.transform.forward, Vector3.up);
             Vector3 right = Vector3.ProjectOnPlane(mainCamera.transform.right, Vector3.up);
             if (forward.sqrMagnitude < 0.0001f) forward = Vector3.forward;
             if (right.sqrMagnitude < 0.0001f) right = Vector3.right;
 
-            float scale = moveSpeed * Time.unscaledDeltaTime * 0.35f;
-            OrbitPivot += (-right.normalized * screenDelta.x - forward.normalized * screenDelta.y) * scale;
+            // The ground travels with the cursor, so the view travels against it.
+            return (-right.normalized * screenDelta.x - forward.normalized * screenDelta.y) * perPixel;
         }
 
         /// <summary>Turns the view around the pivot — the selected agent, or wherever the move tool left it.</summary>

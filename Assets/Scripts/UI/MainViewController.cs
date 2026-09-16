@@ -35,6 +35,9 @@ public class MainViewController : MonoBehaviour
 
         _appStatusBar ??= new AppStatusBar(uiDocument.rootVisualElement);
 
+        // No text field keeps the keyboard once the user has clicked away from it.
+        HudFocusGuard.Install(uiDocument.rootVisualElement);
+
         _sidebarController = GetComponent<SidebarController>();
         if (_sidebarController != null)
             _sidebarController.OnViewChanged += OnViewChanged;

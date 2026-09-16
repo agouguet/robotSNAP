@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using RobotSNAP;
 using RobotSNAP.Agents;
+using UnityEngine.UIElements;
 
 namespace RobotSNAP.CameraControl
 {
@@ -83,6 +84,18 @@ namespace RobotSNAP.CameraControl
 
         /// <summary>True while an agent is selected. The dashboard reads this for its badges.</summary>
         public bool IsFollowing => _currentFollowTarget != null;
+
+        /// <summary>
+        /// True while the mouse is over the camera view. The view tools only react there — the side
+        /// panel, the minimap, the sidebar and every popup keep the mouse for themselves.
+        ///
+        /// The test goes through the UI Toolkit hit test rather than the EventSystem: the whole HUD
+        /// is drawn with UI Toolkit, whose panel registers itself with the EventSystem, so
+        /// <c>EventSystem.IsPointerOverGameObject()</c> answers "true" everywhere above the game
+        /// view — including the empty space between the widgets, which is exactly where the tools
+        /// have to work.
+        /// </summary>
+        public bool PointerOverView { get; private set; }
 
         /// <summary>
         /// The point the orbit turns around while no agent is selected. The move tool slides it, so the
@@ -180,12 +193,10 @@ namespace RobotSNAP.CameraControl
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.Tab))
-            {
-                int direction = Input.GetKey(KeyCode.LeftShift) ? -1 : 1;
-                CycleFollowTarget(direction);
-            }
-
+            // No keyboard shortcut here on purpose: the HUD has text fields, and every key this
+            // component grabbed was a key the user meant to type. Tab in particular also drives the
+            // focus navigation of UI Toolkit, which is how the agent filter used to steal typing.
+            PointerOverView = ComputePointerOverView();
             HandleToolInput();
             UpdateWallVisibility();
         }
@@ -202,7 +213,7 @@ namespace RobotSNAP.CameraControl
 
             if (Input.GetKeyDown(KeyCode.Mouse0))
             {
-                _toolDragging = !IsPointerOverHud();
+                _toolDragging = PointerOverView;
                 _toolDragStart = Input.mousePosition;
                 _toolDragLast = _toolDragStart;
                 _toolDragMoved = false;
@@ -287,29 +298,194 @@ namespace RobotSNAP.CameraControl
         /// <summary>Focuses the agent under the cursor — what the select tool does on a click.</summary>
         private void PickAgentUnderCursor()
         {
-            if (Camera.main == null) return;
+            if (mainCamera == null) return;
 
-            Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
-            if (!Physics.Raycast(ray, out RaycastHit hit, 500f, ~0, QueryTriggerInteraction.Ignore))
+            if (!TryGetPointerViewportPoint(Input.mousePosition, out Vector2 pointer))
                 return;
 
-            Robot robot = hit.collider.GetComponentInParent<Robot>();
-            if (robot != null)
+            Ray ray = mainCamera.ViewportPointToRay(pointer);
+            if (Physics.Raycast(ray, out RaycastHit hit, 500f, ~0, QueryTriggerInteraction.Ignore))
             {
-                SetFollowTarget(robot.RobotTransform);
-                return;
+                Robot robot = hit.collider.GetComponentInParent<Robot>();
+                if (robot != null)
+                {
+                    SetFollowTarget(robot.RobotTransform);
+                    return;
+                }
+
+                HumanAgent human = hit.collider.GetComponentInParent<HumanAgent>();
+                if (human != null)
+                {
+                    SetFollowTarget(human.transform);
+                    return;
+                }
             }
 
-            HumanAgent human = hit.collider.GetComponentInParent<HumanAgent>();
-            if (human != null)
-                SetFollowTarget(human.transform);
+            // The pedestrian avatars carry no collider, so the ray can never reach them. The agent
+            // whose body is nearest to the click on screen is the one the user was aiming at.
+            Transform nearest = NearestTargetToPointer(pointer, ScreenPickRadius);
+            if (nearest != null)
+                SetFollowTarget(nearest);
         }
 
-        /// <summary>True while the pointer is over a UI Toolkit panel — the HUD must not drive the camera.</summary>
-        private static bool IsPointerOverHud()
+        /// <summary>
+        /// The followable agent closest to the pointer, or null when the click landed away from every
+        /// agent. Only the agents whose anchor is in front of the camera count.
+        ///
+        /// <paramref name="viewportPointer"/> and the candidates share the camera's viewport space,
+        /// and the radius is turned into that same space, so the distance means what it says: a
+        /// screen-space radius measures nothing when the two ends are not in the same space.
+        /// </summary>
+        private Transform NearestTargetToPointer(Vector2 viewportPointer, float radius)
         {
-            var eventSystem = UnityEngine.EventSystems.EventSystem.current;
-            return eventSystem != null && eventSystem.IsPointerOverGameObject();
+            if (_followableTargets.Count == 0)
+                RefreshFollowableTargets();
+
+            Rect view = ViewElement()?.worldBound ?? default;
+            float scale = ViewElement()?.panel?.scaledPixelsPerPoint ?? 1f;
+            Vector2 viewSize = new Vector2(view.width * scale, view.height * scale);
+            if (viewSize.x <= 0f || viewSize.y <= 0f) return null;
+
+            Transform best = null;
+            float bestDistance = radius;
+
+            foreach (Transform candidate in _followableTargets)
+            {
+                if (candidate == null) continue;
+
+                Vector3 viewport = mainCamera.WorldToViewportPoint(ScreenAnchor(candidate));
+                if (viewport.z <= 0f) continue;
+
+                float distance = Vector2.Distance(
+                    new Vector2(viewport.x * viewSize.x, viewport.y * viewSize.y),
+                    new Vector2(viewportPointer.x * viewSize.x, viewportPointer.y * viewSize.y));
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = candidate;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// The pointer in the simulation camera's own viewport space — the space
+        /// <c>ViewportPointToRay</c> and <c>WorldToViewportPoint</c> work in.
+        ///
+        /// The simulation camera draws into a render texture that the view container displays, so a
+        /// game view pixel is not a camera pixel: the pointer has to be carried through the
+        /// container rectangle before it can be compared with anything the camera knows about.
+        /// </summary>
+        private bool TryGetPointerViewportPoint(Vector2 screenPoint, out Vector2 viewport)
+        {
+            viewport = default;
+
+            VisualElement view = ViewElement();
+            IPanel panel = view?.panel;
+            if (view == null || panel == null) return false;
+
+            Rect bound = view.worldBound;
+            if (bound.width <= 0f || bound.height <= 0f) return false;
+
+            float scale = panel.scaledPixelsPerPoint;
+
+            // The panel measures downwards from the top of the view, the pointer upwards from its
+            // bottom, so the y axis is flipped once here and the result is already a viewport
+            // coordinate — the camera's own space, whichever texture it draws into.
+            Vector2 fromViewTop = new Vector2(
+                screenPoint.x - bound.x * scale,
+                (Screen.height - screenPoint.y) - bound.y * scale);
+
+            viewport = new Vector2(
+                fromViewTop.x / (bound.width * scale),
+                1f - fromViewTop.y / (bound.height * scale));
+
+            return true;
+        }
+
+        /// <summary>A click aims at the middle of the body, not at the feet the transform sits on.</summary>
+        private static Vector3 ScreenAnchor(Transform target)
+        {
+            bool isHuman = target.GetComponentInParent<HumanAgent>() != null;
+            return target.position + Vector3.up * (isHuman ? 1f : 0.4f);
+        }
+
+        /// <summary>How far from an agent a click still counts as aiming at it, in screen pixels.</summary>
+        private const float ScreenPickRadius = 60f;
+
+        // ==========================================
+        //          HUD HIT TEST
+        // ==========================================
+
+        private UIDocument _hudDocument;
+        private VisualElement _viewElement;
+
+        private bool ComputePointerOverView()
+        {
+            VisualElement picked = PickHudElement(Input.mousePosition);
+            if (picked == null) return false;
+
+            VisualElement view = ViewElement();
+            if (view == null) return false;
+
+            for (VisualElement element = picked; element != null; element = element.parent)
+            {
+                if (element == view) return true;
+            }
+
+            return false;
+        }
+
+        private VisualElement PickHudElement(Vector2 screenPoint)
+        {
+            IPanel panel = HudDocument()?.rootVisualElement?.panel;
+            if (panel == null) return null;
+
+            return panel.Pick(PointerInPanelSpace(panel, screenPoint));
+        }
+
+        /// <summary>
+        /// The pointer in panel coordinates — the space <c>Pick</c> takes.
+        ///
+        /// A panel counts downwards from the top of the view while the pointer counts upwards from
+        /// its bottom, and the raw pointer is not flipped for us: feeding it straight to the hit
+        /// test asks about the mirrored point, which is how the view tools ended up answering a
+        /// gesture the user had not made. The flip is done once, here.
+        /// </summary>
+        private static Vector2 PointerInPanelSpace(IPanel panel, Vector2 screenPoint)
+        {
+            Vector2 fromTop = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
+            return RuntimePanelUtils.ScreenToPanel(panel, fromTop);
+        }
+
+        /// <summary>The document that holds the simulation view; looked up once, and again if it is rebuilt.</summary>
+        private UIDocument HudDocument()
+        {
+            if (_hudDocument != null && _hudDocument.rootVisualElement != null)
+                return _hudDocument;
+
+            foreach (UIDocument document in FindObjectsByType<UIDocument>())
+            {
+                VisualElement root = document.rootVisualElement;
+                if (root != null && root.Q<VisualElement>("CameraContainer") != null)
+                {
+                    _hudDocument = document;
+                    break;
+                }
+            }
+
+            return _hudDocument;
+        }
+
+        /// <summary>The rectangle the view tools own: everything under it is the 3D scene.</summary>
+        private VisualElement ViewElement()
+        {
+            if (_viewElement != null && _viewElement.panel != null)
+                return _viewElement;
+
+            _viewElement = HudDocument()?.rootVisualElement?.Q<VisualElement>("CameraContainer");
+            return _viewElement;
         }
 
         #endregion

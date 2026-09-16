@@ -41,7 +41,9 @@ namespace RobotSNAP.CameraControl
         /// <summary>The wheel and the zoom tool both feed the same distance.</summary>
         private void HandleZoom(CameraController c)
         {
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
+            // The wheel only counts inside the camera view: hovering the HUD, a panel or a popup
+            // must not push the view around while the user is doing something else.
+            float scroll = c.PointerOverView ? Input.GetAxis("Mouse ScrollWheel") : 0f;
             if (scroll != 0)
                 _currentDistance -= scroll * c.zoomSpeed * Time.deltaTime;
 

@@ -135,16 +135,25 @@ namespace RobotSNAP.ROS
         }
 
         /// <summary>
-        /// Creates the component that listens for the commands coming back from the peer, on the same object
-        /// and for the same reason as the state publisher: it has to be born and die with the EnvROS whose
-        /// prefix it reads. The peer can be a ROS2 ros_tcp_endpoint or the pure-Python server of
+        /// Creates the component that listens for the commands coming back from the peer - once per session,
+        /// beside the connection rather than on this environment.
+        ///
+        /// A scenario load destroys the environments and rebuilds them over several seconds, and the listener
+        /// used to be destroyed with them: a command that arrived in that window went to a topic nobody
+        /// listened to yet, was dropped by the connector, and looked like a hang to the client that sent it.
+        /// The connection outlives every environment, so the command channel does too, and it resolves the
+        /// environment it reads its prefix from when it needs it.
+        ///
+        /// The peer can be a ROS2 ros_tcp_endpoint or the pure-Python server of
         /// robotSNAP_ws/src/robotsnap/bridge, and neither side of this conversation needs to know which.
         /// </summary>
         private void EnsureSimulationControlBridge()
         {
-            if (!TryGetComponent(out SimulationControlBridge bridge))
+            GameObject host = _ros != null ? _ros.gameObject : gameObject;
+
+            if (!host.TryGetComponent(out SimulationControlBridge bridge))
             {
-                bridge = gameObject.AddComponent<SimulationControlBridge>();
+                bridge = host.AddComponent<SimulationControlBridge>();
             }
 
             bridge.enabled = true;
@@ -210,15 +219,6 @@ namespace RobotSNAP.ROS
                 Debug.Log($"[EnvROS] Published to {fullTopic}: {message}");
             }
         }
-        
-        #endregion
-        
-        #region Getters
-        
-        /// <summary>
-        /// Get the full topic name with prefix
-        /// </summary>
-        public string GetTopicName(string baseTopic) => BuildTopicName(baseTopic);
         
         #endregion
         

@@ -40,6 +40,15 @@ namespace RobotSNAP.Core.Scenario
         [SerializeField] private bool _isLoading;
         private Coroutine _loadCoroutine;
 
+        // The request that arrived while a load was already running. Building a scenario is a long
+        // operation - map, NavMesh, pool, spawn - and interrupting it halfway leaves the environment in a
+        // state no later call can repair, so the request is remembered instead of refused. See
+        // LoadScenario and Update.
+        private string _pendingScenarioName;
+        private bool _pendingStartClock;
+        private bool _pendingAutoApply;
+        private bool _pendingResetClock;
+
         // Nouveaux flags d'état
         private bool _isClockStarted = false;
         private bool _scenarioApplied = false;  // Indique si les agents ont été spawnés
@@ -50,6 +59,9 @@ namespace RobotSNAP.Core.Scenario
         public IReadOnlyList<GameManager> Environments => _gameManagers;
         public bool HasScenarioLoaded => _currentScenarioData != null;
         public bool IsLoading => _isLoading;
+        /// <summary>Scenario waiting for the load in flight, or null when nothing is queued.</summary>
+        public string PendingScenarioId => _pendingScenarioName;
+        public bool HasPendingLoad => !string.IsNullOrEmpty(_pendingScenarioName);
 
         // Événements
         public event Action<ScenarioData> OnScenarioLoaded;
@@ -75,12 +87,36 @@ namespace RobotSNAP.Core.Scenario
 
         private void OnDestroy()
         {
+            _pendingScenarioName = null;
             CancelLoad();
             ClearEnvironments();
             EventBus.Instance.Unsubscribe<StartSimulationCommand>(OnStartCommand);
             EventBus.Instance.Unsubscribe<StopSimulationCommand>(OnStopCommand);
             EventBus.Instance.Unsubscribe<PauseSimulationCommand>(OnPauseCommand);
             EventBus.Instance.Unsubscribe<ResumeSimulationCommand>(OnResumeCommand);
+        }
+
+        /// <summary>
+        /// Starts a scenario load that was asked for while another one was running.
+        ///
+        /// A queue drained from Update rather than from the end of the loading coroutine: a load can end in
+        /// three different ways (it completed, the file could not be read, it was cancelled), and a hot
+        /// re-apply of the same scenario does not go through the loading coroutine at all. Watching the flag
+        /// here covers every one of them, and costs one comparison per frame.
+        /// </summary>
+        private void Update()
+        {
+            if (_isLoading || !HasPendingLoad) return;
+
+            string name = _pendingScenarioName;
+            bool startClock = _pendingStartClock;
+            bool autoApply = _pendingAutoApply;
+            bool resetClock = _pendingResetClock;
+            _pendingScenarioName = null;
+            _pendingResetClock = false;
+
+            if (_logEvents) Debug.Log($"[ScenarioManager] Starting the scenario queued behind the previous load: {name}");
+            StartLoad(name, startClock, autoApply, resetClock);
         }
 
         // === Gestion des commandes ===
@@ -238,7 +274,7 @@ namespace RobotSNAP.Core.Scenario
 
         // === Chargement du scénario (Coroutine principale) ===
 
-        private IEnumerator LoadScenarioCoroutine(string scenarioName, bool startClock = false, bool autoApply = false)
+        private IEnumerator LoadScenarioCoroutine(string scenarioName, bool startClock = false, bool autoApply = false, bool resetClock = false)
         {
             _isLoading = true;
             if (_applyDelay > 0)
@@ -317,6 +353,12 @@ namespace RobotSNAP.Core.Scenario
                 Supervisor.Instance?.Pause();
             }
 
+            // The clock restarts once the world is actually built, not when the request was made: an episode
+            // then reports its very first instant as zero, whether the load ran straight away or waited
+            // behind another one.
+            if (resetClock)
+                Clock.Instance?.ResetTime();
+
             // 6. Notification finale
             PublishState();
 
@@ -385,16 +427,41 @@ namespace RobotSNAP.Core.Scenario
         /// <param name="scenarioName">Nom du scénario</param>
         /// <param name="startClock">Si true, démarre l'horloge immédiatement après chargement (doit être utilisé avec autoApply).</param>
         /// <param name="autoApply">Si true, applique le scénario (spawn des agents) immédiatement après chargement.</param>
-        public void LoadScenario(string scenarioName, bool startClock = false, bool autoApply = false)
+        /// <param name="resetClock">Si true, remet l'horloge à zéro une fois le monde prêt, ce que fait une
+        /// commande de réinitialisation d'épisode.</param>
+        public void LoadScenario(string scenarioName, bool startClock = false, bool autoApply = false, bool resetClock = false)
         {
             if (_isLoading)
             {
-                OnScenarioErrorInternal("Already loading a scenario");
+                // Refusing here used to log an error and answer nothing, which left a remote caller
+                // believing its scenario had been applied. The request is remembered instead, and
+                // PendingScenarioId tells the caller that it is waiting rather than done.
+                if (_pendingScenarioName == scenarioName &&
+                    _pendingStartClock == startClock &&
+                    _pendingAutoApply == autoApply &&
+                    _pendingResetClock == resetClock)
+                    return;
+
+                _pendingResetClock = resetClock;
+                _pendingScenarioName = scenarioName;
+                _pendingStartClock = startClock;
+                _pendingAutoApply = autoApply;
+                if (_logEvents)
+                    Debug.Log($"[ScenarioManager] Scenario '{scenarioName}' queued behind the load in flight");
                 return;
             }
+
+            StartLoad(scenarioName, startClock, autoApply, resetClock);
+        }
+
+        /// <summary>
+        /// Cancels whatever is in flight and starts this load straight away.
+        /// </summary>
+        private void StartLoad(string scenarioName, bool startClock, bool autoApply, bool resetClock)
+        {
             CancelLoad();
             if (_logEvents) Debug.Log($"[ScenarioManager] Loading scenario: {scenarioName} (startClock={startClock}, autoApply={autoApply})");
-            _loadCoroutine = StartCoroutine(LoadScenarioCoroutine(scenarioName, startClock, autoApply));
+            _loadCoroutine = StartCoroutine(LoadScenarioCoroutine(scenarioName, startClock, autoApply, resetClock));
         }
 
         /// <summary>

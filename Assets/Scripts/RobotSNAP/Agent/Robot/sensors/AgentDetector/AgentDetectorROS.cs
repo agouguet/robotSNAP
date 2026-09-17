@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Globalization;
 using Newtonsoft.Json;
+using RobotSNAP.Agents;
 using RobotSNAP.ROS;
 using RosMessageTypes.Std;
 using Unity.Robotics.ROSTCPConnector.ROSGeometry;
@@ -15,6 +17,11 @@ namespace RobotSNAP
     /// brought back into the robot frame with InverseTransformPoint and InverseTransformDirection, then
     /// converted to the ROS axis convention (x forward, y left, z up), which is what the "frame" field of
     /// the message names. No custom ROS message is used.
+    ///
+    /// The <c>id</c> of an entry is the id its <c>humans</c> entry carries in <c>/simulation/state</c> - the
+    /// one the <c>humans</c> command of <c>/simulation/control</c> addresses - so a client can walk from what
+    /// the robot sees to the human it wants to drive. An agent that is not a human has no such handle and
+    /// keeps its Unity entity id.
     /// </summary>
     [RequireComponent(typeof(AgentDetector))]
     public class AgentDetectorROS : MonoBehaviour
@@ -145,7 +152,7 @@ namespace RobotSNAP
 
             return new Dictionary<string, object>
             {
-                ["id"] = agent.GetEntityId().ToString(),
+                ["id"] = AgentId(agent),
                 ["x"] = position.x,
                 ["y"] = position.y,
                 ["z"] = position.z,
@@ -154,6 +161,23 @@ namespace RobotSNAP
                 ["vz"] = velocity.z,
                 ["visible"] = visible
             };
+        }
+
+        /// <summary>
+        /// The id a client can act on.
+        ///
+        /// A human answers its own <see cref="HumanAgent.agentId"/>, the number <c>/simulation/state</c>
+        /// publishes and the <c>humans</c> command of <c>/simulation/control</c> resolves, so the two streams
+        /// describe the same person under the same name. Publishing the entity id here used to make the crowd
+        /// the robot sees impossible to join with the crowd it can drive, and it changed on every domain
+        /// reload, so nothing could be tracked across a run either.
+        /// </summary>
+        private static string AgentId(GameObject agent)
+        {
+            HumanAgent human = agent.GetComponentInParent<HumanAgent>();
+            if (human != null)
+                return human.agentId.ToString(CultureInfo.InvariantCulture);
+            return agent.GetEntityId().ToString();
         }
 
         /// <summary>

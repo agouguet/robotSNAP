@@ -29,6 +29,11 @@ namespace RobotSNAP.ROS
         private Clock _clock;
         private string _fullTopicName;
         private double _lastPublishedTime;
+        private bool _registered;
+        private float _nextResolveTime;
+
+        //: How often a clock that found no environment looks for one, in seconds.
+        private const float ResolveInterval = 0.5f;
         
         #region Unity Lifecycle
         
@@ -59,7 +64,17 @@ namespace RobotSNAP.ROS
         
         private void Update()
         {
-            if (!publishInFixedUpdate && _envROS != null && _envROS.IsInitialized)
+            // The environment is built by the scenario load, which runs after this scene object has started:
+            // giving up here used to disable the component for the whole session, and the documented /clock
+            // topic never carried anything. Looking again until the bridge exists costs one lookup every
+            // half second, and stops for good once it is found.
+            if (!_registered && Time.unscaledTime >= _nextResolveTime)
+            {
+                _nextResolveTime = Time.unscaledTime + ResolveInterval;
+                Initialize();
+            }
+
+            if (!publishInFixedUpdate && _registered && _envROS != null && _envROS.IsInitialized)
             {
                 Publish();
             }
@@ -71,14 +86,15 @@ namespace RobotSNAP.ROS
         
         public void Initialize()
         {
-            // Find EnvROS
+            if (_registered) return;
+
+            // Find EnvROS. A destroyed one compares equal to null, so this picks up the environment a scenario
+            // load has just rebuilt.
             _envROS ??= FindAnyObjectByType<EnvROS>();
             
             if (_envROS == null)
             {
-                Debug.LogWarning($"[{name}] EnvROS not found, clock will not be published");
-                enabled = false;
-                return;
+                return;  // Update looks again; the environment may not be built yet.
             }
             
             // Get prefix
@@ -98,6 +114,7 @@ namespace RobotSNAP.ROS
             
             // Register publisher
             _envROS.RegisterPublisher<ClockMsg>(_fullTopicName);
+            _registered = true;
             
             if (logPublishEvents)
             {

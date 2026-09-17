@@ -213,9 +213,11 @@ namespace RobotSNAP.ROS
                 if (!TryApplySeed(body, command, out CommandResult seedFailure))
                     return seedFailure;
 
-                manager.LoadScenario(name, startClock: true, autoApply: true);
-                if (clock != null)
-                    clock.ResetTime();
+                manager.LoadScenario(name, startClock: true, autoApply: true, resetClock: true);
+                bool queued = manager.PendingScenarioId == name;
+                if (queued)
+                    return new CommandResult(true, command,
+                        $"scenario '{name}' queued behind the load in flight; it will be applied with the clock reset");
 
                 return new CommandResult(true, command, $"scenario '{name}' loaded, applied and clock reset");
             }
@@ -240,6 +242,11 @@ namespace RobotSNAP.ROS
         /// Loads a scenario by name and hands it to the Scenario Manager with the two flags the body can set:
         /// the scenario is applied unless "apply" is false, and the clock is started unless "start" is false,
         /// which leaves a scenario loaded, built and paused, exactly as the Scenario Manager does it.
+        ///
+        /// A scenario being built cannot be swapped under it, so a request that arrives during one is queued
+        /// by the manager and started as soon as that one ends. The answer then says so instead of claiming
+        /// the scenario was applied: a caller that needs to see the new world waits for the scenario id of
+        /// <c>/simulation/state</c> to change, which is what <c>RobotSNAPClient.wait_for_scenario</c> does.
         /// </summary>
         private static CommandResult LoadScenario(JObject body, string command)
         {
@@ -266,6 +273,9 @@ namespace RobotSNAP.ROS
 
             string applied = apply ? "applied" : "loaded, not applied";
             string clockState = start ? "clock started" : "clock left paused";
+            if (manager.PendingScenarioId == name)
+                return new CommandResult(true, command,
+                    $"scenario '{name}' queued behind the load in flight; it will be {applied}, {clockState}");
             return new CommandResult(true, command, $"scenario '{name}' {applied}, {clockState}");
         }
 

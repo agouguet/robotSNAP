@@ -60,8 +60,9 @@ namespace RobotSNAP.ROS
         private string _resultTopicName;
         private bool _initialized;
 
-        // Application side. The router keeps no reference between two commands, and the manager is refreshed
-        // lazily because a scenario load destroys and rebuilds the environments, and this hook with them.
+        // Application side. The router keeps no reference between two commands, and the manager is resolved
+        // lazily: this component lives beside the connection and outlives every environment, while the
+        // ScenarioManager is a scene object that can be replaced between two commands.
         private readonly SimulationCommandRouter _router = new SimulationCommandRouter();
         private ScenarioManager _scenarioManager;
 
@@ -77,11 +78,10 @@ namespace RobotSNAP.ROS
             if (_scenarioManager != null)
                 _scenarioManager.OnScenarioApplied -= OnScenarioApplied;
 
-            // Deliberately nothing to the topics here. Loading a scenario destroys the environment - and this
-            // component with it - and the environment that replaces it subscribes from its own Start, which
-            // may well run before this OnDestroy does. Clearing here would then wipe the subscription of the
-            // bridge that is alive, and every command would be answered by nobody. The next bridge clears the
-            // topics for itself in Subscribe, so a callback left behind is already handled.
+            // Deliberately nothing to the topics here. This component is created beside the connection and
+            // destroyed with it, at the end of the session; a listener that unsubscribed on the way out would
+            // race the next session's own subscription, which may well run before this OnDestroy does. The
+            // next bridge clears the topic for itself in Subscribe, so a callback left behind is handled.
         }
 
         #endregion

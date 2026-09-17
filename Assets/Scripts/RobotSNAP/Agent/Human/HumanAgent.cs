@@ -80,6 +80,9 @@ namespace RobotSNAP.Agents
         /// <summary>True while the agent walks as part of a group. Nobody in the group is a leader.</summary>
         public bool IsGroupMember => _group != null;
 
+        /// <summary>The group this human walks with, or null when it walks on its own.</summary>
+        public HumanGroup Group => _group;
+
         /// <summary>True while the member has stepped out of its slot to let somebody pass.</summary>
         public bool IsYielding => Time.time < _yieldUntil;
 

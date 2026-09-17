@@ -625,6 +625,7 @@ namespace RobotSNAP.ROS
         ///   map_height             height of the occupancy grid, in cells, 0 without a grid
         ///   map_resolution         metres per grid cell, 0 without a grid
         ///   human_count            humans currently simulated
+        ///   humans                 one entry per human: id, position, velocity, goal, group, controller
         ///   robot                  robot pose {x, y, z, yaw}, null when the scene has no robot
         ///   robot_has_goal         true while the robot drives towards a goal
         ///   robot_goal             robot goal {x, y, z}, null when it has none
@@ -669,6 +670,7 @@ namespace RobotSNAP.ROS
                 { "map_height", _mapHeight },
                 { "map_resolution", _mapResolution },
                 { "human_count", FindHumans().Length },
+                { "humans", HumansJson(FindHumans()) },
                 { "robot", robot != null ? PoseJson(robot.RobotTransform) : null },
                 { "robot_has_goal", robot != null && robot.HasGoal },
                 { "robot_goal", robot != null && robot.HasGoal ? PositionJson(robot.Goal) : null },
@@ -743,6 +745,40 @@ namespace RobotSNAP.ROS
         {
             Vector3<FLU> position = worldPosition.To<FLU>();
             return new { x = position.x, y = position.y, z = position.z };
+        }
+
+        /// <summary>
+        /// One entry per simulated human, in the ROS frame. The typed people stream carries the same
+        /// information as a real message; this list is what makes the JSON snapshot readable on its own,
+        /// by a client that has no message definitions at all.
+        /// </summary>
+        private static object HumansJson(HumanAgent[] humans)
+        {
+            var list = new List<object>(humans.Length);
+
+            foreach (HumanAgent human in humans)
+            {
+                Vector3<FLU> position = human.Position.To<FLU>();
+                Vector3<FLU> velocity = human.Velocity.To<FLU>();
+
+                list.Add(new
+                {
+                    id = human.agentId,
+                    x = position.x,
+                    y = position.y,
+                    z = position.z,
+                    vx = velocity.x,
+                    vy = velocity.y,
+                    vz = velocity.z,
+                    speed = human.CurrentSpeed,
+                    goal = human.HasDestination ? PositionJson(human.CurrentGoal) : null,
+                    group = human.Group != null ? (object)human.Group.Id : null,
+                    controller = human.IsExternallyControlled ? "external" : "sfm",
+                    end_behavior = human.EndBehavior.ToString().ToLowerInvariant()
+                });
+            }
+
+            return list;
         }
 
         /// <summary>

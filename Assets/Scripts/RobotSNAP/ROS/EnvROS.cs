@@ -22,6 +22,10 @@ namespace RobotSNAP.ROS
                  "simulation topics. The publisher lives on this same object, so a client always sees the " +
                  "bridge that is actually running.")]
         [SerializeField] private bool publishSimulationState = true;
+        [Tooltip("Listen for the commands a client sends back - play, pause, reset, load a scenario, drive a " +
+                 "human - on the simulation topics and on the /unity services. Off means the run is " +
+                 "read-only.")]
+        [SerializeField] private bool acceptRemoteControl = true;
         
         [Header("Topic Names (will be prefixed)")]
         [SerializeField] private string resetDoneTopic = "/reset_done";
@@ -70,6 +74,11 @@ namespace RobotSNAP.ROS
             if (publishSimulationState)
             {
                 EnsureSimulationStatePublisher();
+            }
+
+            if (acceptRemoteControl)
+            {
+                EnsureSimulationControlBridge();
             }
         }
         
@@ -177,6 +186,22 @@ namespace RobotSNAP.ROS
             }
 
             publisher.enabled = true;
+        }
+
+        /// <summary>
+        /// Creates the component that listens for the commands coming back from the peer, on the same object
+        /// and for the same reason as the state publisher: it has to be born and die with the EnvROS whose
+        /// prefix it reads. The peer can be a ROS2 ros_tcp_endpoint or the pure-Python server of
+        /// robotSNAP_ws/src/robotsnap/bridge, and neither side of this conversation needs to know which.
+        /// </summary>
+        private void EnsureSimulationControlBridge()
+        {
+            if (!TryGetComponent(out SimulationControlBridge bridge))
+            {
+                bridge = gameObject.AddComponent<SimulationControlBridge>();
+            }
+
+            bridge.enabled = true;
         }
         
         #endregion

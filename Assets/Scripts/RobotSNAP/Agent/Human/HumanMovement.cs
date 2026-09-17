@@ -162,6 +162,11 @@ namespace RobotSNAP.Agents
             // The capsule radius comes from the configuration, which only exists from here on.
             SetupCollider();
             _agentId = avatar.agentId;
+            // The crowd index is joined as soon as the agent is enabled, and the pool hands the manager over
+            // before this call, so the id may have been registered while this avatar was still unknown. The
+            // command path that drives a human from outside Unity looks the agent up by id; without this the
+            // lookup finds nothing and every command is refused as an unknown id.
+            _humanManager?.SetAgentOwner(_agentId, avatar);
             _currentControllerType = config.controllerType;
             _warnedAboutExternalCommand = false;
             InitializeController(_currentControllerType);

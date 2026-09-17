@@ -320,6 +320,21 @@ namespace RobotSNAP.Agents
         public bool TryGetAgent(int id, out HumanAgent agent) => _agentOwners.TryGetValue(id, out agent);
 
         /// <summary>
+        /// Records which agent carries an id, without touching the crowd index.
+        ///
+        /// An agent joins the neighbour index as soon as it is enabled — and the pool hands the manager over
+        /// before the avatar is known — so the registration can happen while there is still no owner to
+        /// attach to the id. The lookup that drives a human from outside Unity goes through this map, which
+        /// therefore has to be filled in again once the avatar exists.
+        /// </summary>
+        public void SetAgentOwner(int id, HumanAgent owner)
+        {
+            if (owner == null) return;
+
+            _agentOwners[id] = owner;
+        }
+
+        /// <summary>
         /// Drives a human from outside Unity, in world units per second. Returns false when no active agent
         /// carries that id.
         /// </summary>

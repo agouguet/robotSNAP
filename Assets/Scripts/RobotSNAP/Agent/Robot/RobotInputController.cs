@@ -36,6 +36,7 @@ namespace RobotSNAP
         private float _lastRosCommandTime;
         private float _targetLinear;
         private float _targetAngular;
+        private bool _rosSubscribed;
 
         // Détection du changement d'état de pause
         private bool _wasPaused = false;
@@ -102,11 +103,17 @@ namespace RobotSNAP
 
         private void SubscribeToROS()
         {
+            // The connector appends a callback to its topic state without deduplicating it, so a second
+            // subscription would run every velocity command twice.
+            if (_rosSubscribed || _envROS == null || !_envROS.IsInitialized)
+                return;
+
             string prefix = "";
             if (autoDetectPrefix && _envROS != null) prefix = _envROS.Prefix;
             else if (!string.IsNullOrEmpty(customPrefix)) prefix = customPrefix;
             _fullCmdVelTopic = string.IsNullOrEmpty(prefix) ? cmdVelTopic : $"/{prefix.TrimStart('/')}{cmdVelTopic}";
             _envROS.RegisterSubscriber<RosMessageTypes.Geometry.TwistMsg>(_fullCmdVelTopic, OnRosCommandReceived);
+            _rosSubscribed = true;
         }
 
         private void OnRosCommandReceived(RosMessageTypes.Geometry.TwistMsg msg)
@@ -136,6 +143,16 @@ namespace RobotSNAP
             controlMode = newMode;
             _targetLinear = 0f;
             _targetAngular = 0f;
+
+            // The subscription used to be created once, in Start, and only when the Inspector already said
+            // ROS or Hybrid. A session switched over the bridge therefore drove the robot with a topic
+            // nobody was listening to, which is the one thing a Python or ROS2 client does first.
+            if (newMode == ControlMode.ROS || newMode == ControlMode.Hybrid)
+            {
+                _envROS ??= FindAnyObjectByType<EnvROS>();
+                SubscribeToROS();
+            }
+
             _robot.Stop();
         }
 

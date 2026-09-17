@@ -74,11 +74,6 @@ namespace RobotSNAP.ROS
         // The command of the crowd topic, as it is named in its answers.
         private const string HumansCommand = "humans/control";
 
-        // Command topics are owned by one bridge at a time: the connection outlives the environments, so the
-        // callbacks of a bridge that went away with the previous scenario would still be called, and every
-        // command would run twice.
-        private static SimulationControlBridge s_active;
-
         #region Unity Lifecycle
 
         private void Start()
@@ -91,9 +86,11 @@ namespace RobotSNAP.ROS
             if (_scenarioManager != null)
                 _scenarioManager.OnScenarioApplied -= OnScenarioApplied;
 
-            // A bridge that was replaced by the one of a new environment leaves the topics to it.
-            if (s_active == this)
-                ReleaseTopics();
+            // Deliberately nothing to the topics here. Loading a scenario destroys the environment - and this
+            // component with it - and the environment that replaces it subscribes from its own Start, which
+            // may well run before this OnDestroy does. Clearing here would then wipe the subscription of the
+            // bridge that is alive, and every command would be answered by nobody. The next bridge clears the
+            // topics for itself in Subscribe, so a callback left behind is already handled.
         }
 
         #endregion
@@ -248,10 +245,13 @@ namespace RobotSNAP.ROS
         {
             if (_ros == null) return;
 
-            if (s_active != null && s_active != this)
-                s_active.ReleaseTopics();
-
-            s_active = this;
+            // This project runs with "Enter Play Mode Options" and no domain reload, so the connection - and
+            // the callbacks its topic states carry - survive a Play session. A new bridge looking at a name
+            // that already holds the callback of the session before would find it busy and leave itself
+            // unsubscribed, while every command went to the dead bridge. These two topics belong to this
+            // component alone, so it clears them and takes them over rather than asking whether they are free.
+            Unsubscribe(_controlTopicName);
+            Unsubscribe(_humansControlTopicName);
 
             SubscribeTo(_controlTopicName, OnControlMessage);
             SubscribeTo(_humansControlTopicName, OnHumansControlMessage);
@@ -277,20 +277,6 @@ namespace RobotSNAP.ROS
         }
 
         /// <summary>
-        /// Gives the command topics back to the connection. A destroyed bridge whose callback stayed
-        /// registered would answer commands from a scene that no longer exists, or answer them twice when the
-        /// next environment subscribes. The connection drops every subscriber of a topic at once, which is
-        /// what these two topics want: they are the command channel of this component and of nothing else.
-        /// </summary>
-        private void ReleaseTopics()
-        {
-            Unsubscribe(_controlTopicName);
-            Unsubscribe(_humansControlTopicName);
-
-            if (s_active == this)
-                s_active = null;
-        }
-
         /// <summary>Removes the subscribers of a topic, and does nothing without a connection or a name.</summary>
         private void Unsubscribe(string topicName)
         {
@@ -328,7 +314,6 @@ namespace RobotSNAP.ROS
             ResolveTopics(force: false);
             if (_controlTopicName == previousControlTopic) return;
 
-            ReleaseTopics();
             Subscribe();
         }
 
@@ -342,6 +327,11 @@ namespace RobotSNAP.ROS
         /// </summary>
         private void OnControlMessage(StringMsg message)
         {
+            // A bridge the scenario reload destroyed is still held by the connection until the next one takes
+            // the topic over. This component compares equal to null once destroyed, so its commands stop here
+            // instead of being run by a session that is gone.
+            if (this == null) return;
+
             CommandResult result = _router.Execute(message != null ? message.data : null);
             PublishResult(result.Command, result.Ok, result.Message, null);
         }
@@ -353,6 +343,8 @@ namespace RobotSNAP.ROS
         /// </summary>
         private void OnHumansControlMessage(StringMsg message)
         {
+            if (this == null) return;
+
             var unknownIds = new List<int>();
             bool ok = ApplyHumanCommands(message != null ? message.data : null, unknownIds, out string summary);
             PublishResult(HumansCommand, ok, summary, unknownIds);

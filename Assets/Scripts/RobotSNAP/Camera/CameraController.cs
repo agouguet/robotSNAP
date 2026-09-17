@@ -10,7 +10,8 @@ namespace RobotSNAP.CameraControl
     public class CameraController : MonoBehaviour
     {
         /// <summary>
-        /// What the left mouse button does in the camera view. The view toolbar picks it.
+        /// What the left mouse button does in the camera view. The view toolbar picks it. Move is the
+        /// combined tool: on top of its left drag it also takes the right button and the wheel.
         /// </summary>
         public enum CameraTool
         {
@@ -73,6 +74,14 @@ namespace RobotSNAP.CameraControl
         public CameraTool ActiveTool => activeTool;
         public event System.Action<CameraTool> OnToolChanged;
 
+        /// <summary>
+        /// True while the Move tool is picked. That one tool carries the whole navigation: left drag
+        /// slides the view, right drag turns it, the wheel zooms it. The three gestures are no longer
+        /// split over the move, rotate and zoom buttons. Every mode that reads the right button or the
+        /// wheel on its own checks this, so no gesture is ever applied twice.
+        /// </summary>
+        public bool UnifiedToolActive => activeTool == CameraTool.Move;
+
         /// <summary>True while an agent is selected. The dashboard reads this for its badges.</summary>
         public bool IsFollowing => _currentFollowTarget != null;
 
@@ -108,6 +117,7 @@ namespace RobotSNAP.CameraControl
         public KeyCode rotateKey = KeyCode.Mouse1;
         public KeyCode fastMoveKey = KeyCode.LeftShift;
         
+        /// <summary>Fires when the view was handed to another mode. The HUD reads CurrentMode from it.</summary>
         public event System.Action OnViewChanged;
         
         public enum CameraMode
@@ -145,9 +155,26 @@ namespace RobotSNAP.CameraControl
         private bool _toolDragMoved;
         private const float DragThresholdPixels = 4f;
 
+        // Right button of the combined tool, tracked apart from the left drag so both gestures can be
+        // held at the same time.
+        private bool _viewRotating;
+        private Vector2 _rotateDragLast;
+
+        // How far one notch of the wheel pulls the view, in the units of zoomSpeed. A notch is a click
+        // rather than a movement, so it has to be worth the same distance on every machine: scaling it
+        // by the frame time, the way a drag is scaled, makes it wear off as the frame rate climbs.
+        private const float WheelNotchZoom = 0.3f;
+
+        // Ceiling on what one frame of wheel may ask for, in metres: a platform that reports a whole
+        // page in a single frame, as some do, must not throw the view across the map in one go.
+        private const float WheelMaxStep = 3f;
+
         private CameraOcclusionSolver _occlusion;
 
-        /// <summary>Zoom asked for by the zoom tool, in metres. The orbit mode consumes it this frame.</summary>
+        /// <summary>
+        /// Zoom asked for this frame by a gesture, in metres: the wheel and the drag of the zoom tool
+        /// both write here, and the modes that zoom by distance consume it during the same frame.
+        /// </summary>
         public float PendingZoom { get; set; }
         
         #region Properties for modes
@@ -173,6 +200,11 @@ namespace RobotSNAP.CameraControl
             if (mainCamera == null) return;
             _currentMode?.Update(this, Time.unscaledDeltaTime);
 
+            // A view with no distance to change (a first person shot sits on the agent) leaves the
+            // request unread. Dropping it here keeps it from firing later, when the user switches to a
+            // view that would answer it with a jump.
+            PendingZoom = 0f;
+
             // After the camera has moved for the frame, so the line of sight is the one the user sees.
             _occlusion?.Tick(revealThroughWalls ? _currentFollowTarget : null);
         }
@@ -194,12 +226,23 @@ namespace RobotSNAP.CameraControl
         #region View tools
 
         /// <summary>
-        /// Applies the gesture the view toolbar selected: pick an agent, slide the view, turn it or
-        /// zoom it. A drag that starts over the HUD is ignored so a panel never moves the camera.
+        /// Applies the gestures of the view: the left drag of the picked tool, the wheel, and the right
+        /// drag of the combined tool. A gesture that starts over the HUD is ignored, so a panel never
+        /// moves the camera.
+        ///
+        /// The routing lives here rather than in the modes because this component is the only one that
+        /// knows which tool is picked, while a mode only knows the pivot and the distance it animates.
+        /// One reader is also what keeps a gesture from being counted twice while the Move tool carries
+        /// all of them: the gestures are turned into the same channels the dedicated buttons use (a
+        /// turn on CurrentRotationY, a zoom on PendingZoom), and the modes leave the right button and
+        /// the wheel to the controller while that tool is picked (see UnifiedToolActive).
         /// </summary>
         private void HandleToolInput()
         {
             if (mainCamera == null) return;
+
+            HandleRotateDrag();
+            HandleWheelZoom();
 
             if (Input.GetKeyDown(KeyCode.Mouse0))
             {
@@ -243,6 +286,56 @@ namespace RobotSNAP.CameraControl
                 if (!_toolDragMoved && activeTool == CameraTool.Select)
                     PickAgentUnderCursor();
             }
+        }
+
+        /// <summary>
+        /// The right drag of the combined Move tool: the turn of the rotate button, on the button the
+        /// other tools leave free. The select tool needs a free click to pick an agent, and the rotate
+        /// and zoom tools already turn and pull the view with the left button.
+        /// </summary>
+        private void HandleRotateDrag()
+        {
+            if (!UnifiedToolActive)
+            {
+                // Picking another tool in the middle of a turn must not leave the view stuck to the
+                // mouse: the drag ends where the tool does.
+                _viewRotating = false;
+                return;
+            }
+
+            if (Input.GetKeyDown(rotateKey))
+            {
+                _viewRotating = PointerOverView;
+                _rotateDragLast = Input.mousePosition;
+            }
+
+            if (_viewRotating)
+            {
+                Vector2 mouse = Input.mousePosition;
+                Vector2 delta = mouse - _rotateDragLast;
+                _rotateDragLast = mouse;
+                RotateBy(delta);
+            }
+
+            if (Input.GetKeyUp(rotateKey))
+                _viewRotating = false;
+        }
+
+        /// <summary>
+        /// The wheel, wherever the pointer is inside the camera view: it zooms the view whichever tool
+        /// is picked, the way the modes used to read it on their own. The views that zoom by a distance
+        /// take it through PendingZoom rather than reading the axis themselves, so a notch is worth the
+        /// same in each of them and cannot be counted twice. The ones that zoom by something else, an
+        /// orthographic size or a forward move, keep their own read.
+        /// </summary>
+        private void HandleWheelZoom()
+        {
+            // Hovering the HUD, a panel or a popup must not push the view around while the user is
+            // doing something there.
+            float scroll = PointerOverView ? Input.GetAxis("Mouse ScrollWheel") : 0f;
+            if (scroll == 0f) return;
+
+            PendingZoom -= Mathf.Clamp(scroll * zoomSpeed * WheelNotchZoom, -WheelMaxStep, WheelMaxStep);
         }
 
         /// <summary>
@@ -564,11 +657,17 @@ namespace RobotSNAP.CameraControl
         #region Public Methods
 
         /// <summary>
-        /// Hands the view over to a mode. The session opens on the orbit; nothing else picks a mode
-        /// while it runs, so this stays the one place that knows how a switch is carried out.
+        /// Hands the view over to a mode. The view selector of the HUD, the start of a run and the focus
+        /// of an agent all end up here, so this stays the one place that knows how a switch is carried
+        /// out; OnViewChanged is what tells the HUD which button to light up.
         /// </summary>
-        private void SetCameraMode(CameraMode mode)
+        public void SetCameraMode(CameraMode mode)
         {
+            // Asking for the view the camera is already in must change nothing: entering the orbit a
+            // second time would re-frame its distance under the user.
+            if (mode == _currentModeEnum && _currentMode != null)
+                return;
+
             if (!_modes.TryGetValue(mode, out ICameraMode next))
             {
                 Debug.LogWarning($"[CameraController] The view has no {mode} mode.");

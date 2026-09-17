@@ -147,6 +147,34 @@
     background-color: var(--border-color);
 }
 
+/* ------------------------- view selector -------------------------- */
+
+/* The three views of the camera, in the corner opposite the tool rail. Three short names read
+   faster than a dropdown and, unlike one, they show the view the camera is actually in without a
+   click, which matters because a run and a click on an agent both change it from the code. */
+.view-modes {
+    position: absolute;
+    top: 68px;
+    right: 14px;
+    flex-direction: row;
+    align-items: center;
+    padding: 6px;
+    background-color: var(--panel-bg);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 12px;
+}
+
+/* A named button rather than the rail's square glyph: it borrows the rail's colours and its
+   hover and active states, and only takes back the box a whole word needs. */
+.view-mode {
+    width: auto;
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
 /* ---------------------------- minimap ----------------------------- */
 
 .minimap-panel {

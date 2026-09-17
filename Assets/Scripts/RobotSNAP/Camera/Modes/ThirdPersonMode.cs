@@ -25,14 +25,14 @@ namespace RobotSNAP.CameraControl
         {
             if (controller.CurrentFollowTarget == null) return;
 
-            // Zoom molette : ajuste la distance (mais on garde l'offset Y proportionnel ? optionnel)
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
-            if (scroll != 0)
+            // Zoom: the wheel and the zoom tool both arrive as one request from the controller, so the
+            // distance changes once whichever gesture asked for it.
+            if (controller.PendingZoom != 0f)
             {
-                _currentDistance -= scroll * controller.zoomSpeed * deltaTime;
-                _currentDistance = Mathf.Clamp(_currentDistance, controller.minDistance, controller.maxDistance);
-                // On pourrait aussi ajuster la hauteur proportionnellement, mais laissons simple.
+                _currentDistance += controller.PendingZoom;
+                controller.PendingZoom = 0f;
             }
+            _currentDistance = Mathf.Clamp(_currentDistance, controller.minDistance, controller.maxDistance);
 
             // Position désirée : derrière l'agent selon son orientation, avec distance et hauteur ajustées
             Vector3 desiredPos = controller.CurrentFollowTarget.position

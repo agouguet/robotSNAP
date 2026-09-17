@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using RobotSNAP;
 using RobotSNAP.CameraControl;
 using RobotSNAP.Core;
@@ -8,7 +9,8 @@ using UnityEngine.UIElements;
 /// <summary>
 /// Wires the simulation tab: the play controls of the top bar, the minimap camera, and the widgets
 /// of the HUD. The widgets take the camera controller as their single source of truth for the
-/// selection, and the camera itself is driven by the view toolbar and by clicks in the scene.
+/// selection, and the camera itself is driven by the view toolbar, by the view selector of the
+/// overlay and by clicks in the scene.
 /// </summary>
 public class SimulationTabController : MonoBehaviour
 {
@@ -35,6 +37,8 @@ public class SimulationTabController : MonoBehaviour
     private SimulationMinimap _minimap;
     private SimulationAgentPanel _agentPanel;
     private SimulationViewToolbar _viewToolbar;
+
+    private readonly Dictionary<CameraController.CameraMode, Button> _viewModeButtons = new();
 
     private Transform _minimapTarget;
     private SimulationState _currentState = SimulationState.Idle;
@@ -104,6 +108,7 @@ public class SimulationTabController : MonoBehaviour
 
         BuildHud();
         WirePlayControls();
+        WireViewSelector();
         UpdateUI();
 
         _isInitialized = true;
@@ -141,6 +146,49 @@ public class SimulationTabController : MonoBehaviour
         _pauseResumeButton.clicked += OnPauseResumeClicked;
     }
 
+    /// <summary>
+    /// Wires the view selector of the overlay: the buttons that hand the camera to another view. The
+    /// camera controller stays the only one that knows how a switch is carried out, so the buttons
+    /// only ask it for a view and read it back for their highlight.
+    /// </summary>
+    private void WireViewSelector()
+    {
+        if (cameraController == null) return;
+
+        _viewModeButtons[CameraController.CameraMode.Orbit] = _root.Q<Button>("ViewIsometricButton");
+        _viewModeButtons[CameraController.CameraMode.FirstPerson] = _root.Q<Button>("ViewFirstPersonButton");
+        _viewModeButtons[CameraController.CameraMode.ThirdPerson] = _root.Q<Button>("ViewThirdPersonButton");
+
+        foreach (KeyValuePair<CameraController.CameraMode, Button> pair in _viewModeButtons)
+        {
+            if (pair.Value == null)
+            {
+                Debug.LogWarning($"[SimulationTabController] The view selector has no button for {pair.Key}.");
+                continue;
+            }
+
+            CameraController.CameraMode mode = pair.Key;
+            pair.Value.clicked += () => cameraController.SetCameraMode(mode);
+        }
+    }
+
+    /// <summary>
+    /// Highlights the view the camera is in. The view changes without a click on the selector (a run
+    /// hands it back to the robot, and a click on an agent focuses it), so the highlight is read from
+    /// the camera rather than from the button the user pressed.
+    /// </summary>
+    private void RefreshViewSelector()
+    {
+        if (cameraController == null) return;
+
+        foreach (KeyValuePair<CameraController.CameraMode, Button> pair in _viewModeButtons)
+        {
+            if (pair.Value == null) continue;
+
+            pair.Value.EnableInClassList("is-active", cameraController.CurrentMode == pair.Key);
+        }
+    }
+
     private void Subscribe()
     {
         if (!_isInitialized || _subscribed) return;
@@ -151,8 +199,10 @@ public class SimulationTabController : MonoBehaviour
         if (cameraController != null)
         {
             cameraController.OnFollowTargetChanged += OnFollowTargetChanged;
+            cameraController.OnViewChanged += RefreshViewSelector;
             _minimapTarget = cameraController.GetCurrentFollowTarget();
             _minimap?.SetFocus(_minimapTarget);
+            RefreshViewSelector();
         }
 
         if (scenarioManager != null)
@@ -170,7 +220,10 @@ public class SimulationTabController : MonoBehaviour
         EventBus.Instance.Unsubscribe<SimulationStateChangedEvent>(OnStateChanged);
 
         if (cameraController != null)
+        {
             cameraController.OnFollowTargetChanged -= OnFollowTargetChanged;
+            cameraController.OnViewChanged -= RefreshViewSelector;
+        }
 
         if (scenarioManager != null)
             scenarioManager.OnScenarioApplied -= OnScenarioApplied;

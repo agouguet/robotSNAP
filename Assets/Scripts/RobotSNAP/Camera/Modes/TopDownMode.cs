@@ -91,7 +91,8 @@ namespace RobotSNAP.CameraControl
         private bool CheckUserInteraction(CameraController c)
         {
             // Vérifie si l'utilisateur a commencé un pan (clic droit)
-            if (Input.GetKeyDown(c.rotateKey))
+            // The combined Move tool owns the right button: it must not release the focus as well.
+            if (!c.UnifiedToolActive && Input.GetKeyDown(c.rotateKey))
                 return true;
 
             // Vérifie si une touche WASD est pressée
@@ -106,8 +107,8 @@ namespace RobotSNAP.CameraControl
 
         private void HandleFreeMove(CameraController c, float deltaTime)
         {
-            // Pan with right mouse button
-            if (Input.GetKeyDown(c.rotateKey))
+            // Pan with right mouse button, unless the combined Move tool already owns that button.
+            if (!c.UnifiedToolActive && Input.GetKeyDown(c.rotateKey))
             {
                 _isPanning = true;
                 _lastMousePosition = Input.mousePosition;
@@ -115,7 +116,7 @@ namespace RobotSNAP.CameraControl
             if (Input.GetKeyUp(c.rotateKey))
                 _isPanning = false;
 
-            if (_isPanning)
+            if (_isPanning && !c.UnifiedToolActive)
             {
                 Vector3 delta = Input.mousePosition - _lastMousePosition;
                 _lastMousePosition = Input.mousePosition;

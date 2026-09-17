@@ -13,11 +13,23 @@
                         <ui:Button name="ToolSelectButton" text="➤" class="view-tool is-active"
                                    tooltip="Select: click an agent to work with it"/>
                         <ui:Button name="ToolMoveButton" text="✥" class="view-tool"
-                                   tooltip="Move: drag to slide the view over the map and release the agent"/>
+                                   tooltip="Move: left drag slides the view and releases the agent, right drag turns it, the wheel zooms it"/>
                         <ui:Button name="ToolRotateButton" text="↻" class="view-tool"
                                    tooltip="Rotate: drag to turn around the scene"/>
                         <ui:Button name="ToolZoomButton" text="⌕" class="view-tool"
                                    tooltip="Zoom: drag up and down, or use the wheel"/>
+                    </ui:VisualElement>
+
+                    <!-- The view selector mirrors the toolbar on the other side of the shot. Its three
+                         names are the three views of the camera; the highlight follows the camera, so a
+                         view the code picked (a run hands it back to the robot) lights up here too. -->
+                    <ui:VisualElement name="ViewModeSelector" class="view-modes">
+                        <ui:Button name="ViewIsometricButton" text="Isometric" class="view-tool view-mode is-active"
+                                   tooltip="Isometric: the angled view over the map"/>
+                        <ui:Button name="ViewFirstPersonButton" text="First person" class="view-tool view-mode"
+                                   tooltip="First person: look through the eyes of the selected agent"/>
+                        <ui:Button name="ViewThirdPersonButton" text="Third person" class="view-tool view-mode"
+                                   tooltip="Third person: follow the selected agent from behind"/>
                     </ui:VisualElement>
 
                     <ui:VisualElement name="MinimapPanel" class="minimap-panel">

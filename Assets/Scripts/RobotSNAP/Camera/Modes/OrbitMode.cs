@@ -6,8 +6,8 @@ namespace RobotSNAP.CameraControl
     /// <summary>
     /// The only interactive view of the simulation: the camera turns around a pivot at a fixed
     /// distance. The pivot is the selected agent while one is selected, and the point the move tool
-    /// last slid to otherwise. Every gesture comes from the view toolbar, so this mode reads no key
-    /// of its own apart from the wheel.
+    /// last slid to otherwise. Every gesture comes from the view toolbar and arrives through the
+    /// controller, so this mode reads no input of its own.
     /// </summary>
     public class OrbitMode : ICameraMode
     {
@@ -41,12 +41,9 @@ namespace RobotSNAP.CameraControl
         /// <summary>The wheel and the zoom tool both feed the same distance.</summary>
         private void HandleZoom(CameraController c)
         {
-            // The wheel only counts inside the camera view: hovering the HUD, a panel or a popup
-            // must not push the view around while the user is doing something else.
-            float scroll = c.PointerOverView ? Input.GetAxis("Mouse ScrollWheel") : 0f;
-            if (scroll != 0)
-                _currentDistance -= scroll * c.zoomSpeed * Time.deltaTime;
-
+            // The wheel is read by the controller, which drops it when the pointer is over the HUD and
+            // hands it over here: one reader is what keeps a notch from being counted twice while the
+            // combined Move tool holds the wheel together with its two drags.
             if (c.PendingZoom != 0f)
             {
                 _currentDistance += c.PendingZoom;

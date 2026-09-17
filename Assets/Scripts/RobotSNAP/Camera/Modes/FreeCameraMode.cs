@@ -48,7 +48,13 @@ namespace RobotSNAP.CameraControl
             }
             
             // --- Rotation de la caméra (clic droit) ---
-            if (Input.GetKeyDown(c.rotateKey))
+            // The combined Move tool turns the view itself: the free camera stands aside from the right
+            // button while that tool is picked, and drops any turn it was in the middle of.
+            bool freeTurnsView = !c.UnifiedToolActive;
+            if (!freeTurnsView)
+                c.IsRotating = false;
+
+            if (freeTurnsView && Input.GetKeyDown(c.rotateKey))
             {
                 c.IsRotating = true;
                 c.LastMousePosition = Input.mousePosition;

@@ -599,13 +599,17 @@ namespace RobotSNAP.Agents
 
         public void SetPlaying(bool playing)
         {
+            if (_isPlaying == playing)
+                return;
+
             _isPlaying = playing;
+
+            // A pause stops the body, nothing else. Zeroing the stored velocity and the avatar's
+            // as well — which is what this used to do — threw away the walk the agent was in the
+            // middle of: it resumed from a standstill and the animation started over. The rigid
+            // body still has to be stopped, or the agent keeps gliding through the pause.
             if (!_isPlaying)
-            {
                 _rb.linearVelocity = Vector3.zero;
-                _currentVelocity = Vector2.zero;
-                _avatar?.SetVelocity(Vector3.zero);
-            }
         }
 
         public void Stop()

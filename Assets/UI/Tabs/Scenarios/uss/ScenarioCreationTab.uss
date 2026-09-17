@@ -1125,6 +1125,7 @@
 }
 
 .tag-input {
+    width: auto;
     flex-grow: 1;
 }
 

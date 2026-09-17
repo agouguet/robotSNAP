@@ -18,6 +18,10 @@ namespace RobotSNAP.ROS
         [Header("ROS Configuration")]
         [SerializeField] private bool logPublishEvents = false;
         [SerializeField] private bool autoInitialize = true;
+        [Tooltip("Publish the state of the whole application - scenario, map, crowd, play/pause - on the " +
+                 "simulation topics. The publisher lives on this same object, so a client always sees the " +
+                 "bridge that is actually running.")]
+        [SerializeField] private bool publishSimulationState = true;
         
         [Header("Topic Names (will be prefixed)")]
         [SerializeField] private string resetDoneTopic = "/reset_done";
@@ -61,6 +65,11 @@ namespace RobotSNAP.ROS
             if (autoInitialize)
             {
                 Initialize(_prefix);
+            }
+
+            if (publishSimulationState)
+            {
+                EnsureSimulationStatePublisher();
             }
         }
         
@@ -152,6 +161,22 @@ namespace RobotSNAP.ROS
         {
             topic = topic.TrimStart('/');
             return string.IsNullOrEmpty(_prefix) ? $"/{topic}" : $"/{_prefix}/{topic}";
+        }
+
+        /// <summary>
+        /// Creates the publisher of the whole application state on this object the first time the bridge
+        /// starts. The component is created here rather than attached to the environment prefab so that it
+        /// cannot outlive the EnvROS it reads its prefix from, and so that a scene built without ROS pays
+        /// for it at all.
+        /// </summary>
+        private void EnsureSimulationStatePublisher()
+        {
+            if (!TryGetComponent(out SimulationStatePublisher publisher))
+            {
+                publisher = gameObject.AddComponent<SimulationStatePublisher>();
+            }
+
+            publisher.enabled = true;
         }
         
         #endregion

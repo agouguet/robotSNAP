@@ -1,5 +1,5 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <ui:Style src="project://database/Assets/UI/Tabs/Scenarios/uss/ScenarioCreationTab.uss?fileID=7433441132597879392&amp;guid=75c4c03faf2f9d48f9a09a9a9d02951e&amp;type=3"/>
+    <Style src="project://database/Assets/UI/Tabs/Scenarios/uss/ScenarioCreationTab.uss?fileID=7433441132597879392&amp;guid=75c4c03faf2f9d48f9a09a9a9d02951e&amp;type=3#ScenarioCreationTab"/>
     <ui:VisualElement name="CreationRoot" class="creation-root">
         <ui:VisualElement name="CreationHeader" class="creation-header">
             <ui:VisualElement class="creation-header-left">
@@ -10,7 +10,6 @@
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
-
         <ui:VisualElement name="CreationStepper" class="creation-stepper">
             <ui:VisualElement name="Step1" class="creation-step active">
                 <ui:VisualElement class="step-number">
@@ -33,7 +32,6 @@
                 <ui:Label text="Validation" class="step-label"/>
             </ui:VisualElement>
         </ui:VisualElement>
-
         <ui:VisualElement name="Step1Content" class="creation-body creation-step-content">
             <ui:VisualElement name="GeneralInformationPanel" class="creation-panel general-information-panel">
                 <ui:Label text="General information" class="creation-panel-title"/>
@@ -87,7 +85,6 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
-
             <ui:VisualElement name="EnvironmentColumn" class="creation-center-column">
                 <ui:VisualElement name="EnvironmentPreviewPanel" class="creation-panel environment-preview-panel">
                     <ui:Label text="Environment preview" class="creation-panel-title"/>
@@ -115,11 +112,20 @@
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
-
         <ui:VisualElement name="Step2Content" class="creation-body creation-step-content agents-step-layout creation-step-hidden">
             <ui:VisualElement class="creation-panel agent-settings-panel">
                 <ui:ScrollView class="agent-settings-scroll">
                     <ui:Label text="Route editor" class="creation-panel-title"/>
+                    <ui:VisualElement class="creation-field">
+                        <ui:Label text="Routes" class="creation-field-label"/>
+                        <ui:Label text="Select a route here or click its line on the map." class="config-panel-subtitle"/>
+                        <ui:VisualElement name="RouteSelectorList" class="route-selector-list"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="route-management-actions">
+                        <ui:Button name="AddHumanRouteButton" text="+ Human route" class="route-management-button"/>
+                        <ui:Button name="DuplicateHumanRouteButton" text="Duplicate" class="route-management-button"/>
+                        <ui:Button name="RemoveHumanRouteButton" text="Remove" class="route-management-button danger-subtle"/>
+                    </ui:VisualElement>
                     <ui:VisualElement name="RobotRouteSettings" class="route-editor-hidden">
                         <ui:VisualElement class="editor-section">
                             <ui:Button name="SectionGlobalHeader" text="Robot route settings" class="editor-section-header"/>
@@ -138,16 +144,6 @@
                                 </ui:VisualElement>
                             </ui:VisualElement>
                         </ui:VisualElement>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="creation-field">
-                        <ui:Label text="Routes" class="creation-field-label"/>
-                        <ui:Label text="Select a route here or click its line on the map." class="config-panel-subtitle"/>
-                        <ui:VisualElement name="RouteSelectorList" class="route-selector-list"/>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="route-management-actions">
-                        <ui:Button name="AddHumanRouteButton" text="+ Human route" class="route-management-button"/>
-                        <ui:Button name="DuplicateHumanRouteButton" text="Duplicate" class="route-management-button"/>
-                        <ui:Button name="RemoveHumanRouteButton" text="Remove" class="route-management-button danger-subtle"/>
                     </ui:VisualElement>
                     <ui:VisualElement name="HumanRouteSettings" class="route-editor-hidden">
                         <ui:VisualElement class="agent-panel-divider"/>
@@ -207,7 +203,6 @@
                     </ui:VisualElement>
                 </ui:ScrollView>
             </ui:VisualElement>
-
             <ui:VisualElement class="creation-panel agents-map-panel">
                 <ui:VisualElement class="agents-map-heading">
                     <ui:VisualElement>
@@ -244,7 +239,6 @@
                     <ui:Label name="MapShortcutCancel" text="Esc  Cancel drag" class="map-shortcut-chip"/>
                 </ui:VisualElement>
             </ui:VisualElement>
-
             <ui:VisualElement class="creation-panel manual-coordinates-panel">
                 <ui:ScrollView class="manual-coordinates-scroll">
                     <ui:Label text="Route points" class="creation-panel-title"/>
@@ -253,7 +247,6 @@
                 </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>
-
         <ui:VisualElement name="Step3Content" class="creation-body creation-step-content validation-layout creation-step-hidden">
             <ui:VisualElement name="CreationSummaryColumn" class="creation-summary-column">
                 <ui:VisualElement name="ScenarioSummaryPanel" class="creation-panel summary-panel">
@@ -305,7 +298,6 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
-
             <ui:VisualElement name="ValidationMapPanel" class="creation-panel agents-map-panel validation-map-panel">
                 <ui:VisualElement class="agents-map-heading">
                     <ui:VisualElement>
@@ -321,7 +313,6 @@
                 </ui:VisualElement>
                 <ui:VisualElement name="ValidationMapLegendList" class="map-legend-list recap-legend"/>
             </ui:VisualElement>
-
             <ui:VisualElement class="creation-panel validation-panel">
                 <ui:VisualElement class="validation-heading">
                     <ui:VisualElement name="ValidationStatusIcon" class="validation-status-icon"/>
@@ -356,7 +347,6 @@
                 <ui:VisualElement name="DryRunFindings" class="dry-run-list"/>
             </ui:VisualElement>
         </ui:VisualElement>
-
         <ui:VisualElement name="CreationFooter" class="creation-footer">
             <ui:Button name="CancelEditorButton" text="Cancel" class="action-button secondary creation-cancel-button"/>
             <ui:Label name="EditorFeedbackLabel" text="" class="editor-feedback"/>
@@ -366,7 +356,6 @@
                 <ui:Button name="SaveEditorButton" text="Save scenario" class="action-button primary creation-save-button creation-step-hidden"/>
             </ui:VisualElement>
         </ui:VisualElement>
-
         <ui:VisualElement name="MapBrowserOverlay" class="creation-modal-overlay creation-step-hidden">
             <ui:VisualElement class="creation-modal map-browser-modal">
                 <ui:VisualElement class="modal-heading-row">
@@ -380,11 +369,15 @@
                 <ui:VisualElement class="map-browser-content">
                     <ui:VisualElement class="map-browser-datasets-panel">
                         <ui:Label text="DATASETS" class="browser-section-title"/>
-                        <ui:ScrollView><ui:VisualElement name="MapDatasetList" class="map-dataset-list"/></ui:ScrollView>
+                        <ui:ScrollView>
+                            <ui:VisualElement name="MapDatasetList" class="map-dataset-list"/>
+                        </ui:ScrollView>
                     </ui:VisualElement>
                     <ui:VisualElement class="map-browser-files-panel">
                         <ui:Label name="MapBrowserFolderLabel" text="All environments" class="browser-section-title"/>
-                        <ui:ScrollView><ui:VisualElement name="MapFileList" class="map-file-list"/></ui:ScrollView>
+                        <ui:ScrollView>
+                            <ui:VisualElement name="MapFileList" class="map-file-list"/>
+                        </ui:ScrollView>
                     </ui:VisualElement>
                     <ui:VisualElement class="map-browser-preview-panel">
                         <ui:Image name="MapBrowserPreviewImage" class="map-browser-preview-image"/>
@@ -395,7 +388,6 @@
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
-
         <ui:VisualElement name="EnvironmentImportOverlay" class="creation-modal-overlay creation-step-hidden">
             <ui:VisualElement class="creation-modal import-environment-modal">
                 <ui:Label text="Import occupancy grid" class="creation-modal-title"/>
@@ -419,9 +411,18 @@
                             <ui:TextField name="EnvironmentImportNameField" placeholder="E.g. ground_floor_lab" class="creation-text-field"/>
                         </ui:VisualElement>
                         <ui:VisualElement class="import-metadata-row">
-                            <ui:VisualElement class="creation-field import-metadata-field"><ui:Label text="Resolution (m/pixel) *" class="creation-field-label"/><ui:FloatField name="EnvironmentResolutionField" class="creation-text-field"/></ui:VisualElement>
-                            <ui:VisualElement class="creation-field import-metadata-field import-field-middle"><ui:Label text="Origin X (m)" class="creation-field-label"/><ui:FloatField name="EnvironmentOriginXField" class="creation-text-field"/></ui:VisualElement>
-                            <ui:VisualElement class="creation-field import-metadata-field import-field-middle"><ui:Label text="Origin Z (m)" class="creation-field-label"/><ui:FloatField name="EnvironmentOriginZField" class="creation-text-field"/></ui:VisualElement>
+                            <ui:VisualElement class="creation-field import-metadata-field">
+                                <ui:Label text="Resolution (m/pixel) *" class="creation-field-label"/>
+                                <ui:FloatField name="EnvironmentResolutionField" class="creation-text-field"/>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="creation-field import-metadata-field import-field-middle">
+                                <ui:Label text="Origin X (m)" class="creation-field-label"/>
+                                <ui:FloatField name="EnvironmentOriginXField" class="creation-text-field"/>
+                            </ui:VisualElement>
+                            <ui:VisualElement class="creation-field import-metadata-field import-field-middle">
+                                <ui:Label text="Origin Z (m)" class="creation-field-label"/>
+                                <ui:FloatField name="EnvironmentOriginZField" class="creation-text-field"/>
+                            </ui:VisualElement>
                         </ui:VisualElement>
                         <ui:Label name="EnvironmentImportFeedbackLabel" text="" class="import-feedback"/>
                     </ui:VisualElement>

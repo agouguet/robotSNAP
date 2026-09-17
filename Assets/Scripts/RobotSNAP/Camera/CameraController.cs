@@ -60,6 +60,16 @@ namespace RobotSNAP.CameraControl
         [Tooltip("What the left mouse button does in the view: pick an agent, slide, turn or zoom.")]
         [SerializeField] private CameraTool activeTool = CameraTool.Select;
 
+        [Header("Occlusion")]
+        [Tooltip("Walls between the camera and the agent it follows step out of the picture.")]
+        [SerializeField] private bool revealThroughWalls = true;
+        [Tooltip("What counts as an occluder.")]
+        [SerializeField] private LayerMask occlusionMask = ~0;
+        [Tooltip("Height on the agent the line of sight aims at, in metres.")]
+        [SerializeField] private float occlusionEyeHeight = 1f;
+        [Tooltip("How long a wall stays out of the picture after it stops blocking the view, in seconds.")]
+        [SerializeField] private float occlusionGraceSeconds = 0.2f;
+
         public CameraTool ActiveTool => activeTool;
         public event System.Action<CameraTool> OnToolChanged;
 
@@ -108,7 +118,10 @@ namespace RobotSNAP.CameraControl
             ThirdPerson,
             Orbit
         }
-        
+
+        /// <summary>The view the camera is in right now, for the panels that have to show it.</summary>
+        public CameraMode CurrentMode => _currentModeEnum;
+
         private CameraMode _currentModeEnum = CameraMode.Free;
         private ICameraMode _currentMode;
         // Dictionnaire unique : clé = enum, valeur = instance du mode
@@ -132,6 +145,8 @@ namespace RobotSNAP.CameraControl
         private bool _toolDragMoved;
         private const float DragThresholdPixels = 4f;
 
+        private CameraOcclusionSolver _occlusion;
+
         /// <summary>Zoom asked for by the zoom tool, in metres. The orbit mode consumes it this frame.</summary>
         public float PendingZoom { get; set; }
         
@@ -150,13 +165,22 @@ namespace RobotSNAP.CameraControl
         private void Awake()
         {
             Initialize();
+            _occlusion = new CameraOcclusionSolver(mainCamera, occlusionMask, occlusionGraceSeconds, occlusionEyeHeight);
         }
         
         private void LateUpdate()
         {
             if (mainCamera == null) return;
             _currentMode?.Update(this, Time.unscaledDeltaTime);
+
+            // After the camera has moved for the frame, so the line of sight is the one the user sees.
+            _occlusion?.Tick(revealThroughWalls ? _currentFollowTarget : null);
         }
+
+        // Nothing may be left out of the picture once the view stops working: the walls of the map
+        // have to come back even if the component is switched off mid-run.
+        private void OnDisable() => _occlusion?.RestoreAll();
+        private void OnDestroy() => _occlusion?.RestoreAll();
 
         private void Update()
         {

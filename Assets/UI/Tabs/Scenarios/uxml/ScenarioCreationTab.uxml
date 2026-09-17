@@ -123,12 +123,13 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="route-management-actions">
                         <ui:Button name="AddHumanRouteButton" text="+ Human route" class="route-management-button"/>
+                        <ui:Button name="AddRobotRouteButton" text="+ Robot" class="route-management-button"/>
                         <ui:Button name="DuplicateHumanRouteButton" text="Duplicate" class="route-management-button"/>
                         <ui:Button name="RemoveHumanRouteButton" text="Remove" class="route-management-button danger-subtle"/>
                     </ui:VisualElement>
                     <ui:VisualElement name="RobotRouteSettings" class="route-editor-hidden">
                         <ui:VisualElement class="editor-section">
-                            <ui:Button name="SectionGlobalHeader" text="Robot route settings" class="editor-section-header"/>
+                            <ui:Button name="SectionGlobalHeader" text="Robot settings" class="editor-section-header"/>
                             <ui:VisualElement name="SectionGlobalContent" class="editor-section-content">
                                 <ui:VisualElement class="creation-field">
                                     <ui:Label text="Robot type" class="creation-field-label"/>

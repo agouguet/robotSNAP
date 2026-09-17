@@ -1,0 +1,138 @@
+scenario_info: 
+  name: Multi Robot
+  type: Custom
+  description: "Two robots of different types crossing a small crowd"
+  version: 1.0
+  author: RobotSNAP
+  created: "2026-09-17 18:00"
+  tags: 
+  - Multi-robot
+  map: easy/10434d6006b686598c8acab6847766e7
+  location: ""
+  dataset: null
+  preview: ""
+  robot_type: TurtleBot4
+  duration: 0
+points: 
+  robot_1_start: 
+    x: 10.34
+    y: 0
+    z: 12
+    yaw: 0
+    center: null
+    size: null
+  robot_1_goal: 
+    x: 36
+    y: 0
+    z: 12
+    yaw: null
+    center: null
+    size: null
+  robot_2_start: 
+    x: 10.34
+    y: 0
+    z: 18
+    yaw: 0
+    center: null
+    size: null
+  robot_2_goal: 
+    x: 36
+    y: 0
+    z: 18
+    yaw: null
+    center: null
+    size: null
+  humans_start: 
+    x: 22
+    y: 0
+    z: 13
+    yaw: null
+    center: 
+      x: 22
+      y: 0
+      z: 13
+    size: 
+      x: 2
+      y: 0
+      z: 6
+  humans_goal: 
+    x: 26
+    y: 0
+    z: 22
+    yaw: null
+    center: 
+      x: 26
+      y: 0
+      z: 22
+    size: 
+      x: 2
+      y: 0
+      z: 6
+robots: 
+- id: robot_1
+  type: turtlebot4
+  start: robot_1_start
+  goal: robot_1_goal
+  waypoints: null
+  behavior: normal
+  speed: 0.31
+- id: robot_2
+  type: husky
+  start: robot_2_start
+  goal: robot_2_goal
+  waypoints: null
+  behavior: normal
+  speed: 1
+humans: 
+- id: crossing
+  count: 8
+  spawn: 
+    type: random
+    ref: null
+    position: null
+    zone: 
+      x: null
+      y: null
+      z: null
+      yaw: null
+      center: 
+        x: 24
+        y: 0
+        z: 13
+      size: 
+        x: 3
+        y: 0
+        z: 4
+    formation: scatter
+    formation_parameter: 0
+    spacing: 1.5
+    relative_to: null
+  goal: 
+    type: random
+    ref: null
+    position: null
+    zone: 
+      x: null
+      y: null
+      z: null
+      yaw: null
+      center: 
+        x: 24
+        y: 0
+        z: 21
+      size: 
+        x: 3
+        y: 0
+        z: 3
+    target: null
+    radius: 3
+  goals: null
+  end_behavior: stay
+  group: null
+  movement_controller: 
+    type: SFM
+    sfm_params: null
+  behavior: normal
+  speed: 1
+  color: null
+  personality: null

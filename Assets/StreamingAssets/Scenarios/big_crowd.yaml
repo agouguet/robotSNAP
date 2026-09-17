@@ -1,31 +1,29 @@
 scenario_info: 
-  name: Perpendicular Traffic
+  name: Big Crowd
   type: Custom
   description: ""
   version: 1.0
   author: RobotSNAP
-  created: "2026-09-14 14:41"
-  tags: 
-  - Basic
-  - Crowd
-  map: basic/crowd
-  location: null
+  created: "2026-09-17 15:43"
+  tags: []
+  map: easy/10434d6006b686598c8acab6847766e7
+  location: ""
   dataset: null
   preview: ""
   robot_type: TurtleBot4
   duration: 0
 points: 
   robot_start: 
-    x: -6
+    x: 10.34
     y: 0
-    z: 0
+    z: 15.07
     yaw: 0
     center: null
     size: null
   robot_goal: 
-    x: 6
+    x: 40
     y: 0
-    z: 0
+    z: 15
     yaw: null
     center: null
     size: null
@@ -37,7 +35,7 @@ robot:
   speed: 1.2
 humans: 
 - id: human_route_1
-  count: 10
+  count: 40
   spawn: 
     type: random
     ref: null
@@ -48,16 +46,16 @@ humans:
       z: null
       yaw: null
       center: 
-        x: -0.02036619
+        x: 16.78985
         y: 0
-        z: -4.949083
+        z: 15
       size: 
-        x: 13.72709
+        x: 9.999999
         y: 0
-        z: 3.991853
+        z: 15
     formation: scatter
     formation_parameter: 0
-    spacing: 1
+    spacing: 1.5
     relative_to: null
   goal: 
     type: random
@@ -69,27 +67,25 @@ humans:
       z: null
       yaw: null
       center: 
-        x: 0
+        x: 35
         y: 0
-        z: 5
+        z: 15
       size: 
-        x: 14
+        x: 10
         y: 0
-        z: 4
+        z: 15
     target: null
     radius: 5
   goals: null
-  end_behavior: loop
+  end_behavior: stay
   group: null
-  movement_controller: 
-    type: SFM
-    sfm_params: null
+  movement_controller: null
   behavior: normal
-  speed: 1.2
+  speed: 1
   color: null
   personality: null
 - id: human_route_2
-  count: 10
+  count: 40
   spawn: 
     type: random
     ref: null
@@ -100,16 +96,16 @@ humans:
       z: null
       yaw: null
       center: 
-        x: 0
+        x: 35.04946
         y: 0
-        z: 5
+        z: 15
       size: 
-        x: 14
+        x: 9.999999
         y: 0
-        z: 3
+        z: 15
     formation: scatter
     formation_parameter: 0
-    spacing: 1
+    spacing: 1.5
     relative_to: null
   goal: 
     type: random
@@ -121,22 +117,20 @@ humans:
       z: null
       yaw: null
       center: 
-        x: 0
+        x: 16.95148
         y: 0
-        z: -5
+        z: 15.05236
       size: 
-        x: 14
+        x: 10
         y: 0
-        z: 3
+        z: 15
     target: null
     radius: 5
   goals: null
-  end_behavior: loop
+  end_behavior: stay
   group: null
-  movement_controller: 
-    type: SFM
-    sfm_params: null
+  movement_controller: null
   behavior: normal
-  speed: 1.2
+  speed: 1
   color: null
   personality: null

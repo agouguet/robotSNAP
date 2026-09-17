@@ -1,44 +1,101 @@
-scenario_info:
-  name: "Crowd"
-  description: "Crowd scenario with multiple pedestrians"
-  version: "1.0"
-  map: "basic/crowd"
-  preview: "crowd.png"
-  tags: ["Basic", "Indoor", "Crowd", "Openspace"]
-
-simulation:
-  duration: 0.1
-  random_seed: 42
-  time_scale: 1.0
-  min_humans: 0
-  max_humans: 50
-
-points:
-  start_robot: {x: -7, y: 0, z: 0}
-  end_robot: {x: 7, y: 0, z: 0}
-  start_human: {x: 7, y: 0, z: 0}
-  end_human: {x: 0, y: 0, z: -7}
-  spawn_zone:
-    center: {x: 0, y: 0, z: 0}
-    size: {x: 7, y: 1, z: 7}
-
-robot:
-  start: "start_robot"
-  goal: "end_robot"
-  behavior: "normal"
+scenario_info: 
+  name: Crowd
+  type: Custom
+  description: Crowd scenario with multiple pedestrians
+  version: 1.0
+  author: RobotSNAP
+  created: "2026-09-17 09:23"
+  tags: 
+  - Basic
+  - Crowd
+  - Indoor
+  - Openspace
+  map: basic/crowd
+  location: null
+  dataset: null
+  preview: crowd.png
+  robot_type: TurtleBot4
+  duration: 0
+points: 
+  start_robot: 
+    x: -7
+    y: 0
+    z: 0
+    yaw: 0
+    center: null
+    size: null
+  end_robot: 
+    x: 7
+    y: 0
+    z: 0
+    yaw: null
+    center: null
+    size: null
+  start_human: 
+    x: 7
+    y: 0
+    z: 0
+    yaw: null
+    center: null
+    size: null
+  end_human: 
+    x: 0
+    y: 0
+    z: -7
+    yaw: null
+    center: null
+    size: null
+  spawn_zone: 
+    x: 0
+    y: 0
+    z: 0
+    yaw: null
+    center: null
+    size: null
+robot: 
+  start: start_robot
+  goal: end_robot
+  waypoints: null
+  behavior: normal
   speed: 1.2
-
-humans:
-  # Groupe 1 : simples piétons spawn aléatoire dans une zone
-  - id: "pedestrians"
-    count: 5
-    spawn:
-      type: "random"
-      ref: "spawn_zone"
-    goal:
-      type: "random"
-      ref: "spawn_zone"
-    behavior: "normal"
-    speed: 1.0
-    movement_controller:
-      type: "SFM"
+humans: 
+- id: pedestrians
+  count: 5
+  spawn: 
+    type: random
+    ref: null
+    position: null
+    zone: 
+      x: null
+      y: null
+      z: null
+      yaw: null
+      center: 
+        x: 0.02057409
+        y: 0
+        z: 0.04115248
+      size: 
+        x: 10.12346
+        y: 0
+        z: 10.12346
+    formation: scatter
+    formation_parameter: 0
+    spacing: 0.8
+    relative_to: null
+  goal: 
+    type: point
+    ref: spawn_zone
+    position: null
+    zone: null
+    target: null
+    radius: 0
+  goals: null
+  end_behavior: loop
+  group: null
+  movement_controller: 
+    type: SFM
+    sfm_params: null
+  behavior: normal
+  speed: 1
+  color: null
+  personality: null

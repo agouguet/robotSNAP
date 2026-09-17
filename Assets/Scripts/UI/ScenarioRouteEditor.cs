@@ -44,6 +44,10 @@ public sealed class ScenarioRouteEditor
     {
         public string Id;
         public bool IsRobot;
+        /// <summary>Type of a robot route, an id of <see cref="RobotProfiles"/>; meaningless for a human.</summary>
+        public string RobotType = RobotProfiles.DefaultId;
+        /// <summary>Heading of the robot on its first point, in degrees; meaningless for a human.</summary>
+        public float StartYaw;
         public int Count;
         public float Speed = 1f;
         public HumanEndBehavior EndBehavior = HumanEndBehavior.Stay;
@@ -60,6 +64,8 @@ public sealed class ScenarioRouteEditor
         /// <summary>Arrival area of each point, parallel to <see cref="Points"/>; a null entry is a fixed point.</summary>
         public readonly List<Rect?> PointZones = new();
         public HumanScenarioConfig Source;
+        /// <summary>The robot entry a route was read from, so saving keeps the fields the editor does not show.</summary>
+        public RobotScenarioConfig RobotSource;
         public bool RouteModified;
         public bool HasNonSpatialGoal;
 
@@ -72,6 +78,8 @@ public sealed class ScenarioRouteEditor
     {
         public string Id;
         public bool IsRobot;
+        public string RobotType;
+        public float StartYaw;
         public int Count;
         public float Speed;
         public HumanEndBehavior EndBehavior;
@@ -85,6 +93,7 @@ public sealed class ScenarioRouteEditor
         public Rect SpawnZone;
         public List<Rect?> PointZones;
         public HumanScenarioConfig Source;
+        public RobotScenarioConfig RobotSource;
         public bool RouteModified;
         public bool HasNonSpatialGoal;
     }
@@ -182,6 +191,7 @@ public sealed class ScenarioRouteEditor
     private readonly Dictionary<int, Label> _pointAreaLabels = new();
     private readonly VisualElement _routeList;
     private readonly Button _addHumanRouteButton;
+    private readonly Button _addRobotRouteButton;
     private readonly Button _duplicateHumanRouteButton;
     private readonly Button _removeHumanRouteButton;
     private readonly Button _setRouteStartButton;
@@ -189,6 +199,10 @@ public sealed class ScenarioRouteEditor
     private readonly Button _toggleMapGridButton;
     private readonly VisualElement _humanRouteSettings;
     private readonly VisualElement _robotRouteSettings;
+    /// <summary>Type of the active robot route, one per robot, written in the scenario as <c>robots[i].type</c>.</summary>
+    private readonly DropdownField _robotTypeDropdown;
+    private readonly FloatField _robotSpeedField;
+    private readonly FloatField _startYawField;
     private readonly IntegerField _humanCountField;
     private readonly FloatField _humanSpeedField;
     private readonly DropdownField _endBehaviorDropdown;
@@ -268,6 +282,7 @@ public sealed class ScenarioRouteEditor
     {
         _routeList = root.Q<VisualElement>("RouteSelectorList");
         _addHumanRouteButton = root.Q<Button>("AddHumanRouteButton");
+        _addRobotRouteButton = root.Q<Button>("AddRobotRouteButton");
         _duplicateHumanRouteButton = root.Q<Button>("DuplicateHumanRouteButton");
         _removeHumanRouteButton = root.Q<Button>("RemoveHumanRouteButton");
         _setRouteStartButton = root.Q<Button>("SetRouteStartButton");
@@ -275,6 +290,9 @@ public sealed class ScenarioRouteEditor
         _toggleMapGridButton = root.Q<Button>("ToggleMapGridButton");
         _humanRouteSettings = root.Q<VisualElement>("HumanRouteSettings");
         _robotRouteSettings = root.Q<VisualElement>("RobotRouteSettings");
+        _robotTypeDropdown = root.Q<DropdownField>("RobotTypeDropdown");
+        _robotSpeedField = root.Q<FloatField>("RobotSpeedField");
+        _startYawField = root.Q<FloatField>("StartYawField");
         _humanCountField = root.Q<IntegerField>("HumanCountField");
         _humanSpeedField = root.Q<FloatField>("HumanSpeedField");
         _endBehaviorDropdown = root.Q<DropdownField>("EndBehaviorDropdown");
@@ -342,11 +360,56 @@ public sealed class ScenarioRouteEditor
         _canvas.RegisterCallback<GeometryChangedEvent>(_ => RefreshOverlay());
 
         _addHumanRouteButton.clicked += AddHumanRoute;
-        _duplicateHumanRouteButton.clicked += DuplicateActiveHumanRoute;
-        _removeHumanRouteButton.clicked += RemoveActiveHumanRoute;
+        if (_addRobotRouteButton != null)
+            _addRobotRouteButton.clicked += AddRobotRoute;
+        _duplicateHumanRouteButton.clicked += DuplicateActiveRoute;
+        _removeHumanRouteButton.clicked += RemoveActiveRoute;
         _setRouteStartButton.clicked += SelectStartForPlacement;
         _addRouteObjectiveButton.clicked += AddObjective;
         _toggleMapGridButton.clicked += ToggleGrid;
+
+        // The type of a robot is the one setting that changes how it behaves rather than where it goes, so it
+        // belongs to the route of that robot and follows the selection like every other field of the panel.
+        _robotTypeDropdown.choices = RobotProfiles.DisplayNames().ToList();
+        _robotTypeDropdown.RegisterValueChangedCallback(evt =>
+        {
+            if (_updatingFields) return;
+            RouteDraft robot = ActiveRobotRoute;
+            if (robot == null || string.Equals(evt.newValue, DisplayNameOf(robot.RobotType), StringComparison.Ordinal))
+                return;
+
+            PushUndo($"robot-type:{_activeRouteIndex}");
+            robot.RobotType = RobotProfiles.Find(evt.newValue).Id;
+            // A type carries its own speed; taking it saves the author from typing the figure of the vendor
+            // twice, and the field stays editable for a scenario that wants to drive it slower.
+            robot.Speed = RobotProfiles.Find(evt.newValue).MaxLinearSpeed;
+            robot.RouteModified = true;
+            RefreshRouteList();
+            RefreshActiveRoute();
+        });
+        _robotSpeedField.RegisterValueChangedCallback(evt =>
+        {
+            if (_updatingFields) return;
+            RouteDraft robot = ActiveRobotRoute;
+            if (robot == null) return;
+
+            float value = Mathf.Max(0.01f, evt.newValue);
+            if (!Mathf.Approximately(value, evt.newValue)) _robotSpeedField.SetValueWithoutNotify(value);
+            PushUndo($"robot-speed:{_activeRouteIndex}");
+            robot.Speed = value;
+            robot.RouteModified = true;
+        });
+        _startYawField.RegisterValueChangedCallback(evt =>
+        {
+            if (_updatingFields) return;
+            RouteDraft robot = ActiveRobotRoute;
+            if (robot == null || robot.Points.Count == 0) return;
+
+            PushUndo($"robot-yaw:{_activeRouteIndex}");
+            // The orientation of the first point is what the robot faces at spawn, so it is stored on that
+            // point and written back with the rest of the route.
+            robot.StartYaw = evt.newValue;
+        });
 
         _humanCountField.RegisterValueChangedCallback(evt =>
         {
@@ -435,8 +498,19 @@ public sealed class ScenarioRouteEditor
     {
         get
         {
-            RouteDraft robot = _routes.FirstOrDefault(route => route.IsRobot);
-            return robot == null ? "No robot route" : FormatRouteSummary(robot);
+            List<RouteDraft> robots = _routes.Where(route => route.IsRobot).ToList();
+            if (robots.Count == 0)
+                return "No robot route";
+
+            // Several robots are named by their types, because that is the question the summary answers:
+            // what drives this scenario, not how many lists entries it has.
+            string types = string.Join(", ", robots
+                .Select(route => RobotProfiles.Find(route.RobotType).DisplayName)
+                .Distinct());
+
+            return robots.Count == 1
+                ? FormatRouteSummary(robots[0])
+                : $"{robots.Count} robots · {types}";
         }
     }
 
@@ -448,6 +522,19 @@ public sealed class ScenarioRouteEditor
             return humans.Count == 0
                 ? "No human route"
                 : $"{humans.Count} route(s), {humans.Sum(route => route.Points.Count - 1)} objective(s)";
+        }
+    }
+
+    /// <summary>
+    /// Readable type of the robot the scenario drives first: the one a client reaches without naming anybody,
+    /// and the label the browser shows for the scenario as a whole.
+    /// </summary>
+    public string PrimaryRobotTypeName
+    {
+        get
+        {
+            RouteDraft first = _routes.FirstOrDefault(route => route.IsRobot);
+            return first == null ? RobotProfiles.Default.DisplayName : RobotProfiles.Find(first.RobotType).DisplayName;
         }
     }
 
@@ -545,9 +632,10 @@ public sealed class ScenarioRouteEditor
 
     /// <summary>
     /// Every route as plain data, for the dry run of the validation step.
-    /// The robot speed lives in the tab controller, so it is passed in for the robot route.
+    /// Each route carries its own speed, robots included, because a scenario with several robots drives them at
+    /// the speed its author gave each one.
     /// </summary>
-    public List<ScenarioDryRun.Route> BuildDryRunRoutes(float robotSpeed)
+    public List<ScenarioDryRun.Route> BuildDryRunRoutes()
     {
         var routes = new List<ScenarioDryRun.Route>(_routes.Count);
         for (int index = 0; index < _routes.Count; index++)
@@ -561,7 +649,7 @@ public sealed class ScenarioRouteEditor
             routes.Add(new ScenarioDryRun.Route(
                 draft.Id,
                 GetDisplayPoints(index),
-                draft.IsRobot ? robotSpeed : draft.Speed));
+                draft.Speed));
         }
         return routes;
     }
@@ -570,15 +658,7 @@ public sealed class ScenarioRouteEditor
     {
         _routes.Clear();
         _plannedGeometry.Clear();
-        var robot = new RouteDraft
-        {
-            Id = "Robot route",
-            IsRobot = true,
-            RouteModified = true
-        };
-        AppendPoint(robot, Vector2.zero);
-        AppendPoint(robot, new Vector2(2f, 0f));
-        _routes.Add(robot);
+        _routes.Add(CreateRobotDraft(RobotProfiles.DefaultId, 0));
         _routes.Add(CreateHumanDraft(1));
         _activeRouteIndex = 0;
         _pendingPointIndex = 0;
@@ -587,30 +667,41 @@ public sealed class ScenarioRouteEditor
         RefreshActiveRoute();
     }
 
+    /// <summary>
+    /// A robot route to start from, laid down as a short straight leg so the map already shows something to
+    /// drag when the step opens.
+    /// </summary>
+    private static RouteDraft CreateRobotDraft(string typeId, int index)
+    {
+        RobotProfile profile = RobotProfiles.Find(typeId);
+        var draft = new RouteDraft
+        {
+            Id = ScenarioData.DefaultRobotId(index),
+            IsRobot = true,
+            RobotType = profile.Id,
+            Speed = profile.MaxLinearSpeed,
+            RouteModified = true
+        };
+
+        Vector2 start = new Vector2(0f, index * 1.5f);
+        AppendPoint(draft, start);
+        AppendPoint(draft, start + Vector2.right * 2f);
+        return draft;
+    }
+
     public void Load(ScenarioData scenario)
     {
         Reset();
         if (scenario == null)
             return;
 
-        RouteDraft robot = _routes[0];
-        robot.Points.Clear();
-        robot.PointZones.Clear();
-        robot.SpawnRandom = false;
-        robot.SpawnZone = default;
-        if (TryResolveReference(scenario, scenario.Robot?.StartRef, out Vector2 robotStart))
-            AppendPoint(robot, robotStart);
-        if (scenario.Robot?.WaypointRefs != null)
-        {
-            foreach (string waypointRef in scenario.Robot.WaypointRefs)
-                if (TryResolveReference(scenario, waypointRef, out Vector2 waypoint)) AppendPoint(robot, waypoint);
-        }
-        if (TryResolveReference(scenario, scenario.Robot?.GoalRef, out Vector2 robotGoal))
-            AppendPoint(robot, robotGoal);
-        EnsureMinimumPoints(robot);
-        robot.RouteModified = false;
+        List<RobotScenarioConfig> robots = scenario.NormalizedRobots();
+        _routes.Clear();
+        for (int index = 0; index < robots.Count; index++)
+            _routes.Add(CreateRobotDraftFrom(scenario, robots[index], index));
+        if (_routes.Count == 0)
+            _routes.Add(CreateRobotDraft(RobotProfiles.DefaultId, 0));
 
-        _routes.RemoveRange(1, _routes.Count - 1);
         if (scenario.Humans != null)
         {
             foreach (HumanScenarioConfig human in scenario.Humans.Where(human => human != null))
@@ -620,7 +711,7 @@ public sealed class ScenarioRouteEditor
                 _routes.Add(draft);
             }
         }
-        if (_routes.Count == 1)
+        if (!_routes.Any(route => !route.IsRobot))
             _routes.Add(CreateHumanDraft(1));
 
         _activeRouteIndex = 0;
@@ -628,6 +719,49 @@ public sealed class ScenarioRouteEditor
         ResetHistory();
         RebuildRouteList();
         RefreshActiveRoute();
+    }
+
+    /// <summary>
+    /// One robot of a stored scenario, as the editor draws it: its declared type, its start, its waypoints and
+    /// its goal. The single <c>robot</c> section of an older file arrives here as the one-entry list of the
+    /// same call, so a scenario written before several robots existed opens unchanged.
+    /// </summary>
+    private static RouteDraft CreateRobotDraftFrom(ScenarioData scenario, RobotScenarioConfig config, int index)
+    {
+        RobotProfile profile = RobotProfiles.Find(config.Type);
+        var draft = new RouteDraft
+        {
+            Id = string.IsNullOrWhiteSpace(config.Id) ? ScenarioData.DefaultRobotId(index) : config.Id.Trim(),
+            IsRobot = true,
+            RobotType = profile.Id,
+            Speed = config.Speed > 0f ? config.Speed : profile.MaxLinearSpeed,
+            RobotSource = config,
+            RouteModified = false
+        };
+
+        if (TryResolveReference(scenario, config.StartRef, out Vector2 start))
+            AppendPoint(draft, start);
+        if (config.WaypointRefs != null)
+        {
+            foreach (string waypointRef in config.WaypointRefs)
+                if (TryResolveReference(scenario, waypointRef, out Vector2 waypoint)) AppendPoint(draft, waypoint);
+        }
+        if (TryResolveReference(scenario, config.GoalRef, out Vector2 goal))
+            AppendPoint(draft, goal);
+
+        draft.StartYaw = TryReadYaw(scenario, config.StartRef);
+        EnsureMinimumPoints(draft);
+        return draft;
+    }
+
+    /// <summary>Heading stored with a point, or zero when the scenario names none.</summary>
+    private static float TryReadYaw(ScenarioData scenario, string reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference) || scenario?.Points == null ||
+            !scenario.Points.TryGetValue(reference, out RefPoint point) || point == null)
+            return 0f;
+
+        return point.Yaw ?? 0f;
     }
 
     public void SetMap(Texture2D texture, Bounds bounds)
@@ -837,15 +971,34 @@ public sealed class ScenarioRouteEditor
     public bool Validate(out string error)
     {
         error = null;
-        RouteDraft robot = _routes.FirstOrDefault(route => route.IsRobot);
-        if (robot == null || robot.Points.Count < 2)
-            error = "The robot route needs a start point and at least one objective.";
-        else if (HasRepeatedConsecutivePoint(robot))
-            error = "Consecutive robot route points must be different.";
+        List<RouteDraft> robots = _routes.Where(route => route.IsRobot).ToList();
+        if (robots.Count == 0)
+            error = "The scenario needs at least one robot.";
         else
         {
+            foreach (RouteDraft robot in robots)
+            {
+                if (robot.Points.Count < 2)
+                {
+                    error = $"{robot.Id} needs a start point and at least one objective.";
+                    break;
+                }
+                if (robot.Speed <= 0f)
+                {
+                    error = $"{robot.Id} speed must be greater than zero.";
+                    break;
+                }
+                if (HasRepeatedConsecutivePoint(robot))
+                {
+                    error = $"Consecutive points of {robot.Id} must be different.";
+                    break;
+                }
+            }
+
             foreach (RouteDraft human in _routes.Where(route => !route.IsRobot && route.Count > 0))
             {
+                if (error != null)
+                    break;
                 if (human.Speed <= 0f)
                 {
                     error = $"{human.Id} speed must be greater than zero.";
@@ -1097,27 +1250,49 @@ public sealed class ScenarioRouteEditor
     public void WriteToScenario(ScenarioData scenario)
     {
         scenario.Points ??= new Dictionary<string, RefPoint>();
-        scenario.Robot ??= new RobotScenarioConfig();
         HashSet<string> previousRouteReferences = CollectRouteReferences(scenario);
 
-        RouteDraft robot = _routes.First(route => route.IsRobot);
-        string startRef = string.IsNullOrWhiteSpace(scenario.Robot.StartRef) ? "robot_start" : scenario.Robot.StartRef;
-        string goalRef = string.IsNullOrWhiteSpace(scenario.Robot.GoalRef) ? "robot_goal" : scenario.Robot.GoalRef;
-        WritePoint(scenario, startRef, robot.Points[0]);
-        WritePoint(scenario, goalRef, robot.Points[^1]);
-        scenario.Robot.StartRef = startRef;
-        scenario.Robot.GoalRef = goalRef;
-
-        var waypointRefs = new List<string>();
-        for (int index = 1; index < robot.Points.Count - 1; index++)
+        // Every robot of the scenario is written as one entry of the list, in the order the editor lists them.
+        // The robot a client reaches without naming anybody is robot_1, which is the id the first route carries,
+        // so the order of the list is what it always was for a client that knows a single robot.
+        var robotConfigs = new List<RobotScenarioConfig>();
+        List<RouteDraft> robotRoutes = _routes.Where(route => route.IsRobot).ToList();
+        for (int index = 0; index < robotRoutes.Count; index++)
         {
-            string reference = scenario.Robot.WaypointRefs != null && index - 1 < scenario.Robot.WaypointRefs.Count
-                ? scenario.Robot.WaypointRefs[index - 1]
-                : $"robot_waypoint_{index}";
-            waypointRefs.Add(reference);
-            WritePoint(scenario, reference, robot.Points[index]);
+            RouteDraft robot = robotRoutes[index];
+            EnsureMinimumPoints(robot);
+
+            RobotScenarioConfig config = robot.RobotSource ?? new RobotScenarioConfig();
+            config.Id = string.IsNullOrWhiteSpace(robot.Id) ? ScenarioData.DefaultRobotId(index) : robot.Id;
+            config.Type = string.IsNullOrWhiteSpace(robot.RobotType) ? RobotProfiles.DefaultId : robot.RobotType;
+            config.Speed = robot.Speed > 0f ? robot.Speed : RobotProfiles.Find(config.Type).MaxLinearSpeed;
+            config.Behavior = string.IsNullOrWhiteSpace(config.Behavior) ? "normal" : config.Behavior;
+
+            string prefix = $"robot_{index + 1}";
+            string startRef = string.IsNullOrWhiteSpace(config.StartRef) ? $"{prefix}_start" : config.StartRef;
+            string goalRef = string.IsNullOrWhiteSpace(config.GoalRef) ? $"{prefix}_goal" : config.GoalRef;
+            WritePoint(scenario, startRef, robot.Points[0], robot.StartYaw);
+            WritePoint(scenario, goalRef, robot.Points[^1]);
+            config.StartRef = startRef;
+            config.GoalRef = goalRef;
+
+            var waypointRefs = new List<string>();
+            for (int pointIndex = 1; pointIndex < robot.Points.Count - 1; pointIndex++)
+            {
+                string reference = config.WaypointRefs != null && pointIndex - 1 < config.WaypointRefs.Count
+                    ? config.WaypointRefs[pointIndex - 1]
+                    : $"{prefix}_waypoint_{pointIndex}";
+                waypointRefs.Add(reference);
+                WritePoint(scenario, reference, robot.Points[pointIndex]);
+            }
+            config.WaypointRefs = waypointRefs.Count > 0 ? waypointRefs : null;
+            robotConfigs.Add(config);
         }
-        scenario.Robot.WaypointRefs = waypointRefs.Count > 0 ? waypointRefs : null;
+
+        scenario.Robots = robotConfigs;
+        // The single-robot section is only a way to read an old file: writing both would put two different
+        // robots in one scenario the next time it is opened.
+        scenario.Robot = null;
 
         var humanConfigs = new List<HumanScenarioConfig>();
         int humanIndex = 1;
@@ -1182,10 +1357,43 @@ public sealed class ScenarioRouteEditor
             scenario.Points.Remove(staleReference);
     }
 
-    private void AddHumanRoute()
+    /// <summary>Adds a crowd route to the scenario and selects it.</summary>
+    public void AddHumanRoute()
     {
         PushUndo();
         RouteDraft draft = CreateHumanDraft(NextHumanRouteNumber());
+        _routes.Add(draft);
+        _activeRouteIndex = _routes.Count - 1;
+        _pendingPointIndex = 0;
+        RebuildRouteList();
+        RefreshActiveRoute();
+    }
+
+    /// <summary>
+    /// Adds a robot. A second robot is a second route like any other: it appears in the same list, carries its
+    /// own type, its own start and its own objectives, and is saved as another entry of the scenario's
+    /// <c>robots</c> list. The new one is laid down a little to the side of the last, because two robots on
+    /// the same point would spend the run pushing each other apart.
+    /// </summary>
+    public void AddRobotRoute()
+    {
+        PushUndo();
+
+        var draft = new RouteDraft
+        {
+            Id = NextRobotRouteId(),
+            IsRobot = true,
+            RobotType = RobotProfiles.DefaultId,
+            RouteModified = true
+        };
+
+        Vector2 anchor = Vector2.zero;
+        RouteDraft last = _routes.LastOrDefault(route => route.IsRobot && route.Points.Count > 0);
+        if (last != null)
+            anchor = last.Points[0];
+
+        AppendPoint(draft, anchor + new Vector2(0f, 1.5f));
+        AppendPoint(draft, anchor + new Vector2(0f, 1.5f) + Vector2.right * 2f);
         _routes.Add(draft);
         _activeRouteIndex = _routes.Count - 1;
         _pendingPointIndex = 0;
@@ -1198,10 +1406,10 @@ public sealed class ScenarioRouteEditor
     /// area crossed from another side, a second flow through the same corridor — so the copy has to carry the
     /// whole route: points, areas, formation, end behaviour and speed.
     /// </summary>
-    private void DuplicateActiveHumanRoute()
+    public void DuplicateActiveRoute()
     {
         RouteDraft active = ActiveRoute;
-        if (active == null || active.IsRobot)
+        if (active == null)
             return;
 
         InsertRouteCopy(CaptureRoute(active));
@@ -1211,7 +1419,7 @@ public sealed class ScenarioRouteEditor
     private void CopyActiveRoute()
     {
         RouteDraft active = ActiveRoute;
-        if (active == null || active.IsRobot)
+        if (active == null)
             return;
 
         _routeClipboard = CaptureRoute(active);
@@ -1268,11 +1476,18 @@ public sealed class ScenarioRouteEditor
         return candidate;
     }
 
-    private void RemoveActiveHumanRoute()
+    public void RemoveActiveRoute()
     {
         RouteDraft active = ActiveRoute;
-        if (active == null || active.IsRobot)
+        if (active == null)
             return;
+
+        // The scenario always drives at least one robot, so the last one stays and only its route is reset.
+        if (active.IsRobot && RobotRouteCount <= 1)
+        {
+            _instructionLabel.text = "A scenario drives at least one robot: clear its points instead of removing it.";
+            return;
+        }
 
         PushUndo();
         _routes.RemoveAt(_activeRouteIndex);
@@ -1333,14 +1548,22 @@ public sealed class ScenarioRouteEditor
             return;
 
         _activeRouteLabel.text = active.Id;
-        _removeHumanRouteButton.SetEnabled(!active.IsRobot);
-        _duplicateHumanRouteButton.SetEnabled(!active.IsRobot);
+        // A scenario can hold several robots but never none: the last robot route is the one the wizard
+        // guarantees, so it cannot be removed, exactly like the last human route is restored instead.
+        _removeHumanRouteButton.SetEnabled(!active.IsRobot || RobotRouteCount > 1);
+        _duplicateHumanRouteButton.SetEnabled(true);
         _humanRouteSettings.EnableInClassList(HiddenClass, active.IsRobot);
         _robotRouteSettings.EnableInClassList(HiddenClass, !active.IsRobot);
         _pendingPointIndex = Mathf.Clamp(_pendingPointIndex, 0, Mathf.Max(0, active.Points.Count - 1));
 
         _updatingFields = true;
-        if (!active.IsRobot)
+        if (active.IsRobot)
+        {
+            _robotTypeDropdown.SetValueWithoutNotify(DisplayNameOf(active.RobotType));
+            _robotSpeedField.SetValueWithoutNotify(active.Speed);
+            _startYawField.SetValueWithoutNotify(active.StartYaw);
+        }
+        else
         {
             _humanCountField.SetValueWithoutNotify(active.Count);
             _humanSpeedField.SetValueWithoutNotify(active.Speed);
@@ -1688,7 +1911,7 @@ public sealed class ScenarioRouteEditor
     private static string DescribeRoute(RouteDraft route)
     {
         if (route.IsRobot)
-            return "Robot route";
+            return $"{route.Id} · {RobotProfiles.Find(route.RobotType).DisplayName}";
         int agents = Mathf.Max(0, route.Count);
         int objectives = Mathf.Max(0, route.Points.Count - 1);
         int areas = 0;
@@ -2207,7 +2430,7 @@ public sealed class ScenarioRouteEditor
         }
         if (control && evt.keyCode == KeyCode.D)
         {
-            DuplicateActiveHumanRoute();
+            DuplicateActiveRoute();
             evt.StopPropagation();
             return;
         }
@@ -2790,6 +3013,31 @@ public sealed class ScenarioRouteEditor
         ? _routes[_activeRouteIndex]
         : null;
 
+    /// <summary>The active route when it belongs to a robot, so a robot field never writes into a crowd.</summary>
+    private RouteDraft ActiveRobotRoute
+    {
+        get
+        {
+            RouteDraft active = ActiveRoute;
+            return active != null && active.IsRobot ? active : null;
+        }
+    }
+
+    /// <summary>Number of robots the scenario drives, which is the number of robot routes.</summary>
+    public int RobotRouteCount => _routes.Count(route => route.IsRobot);
+
+    /// <summary>The id a new robot route takes: <c>robot_2</c> after <c>robot_1</c>, never twice.</summary>
+    private string NextRobotRouteId()
+    {
+        int number = 1;
+        while (_routes.Any(route => string.Equals(route.Id, ScenarioData.DefaultRobotId(number - 1), StringComparison.OrdinalIgnoreCase)))
+            number++;
+        return ScenarioData.DefaultRobotId(number - 1);
+    }
+
+    /// <summary>Label of a robot type as the dropdown shows it.</summary>
+    private static string DisplayNameOf(string typeId) => RobotProfiles.Find(typeId).DisplayName;
+
     private void ResetHistory()
     {
         _undoStack.Clear();
@@ -2864,6 +3112,8 @@ public sealed class ScenarioRouteEditor
         {
             Id = route.Id,
             IsRobot = route.IsRobot,
+            RobotType = route.RobotType,
+            StartYaw = route.StartYaw,
             Count = route.Count,
             Speed = route.Speed,
             EndBehavior = route.EndBehavior,
@@ -2877,6 +3127,7 @@ public sealed class ScenarioRouteEditor
             SpawnZone = route.SpawnZone,
             PointZones = new List<Rect?>(route.PointZones),
             Source = route.Source,
+            RobotSource = route.RobotSource,
             RouteModified = route.RouteModified,
             HasNonSpatialGoal = route.HasNonSpatialGoal
         };
@@ -2888,6 +3139,8 @@ public sealed class ScenarioRouteEditor
         {
             Id = route.Id,
             IsRobot = route.IsRobot,
+            RobotType = string.IsNullOrWhiteSpace(route.RobotType) ? RobotProfiles.DefaultId : route.RobotType,
+            StartYaw = route.StartYaw,
             Count = route.Count,
             Speed = route.Speed,
             EndBehavior = route.EndBehavior,
@@ -2899,6 +3152,7 @@ public sealed class ScenarioRouteEditor
             SpawnRandom = route.SpawnRandom,
             SpawnZone = route.SpawnZone,
             Source = route.Source,
+            RobotSource = route.RobotSource,
             RouteModified = route.RouteModified,
             HasNonSpatialGoal = route.HasNonSpatialGoal
         };
@@ -3217,6 +3471,16 @@ public sealed class ScenarioRouteEditor
             Y = 0f,
             Z = RoundCoordinate(point.y)
         };
+    }
+
+    /// <summary>
+    /// One point carrying the heading an agent placed on it faces. Only the start of a robot has one: it is
+    /// what the run begins pointing at, and a scenario the author drew without a heading keeps none.
+    /// </summary>
+    private static void WritePoint(ScenarioData scenario, string reference, Vector2 point, float yaw)
+    {
+        WritePoint(scenario, reference, point);
+        scenario.Points[reference].Yaw = Mathf.Round(yaw * 10f) / 10f;
     }
 
     private static float RoundCoordinate(float value) => Mathf.Round(value * 100f) / 100f;

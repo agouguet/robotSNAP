@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using RobotSNAP.Core;
 using RobotSNAP.ROS;
@@ -32,11 +33,23 @@ namespace RobotSNAP
         [SerializeField] private Supervisor _supervisor;
 
         private Robot _robot;
-        private string _fullCmdVelTopic;
+        /// <summary>
+        /// Every command stream this robot listens to: its own id, plus the legacy `/cmd_vel` for the first
+        /// robot, so an old client drives robot 1 and a new one can address any robot by id.
+        /// </summary>
+        private readonly List<string> _fullCmdVelTopics = new List<string>(2);
         private float _lastRosCommandTime;
         private float _targetLinear;
         private float _targetAngular;
         private bool _rosSubscribed;
+
+        /// <summary>
+        /// True while a movement key is held. A keyboard that is doing nothing has nothing to say to the
+        /// robot, and it used to say it anyway: it wrote a zero velocity on every physics step, which
+        /// cancelled the route the scenario had just given the robot. Nobody noticed while a session was
+        /// always driven from outside; the moment a scenario drives several robots, all of them stand still.
+        /// </summary>
+        private bool _keyboardDriving;
 
         // Détection du changement d'état de pause
         private bool _wasPaused = false;
@@ -88,6 +101,11 @@ namespace RobotSNAP
             if ((_supervisor ??= Supervisor.Instance) != null && _supervisor.IsPaused)
                 return;
 
+            // A robot handed to a client belongs to that client, not to the scenario: a session that asked
+            // for ROS control keeps it even when a scenario hands the robot a route.
+            if (controlMode == ControlMode.ROS && _robot.HasGoal)
+                _robot.ClearGoal();
+
             if (controlMode == ControlMode.Scenario) return;
 
             if (controlMode == ControlMode.Hybrid && Time.time - _lastRosCommandTime > rosCommandTimeout)
@@ -96,6 +114,15 @@ namespace RobotSNAP
                     Debug.Log("[RobotInputController] ROS timeout, fallback to keyboard");
                 HandleKeyboardInput();
             }
+
+            // Keyboard mode with no key held: the scenario route of this robot is what drives it.
+            if (controlMode == ControlMode.Keyboard && !_keyboardDriving)
+                return;
+
+            // Hybrid mode, client still talking and no key held: the client drives.
+            if (controlMode == ControlMode.Hybrid && !_keyboardDriving &&
+                Time.time - _lastRosCommandTime <= rosCommandTimeout)
+                return;
 
             // Appliquer la vitesse au robot (les valeurs sont conservées)
             _robot.SetVelocity(_targetLinear, _targetAngular);
@@ -114,8 +141,10 @@ namespace RobotSNAP
             // Joined by the topic table. This line used to concatenate the prefix and the name and rely on
             // the leading slash of `/cmd_vel` to separate them, so a topic configured without one came out
             // as `/myenvcmd_vel`.
-            _fullCmdVelTopic = RobotSNAPTopics.Full(cmdVelTopic, prefix);
-            _envROS.RegisterSubscriber<RosMessageTypes.Geometry.TwistMsg>(_fullCmdVelTopic, OnRosCommandReceived);
+            _fullCmdVelTopics.Clear();
+            _fullCmdVelTopics.AddRange(RobotIdentity.StreamNamesFor(this, cmdVelTopic, prefix));
+            foreach (string topic in _fullCmdVelTopics)
+                _envROS.RegisterSubscriber<RosMessageTypes.Geometry.TwistMsg>(topic, OnRosCommandReceived);
             _rosSubscribed = true;
         }
 
@@ -139,6 +168,11 @@ namespace RobotSNAP
             if (Input.GetKeyDown(stopKey)) { linear = 0f; angular = 0f; }
             _targetLinear = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed);
             _targetAngular = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
+
+            // The hand takes this robot away from the route it was given, so the two never steer it at once.
+            _keyboardDriving = Mathf.Abs(_targetLinear) > 0.01f || Mathf.Abs(_targetAngular) > 0.01f;
+            if (_keyboardDriving)
+                _robot.ClearGoal();
         }
 
         public void SetControlMode(ControlMode newMode)
@@ -146,6 +180,12 @@ namespace RobotSNAP
             controlMode = newMode;
             _targetLinear = 0f;
             _targetAngular = 0f;
+            _keyboardDriving = false;
+
+            // A robot handed to a client - or to the keyboard - stops walking the route the scenario gave
+            // it: without this the scenario and the driver would steer it at the same time.
+            if (newMode != ControlMode.Scenario)
+                _robot.ClearGoal();
 
             // The subscription used to be created once, in Start, and only when the Inspector already said
             // ROS or Hybrid. A session switched over the bridge therefore drove the robot with a topic

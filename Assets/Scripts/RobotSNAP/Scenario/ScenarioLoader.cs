@@ -654,7 +654,12 @@ namespace RobotSNAP.Core.Scenario
                 archivedPath = destination;
                 ClearScenarioCache();
 #if UNITY_EDITOR
-                AssetDatabase.Refresh();
+                // Only a file inside the project is something the importer has to hear about. A scenario
+                // archived outside it - a caller that pointed the loader at its own folder - has nothing for
+                // the asset database to pick up, and asking anyway makes the Editor probe paths it cannot
+                // stat, which it reports as an internal assert.
+                if (IsInsideProjectAssets(destination))
+                    AssetDatabase.Refresh();
 #endif
                 return true;
             }
@@ -664,6 +669,20 @@ namespace RobotSNAP.Core.Scenario
                 return false;
             }
         }
+
+#if UNITY_EDITOR
+        /// <summary>True when a path sits under the <c>Assets</c> folder of this project.</summary>
+        private static bool IsInsideProjectAssets(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return false;
+
+            string assets = Path.GetFullPath(Application.dataPath).TrimEnd('/', '\\');
+            string candidate = Path.GetFullPath(path).Replace('\\', '/');
+            assets = assets.Replace('\\', '/');
+            return candidate.StartsWith(assets + "/", StringComparison.OrdinalIgnoreCase);
+        }
+#endif
         
         /// <summary>
         /// Vérifie si une map existe

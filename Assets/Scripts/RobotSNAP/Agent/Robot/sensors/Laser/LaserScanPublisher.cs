@@ -1,5 +1,7 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using RobotSNAP.ROS;
+using RobotSNAP.Agents;
 
 namespace RobotSNAP
 {
@@ -20,7 +22,11 @@ namespace RobotSNAP
         
         [SerializeField] private EnvROS _envROS;
         private LaserScanner _laserScanner;
-        private string _fullTopicName;
+        /// <summary>
+        /// Every name this scan answers on: the id of this robot, plus the legacy name when it is the first
+        /// robot of the scenario. One robot has one name, so a crowd of robots costs no extra publish.
+        /// </summary>
+        private readonly List<string> _fullTopicNames = new List<string>(2);
         private float _publishInterval;
         private float _previousPublishTime;
         private RosMessageTypes.Sensor.LaserScanMsg _message;
@@ -56,9 +62,11 @@ namespace RobotSNAP
                 prefix = customPrefix;
             }
             
-            // The full name is built by the one topic table of the project, which joins the prefix with a
-            // separator: a prefix used to turn `/scan` into `/myenvscan`, which no client could guess.
-            _fullTopicName = RobotSNAPTopics.Full(laserTopic, prefix);
+            // The names are built by the one topic table of the project and by the identity of the robot this
+            // sensor belongs to: a second robot publishes under its own id, the first keeps the name the
+            // project has always published.
+            _fullTopicNames.Clear();
+            _fullTopicNames.AddRange(RobotIdentity.StreamNamesFor(this, laserTopic, prefix));
             
             // Get laser scanner component
             _laserScanner = GetComponent<LaserScanner>();
@@ -70,7 +78,8 @@ namespace RobotSNAP
             }
             
             // Register publisher
-            _envROS.RegisterPublisher<RosMessageTypes.Sensor.LaserScanMsg>(_fullTopicName);
+            foreach (string topic in _fullTopicNames)
+                _envROS.RegisterPublisher<RosMessageTypes.Sensor.LaserScanMsg>(topic);
             
             // Initialize message
             InitializeMessage(prefix);
@@ -80,7 +89,7 @@ namespace RobotSNAP
             
             if (logPublishEvents)
             {
-                Debug.Log($"[{name}] Publishing laser scans to {_fullTopicName} at {publishFrequencyHz} Hz");
+                Debug.Log($"[{name}] Publishing laser scans to {string.Join(", ", _fullTopicNames)} at {publishFrequencyHz} Hz");
             }
         }
         
@@ -89,7 +98,7 @@ namespace RobotSNAP
         /// </summary>
         private void InitializeMessage(string prefix)
         {
-            string fullFrameId = RobotSNAPTopics.Full(frameId, prefix);
+            string fullFrameId = RobotIdentity.FrameIdFor(this, frameId, prefix);
             _message = _laserScanner.InitializeMessage(fullFrameId);
             
             if (logPublishEvents)
@@ -125,8 +134,9 @@ namespace RobotSNAP
             // Perform scan and update ranges
             _message.ranges = _laserScanner.Scan();
             
-            // Publish
-            _envROS.Publish(_fullTopicName, _message);
+            // Publish, on every name this robot answers on.
+            foreach (string topic in _fullTopicNames)
+                _envROS.Publish(topic, _message);
             
             if (logPublishEvents)
             {
@@ -159,14 +169,15 @@ namespace RobotSNAP
             if (_envROS != null)
             {
                 // Build new topic name with new prefix
-                _fullTopicName = string.IsNullOrEmpty(newPrefix) ? laserTopic : $"/{newPrefix}{laserTopic}";
+                _fullTopicNames.Clear();
+                _fullTopicNames.AddRange(RobotIdentity.StreamNamesFor(this, laserTopic, newPrefix));
                 
                 // Re-initialize message with new frame ID
                 InitializeMessage(newPrefix);
                 
                 if (logPublishEvents)
                 {
-                    Debug.Log($"[{name}] Reinitialized with prefix: '{newPrefix}', topic: {_fullTopicName}");
+                    Debug.Log($"[{name}] Reinitialized with prefix: '{newPrefix}', topics: {string.Join(", ", _fullTopicNames)}");
                 }
             }
         }
@@ -185,9 +196,24 @@ namespace RobotSNAP
         #region Public Properties
         
         /// <summary>
-        /// Get the full topic name being published to
+        /// The first name being published to. A robot answers on one stream, the first robot of a scenario
+        /// on two, so this is the one a client that names no robot reads.
         /// </summary>
-        public string TopicName => _fullTopicName;
+        public string TopicName => _fullTopicNames.Count > 0 ? _fullTopicNames[0] : null;
+
+        /// <summary>Every name being published to, the legacy one first when there is one.</summary>
+        public IReadOnlyList<string> TopicNames => _fullTopicNames;
+
+        /// <summary>
+        /// Sets the publishing rate. The profile of a robot type carries it - a TurtleBot publishes its scan
+        /// at 10 Hz, a Jackal at 20 - and applying a type has to reach the rate the publisher already
+        /// computed its interval from.
+        /// </summary>
+        public void SetPublishFrequency(float hertz)
+        {
+            publishFrequencyHz = Mathf.Max(1f, hertz);
+            _publishInterval = 1f / publishFrequencyHz;
+        }
         
         /// <summary>
         /// Get the publish frequency

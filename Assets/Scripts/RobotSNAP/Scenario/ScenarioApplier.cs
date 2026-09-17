@@ -38,9 +38,30 @@ namespace RobotSNAP.Core.Scenario
 
         private GameManager _gameManager;
         private ScenarioData _currentScenario;
+        private RobotRoster _roster;
         private readonly List<Coroutine> _activeCoroutines = new();
         private readonly Dictionary<string, HumanAgent> _spawnedHumans = new();
         private int _humanCounter;
+        private readonly List<Robot> _liveRobots = new();
+
+        /// <summary>
+        /// The registry of the robots of this environment, created on first use so an environment prefab
+        /// authored before multiple robots existed gains one as soon as a scenario is applied.
+        /// </summary>
+        private RobotRoster Roster
+        {
+            get
+            {
+                if (_roster == null)
+                {
+                    _roster = GetComponent<RobotRoster>();
+                    if (_roster == null)
+                        _roster = gameObject.AddComponent<RobotRoster>();
+                }
+
+                return _roster;
+            }
+        }
 
         /// <summary>
         /// Random spawn anchors already drawn for the scenario being applied, so a single draw serves every
@@ -180,8 +201,8 @@ namespace RobotSNAP.Core.Scenario
             // the same image as the floor and the walls, before anything could spawn.
             LogNavigationSource();
 
-            // 5. Setup the robot (position, rotation, goal, behavior, speed)
-            yield return StartCoroutine(SetupRobot());
+            // 5. Setup the robots (position, rotation, route, speed), one per entry of the scenario
+            yield return StartCoroutine(SetupRobots());
 
             // 6. Setup humans via the pool
             yield return StartCoroutine(SetupHumans());
@@ -278,87 +299,48 @@ namespace RobotSNAP.Core.Scenario
         //          ROBOT SETUP
         // ==========================================
 
-        private IEnumerator SetupRobot()
+        /// <summary>
+        /// Builds and places every robot the scenario asks for. The single <c>robot</c> section of a scenario
+        /// written before several robots existed is the one-entry list of the same call, so the legacy path
+        /// is not a special case any more: it is the general one with one robot in it.
+        /// </summary>
+        private IEnumerator SetupRobots()
         {
-            var robot = FindRobot();
-            if (robot == null)
-            {
-                if (_robotPrefab == null)
-                {
-                    OnApplicationError?.Invoke("Robot prefab not assigned and no robot found in scene.");
-                    yield break;
-                }
-                robot = Instantiate(_robotPrefab);
-                robot.transform.parent = _gameManager.transform;
-                robot.tag = "Robot";
-                robot.name = "Robot";
-                if (_logEvents) Debug.Log("[ScenarioApplier] Created new robot from prefab.");
-            }
-
-            var robotConfig = _currentScenario.Robot;
-            if (robotConfig == null)
+            List<RobotScenarioConfig> robots = _currentScenario.NormalizedRobots();
+            if (robots.Count == 0)
             {
                 OnApplicationError?.Invoke("Robot config missing");
                 yield break;
             }
 
-            if (_resetRobotPosition)
+            if (_robotPrefab == null && Roster.PrefabFor(RobotProfiles.DefaultId) == null)
             {
-                // Resolve position AND rotation (yaw) from the start reference
-                var (startPos, startRot) = _loader.GetPositionAndRotation(_currentScenario, robotConfig.StartRef);
-                var robotComponent = robot.GetComponent<Robot>();
-                if (robotComponent != null)
-                    robotComponent.Reset();
-
-                if (robotComponent != null)
-                {
-                    robotComponent.SetBaseLinkPose(startPos, startRot);
-                }
-                else
-                {
-                    // Fallback
-                    robot.transform.position = startPos;
-                    robot.transform.rotation = startRot;
-                }
-                if (_logEvents) 
-                    Debug.Log($"[ScenarioApplier] Robot position set to {startPos}, rotation yaw: {startRot.eulerAngles.y}");
+                OnApplicationError?.Invoke("Robot prefab not assigned and no robot found in scene.");
+                yield break;
             }
 
-            // Set the ordered route while keeping legacy single-goal scenarios valid.
-            var robotRoute = new List<Vector3>();
-            if (robotConfig.WaypointRefs != null)
-            {
-                foreach (string waypointRef in robotConfig.WaypointRefs)
-                {
-                    if (!string.IsNullOrWhiteSpace(waypointRef))
-                        robotRoute.Add(ResolvePosition(waypointRef));
-                }
-            }
-            robotRoute.Add(ResolvePosition(robotConfig.GoalRef));
-            SetRobotGoals(robot, robotRoute);
-            SetRobotSpeed(robot, robotConfig.Speed);
-
-            yield return null;
+            // The roster parents the robots under itself: it lives on the environment prefab, so they are
+            // torn down with the environment a scenario change rebuilds.
+            yield return StartCoroutine(
+                Roster.Sync(robots, _loader, _currentScenario, _robotPrefab, _resetRobotPosition, _logEvents));
         }
 
+        /// <summary>
+        /// The robot a human follows or spawns next to, and the one the interface calls "the robot".
+        ///
+        /// A scenario with several robots still has to answer that question for a crowd that was authored
+        /// against a single one, and the answer is the primary robot - the same one a client reaches without
+        /// naming anybody.
+        /// </summary>
         private GameObject FindRobot()
         {
-            var robotComp = _gameManager.GetComponentInChildren<Robot>();
-            if (robotComp != null) return robotComp.gameObject;
-            return null;
-            // return GameObject.FindGameObjectWithTag("Robot");
-        }
+            Robot primary = Roster.Primary;
+            if (primary != null)
+                return primary.gameObject;
 
-        private void SetRobotGoals(GameObject robot, IEnumerable<Vector3> goals)
-        {
-            var comp = robot.GetComponent<Robot>();
-            comp?.SetGoals(goals);
-        }
-
-        private void SetRobotSpeed(GameObject robot, float speed)
-        {
-            var comp = robot.GetComponent<Robot>();
-            comp?.SetSpeed(speed);
+            // Fallback for a scene that carries a robot nobody registered: a hand-placed one, or a test.
+            var robotComp = _gameManager != null ? _gameManager.GetComponentInChildren<Robot>() : null;
+            return robotComp != null ? robotComp.gameObject : null;
         }
 
         // ==========================================
@@ -468,14 +450,18 @@ namespace RobotSNAP.Core.Scenario
             // The anchor being on walkable ground does not mean the formation is: check every member.
             VerifySpawnedFormation(allHumans);
 
-            var robot = FindRobot();
-            if (robot != null)
+            // Every robot watches the same crowd: the detector of a robot is what its own stream publishes,
+            // so a second robot has its own view of the pedestrians, not a copy of the first one's.
+            _liveRobots.Clear();
+            Roster.FillRobots(_liveRobots);
+            foreach (Robot robot in _liveRobots)
             {
-                var robotComp = robot.GetComponent<Robot>();
-                if (robotComp != null){
-                    robotComp.GetAgentDetector().SetAgentPool(poolManager.GetPoolParent().gameObject);
-                }
+                if (robot == null)
+                    continue;
 
+                AgentDetector detector = robot.GetAgentDetector();
+                if (detector != null)
+                    detector.SetAgentPool(poolManager.GetPoolParent().gameObject);
             }
 
             if (_logEvents)

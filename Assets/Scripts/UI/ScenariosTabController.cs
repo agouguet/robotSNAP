@@ -105,10 +105,7 @@ public class ScenariosTabController : MonoBehaviour
     private VisualElement _deleteScenarioOverlay;
     private Label _deleteScenarioNameLabel;
 
-    private DropdownField _robotTypeDropdown;
-    private FloatField _robotSpeedField;
     private FloatField _durationField;
-    private FloatField _startYawField;
 
     private Label _summaryName;
     private Label _summaryType;
@@ -268,10 +265,7 @@ public class ScenariosTabController : MonoBehaviour
         _deleteScenarioOverlay = Require<VisualElement>(root, "DeleteScenarioOverlay", missing);
         _deleteScenarioNameLabel = Require<Label>(root, "DeleteScenarioNameLabel", missing);
 
-        _robotTypeDropdown = Require<DropdownField>(root, "RobotTypeDropdown", missing);
-        _robotSpeedField = Require<FloatField>(root, "RobotSpeedField", missing);
         _durationField = Require<FloatField>(root, "DurationField", missing);
-        _startYawField = Require<FloatField>(root, "StartYawField", missing);
 
         _summaryName = Require<Label>(root, "SummaryName", missing);
         _summaryType = Require<Label>(root, "SummaryType", missing);
@@ -454,11 +448,6 @@ public class ScenariosTabController : MonoBehaviour
             .Where(tag => !string.Equals(tag, "All", StringComparison.OrdinalIgnoreCase))
             .OrderBy(tag => tag).ToList() ?? new List<string>();
         _tagsDropdown.choices = new[] { TagPlaceholder }.Concat(knownTags).ToList();
-        var robotTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "TurtleBot4" };
-        if (dataService != null)
-            foreach (ScenarioInfo info in dataService.AllScenarios.Values)
-                if (!string.IsNullOrWhiteSpace(info?.RobotType)) robotTypes.Add(info.RobotType);
-        _robotTypeDropdown.choices = robotTypes.OrderBy(type => type).ToList();
         if (_mapDatasetList != null)
         {
             RebuildMapDatasetList();
@@ -524,10 +513,7 @@ public class ScenariosTabController : MonoBehaviour
         _mapDropdown.SetValueWithoutNotify(MapPlaceholder);
         _previewDropdown.SetValueWithoutNotify(PreviewPlaceholder);
         _tagsDropdown.SetValueWithoutNotify(TagPlaceholder);
-        _robotTypeDropdown.SetValueWithoutNotify(_robotTypeDropdown.choices.FirstOrDefault() ?? "TurtleBot4");
-        _robotSpeedField.SetValueWithoutNotify(1.2f);
         _durationField.SetValueWithoutNotify(0f);
-        _startYawField.SetValueWithoutNotify(0f);
         _nameCounter.text = "0/60";
         _descriptionCounter.text = "0/300";
         _mapName.text = "—";
@@ -550,7 +536,6 @@ public class ScenariosTabController : MonoBehaviour
             _nameCounter.text = $"{_nameField.value.Length}/60";
             _descriptionCounter.text = $"{_descriptionField.value.Length}/300";
             EnsureChoice(_mapDropdown, info.MapImage, MapPlaceholder);
-            EnsureChoice(_robotTypeDropdown, info.RobotType, "TurtleBot4");
             _durationField.SetValueWithoutNotify(Mathf.Max(0f, info.Duration));
             _selectedTags.Clear();
             if (info.Tags != null)
@@ -559,13 +544,6 @@ public class ScenariosTabController : MonoBehaviour
             RebuildTagChips();
             if (string.IsNullOrWhiteSpace(info.PreviewImage)) UseDefaultCover();
             else UseExistingCover(info.PreviewImage);
-        }
-        if (scenario?.Robot != null)
-        {
-            _robotSpeedField.SetValueWithoutNotify(Mathf.Max(0.01f, scenario.Robot.Speed));
-            if (scenario.Points != null && !string.IsNullOrWhiteSpace(scenario.Robot.StartRef) &&
-                scenario.Points.TryGetValue(scenario.Robot.StartRef, out RefPoint startPoint) && startPoint != null)
-                _startYawField.SetValueWithoutNotify(startPoint.Yaw ?? 0f);
         }
         _routeEditor.Load(scenario);
         UpdateSelectedMapLabel();
@@ -633,8 +611,7 @@ public class ScenariosTabController : MonoBehaviour
     private bool ValidateStepTwo(bool showFeedback)
     {
         string message = null;
-        if (_robotSpeedField.value <= 0f) message = "Robot speed must be greater than zero.";
-        else _routeEditor.Validate(out message);
+        _routeEditor.Validate(out message);
         if (showFeedback) SetFeedback(message);
         return message == null;
     }
@@ -644,21 +621,22 @@ public class ScenariosTabController : MonoBehaviour
         RefreshMapRecap();
         bool informationValid = ValidateStepOne(false);
         bool routeEditorValid = _routeEditor.Validate(out _);
-        bool routeValid = routeEditorValid && _robotSpeedField.value > 0f;
+        bool routeValid = routeEditorValid;
         bool humansValid = routeEditorValid;
         bool environmentValid = !IsPlaceholder(_mapDropdown.value, MapPlaceholder);
         bool allValid = informationValid && routeValid && humansValid && environmentValid;
         int humanTotal = _routeEditor.TotalHumanCount;
+        int robotTotal = Mathf.Max(1, _routeEditor.RobotRouteCount);
         _summaryName.text = string.IsNullOrWhiteSpace(_nameField.value) ? "Not set" : _nameField.value.Trim();
         _summaryType.text = string.IsNullOrWhiteSpace(_editingScenario?.Info?.Type) ? "Custom" : _editingScenario.Info.Type;
         _summaryEnvironment.text = environmentValid ? _mapDropdown.value : "Not set";
-        _summaryAgents.text = (humanTotal + 1).ToString();
+        _summaryAgents.text = (humanTotal + robotTotal).ToString();
         _summaryObjectives.text = _routeEditor.TotalObjectiveCount.ToString();
         _summaryDuration.text = _durationField.value > 0f ? $"{_durationField.value:0.#} s" : "Unlimited";
         _pedestrianCount.text = humanTotal.ToString();
-        _totalAgentCount.text = (humanTotal + 1).ToString();
-        _summaryRobotConfig.text = $"{_robotTypeDropdown.value} · {_robotSpeedField.value:0.##} m/s";
-        _summaryRobotRoute.text = _routeEditor.RobotRouteSummary + $", orientation {_startYawField.value:0.#}°";
+        _totalAgentCount.text = (humanTotal + robotTotal).ToString();
+        _summaryRobotConfig.text = $"{robotTotal} robot(s)";
+        _summaryRobotRoute.text = _routeEditor.RobotRouteSummary;
         _summaryHumanConfig.text = humanTotal == 0 ? "No humans" : $"{humanTotal} human(s) across {_routeEditor.HumanRouteCount} route(s)";
         _summaryHumanRoute.text = _routeEditor.HumanRouteSummary;
         _summaryDescription.text = string.IsNullOrWhiteSpace(_descriptionField.value) ? "No description." : _descriptionField.value.Trim();
@@ -683,7 +661,7 @@ public class ScenariosTabController : MonoBehaviour
             return;
 
         _dryRunFindings.Clear();
-        List<ScenarioDryRun.Route> routes = _routeEditor.BuildDryRunRoutes(_robotSpeedField.value);
+        List<ScenarioDryRun.Route> routes = _routeEditor.BuildDryRunRoutes();
         List<DryRunFinding> findings = ScenarioDryRun.Analyse(routes);
 
         var summary = new Label(ScenarioDryRun.Describe(routes));
@@ -788,12 +766,11 @@ public class ScenariosTabController : MonoBehaviour
         scenario.Info.Tags = _selectedTags.OrderBy(tag => tag).ToArray();
         scenario.Info.MapImage = _mapDropdown.value;
         scenario.Info.PreviewImage = IsPlaceholder(_previewDropdown.value, PreviewPlaceholder) ? string.Empty : _previewDropdown.value;
-        scenario.Info.RobotType = _robotTypeDropdown.value;
         scenario.Info.Duration = Mathf.Max(0f, _durationField.value);
-        scenario.Robot.Speed = _robotSpeedField.value;
         _routeEditor.WriteToScenario(scenario);
-        if (scenario.Points.TryGetValue(scenario.Robot.StartRef, out RefPoint startPoint) && startPoint != null)
-            startPoint.Yaw = _startYawField.value;
+        // The label the browser shows is the kind of robot this scenario drives. With several of them the
+        // first one speaks for the scenario, which is also the one a single-robot client reaches.
+        scenario.Info.RobotType = _routeEditor.PrimaryRobotTypeName;
         return scenario;
     }
 

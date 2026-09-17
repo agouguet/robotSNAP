@@ -22,6 +22,12 @@ namespace RobotSNAP.Agents
         private readonly Queue<Vector3> _routeGoals = new();
         private bool _followingRoute;
 
+        // Geometry of the wheels as the prefab authored them, kept so a second call to ApplyProfile scales
+        // from the prefab and not from the previous type.
+        private float _baseWheelTrackLength;
+        private float _baseWheelRadius;
+        private bool _wheelGeometryCaptured;
+
         public event Action<float, float> OnVelocityCommandReceived;
         public event Action<Vector3, Quaternion> OnMovementUpdated;
 
@@ -33,6 +39,9 @@ namespace RobotSNAP.Agents
         public override float AngularSpeed => _baseLinkArticulation != null ? _baseLinkArticulation.angularVelocity.y : 0f;
 
         public Transform RobotTransform => baseLink != null ? baseLink.transform : transform;
+
+        /// <summary>The type this robot drives as, or the default one before a roster applied one.</summary>
+        public RobotProfile Profile { get; private set; }
 
         // ==================== Unity Lifecycle ====================
         private void Awake()
@@ -98,6 +107,199 @@ namespace RobotSNAP.Agents
                 Debug.LogWarning($"[Robot] Enforcing parent origin for {name}. Parent will be reset to (0,0,0).");
                 transform.position = Vector3.zero;
                 transform.rotation = Quaternion.identity;
+            }
+        }
+
+        // ==================== Robot Type ====================
+
+        /// <summary>
+        /// Makes this instance drive as <paramref name="profile"/>: its footprint, its mass, the speeds it
+        /// may be commanded, its body size, and the shape of its lidar.
+        ///
+        /// It is meant to run once, on an instance the roster has just created and before the components of
+        /// the prefab had their first frame - the scanner rebuilds its rays here, and the publisher of the
+        /// scan reads the rate at its own start.
+        ///
+        /// The footprint is what the rest of the application reads: the crowd's social force model gives a
+        /// Husky a wider berth than a TurtleBot, and the spawn check uses the same number to decide whether
+        /// two robots may be placed side by side.
+        /// </summary>
+        public void ApplyProfile(RobotProfile profile)
+        {
+            if (profile == null)
+                return;
+
+            Profile = profile;
+
+            maxLinearSpeed = Mathf.Max(0.01f, profile.MaxLinearSpeed);
+            maxAngularSpeed = Mathf.Max(0.01f, profile.MaxAngularSpeed);
+            SetRadius(profile.Radius);
+            SetMass(profile.Mass);
+
+            ApplyBodyScale(profile.BodyScale);
+            ApplyWheelGeometry();
+            ApplyLidar(profile);
+            ApplyBodyColor(profile.BodyColor);
+        }
+
+        private void ApplyBodyScale(float scale)
+        {
+            // Only the picture is resized, never the body. An articulation that is scaled keeps the joints it
+            // was built with, its collision volume stops matching the space the planner reserved for it, and a
+            // base teleported to the ground ends up buried in it. The bodies of every type therefore stay the
+            // ones the prefab was authored and proven with, and the type is what a person sees.
+            if (!Mathf.Approximately(scale, 1f) && scale > 0f)
+            {
+                var nodes = new List<Transform>();
+                CollectVisualRoots(nodes);
+                foreach (Transform node in nodes)
+                    ScaleVisual(node, scale);
+            }
+
+            if (_baseLinkArticulation != null)
+                _baseLinkArticulation.mass = Profile != null ? Profile.Mass : _baseLinkArticulation.mass;
+        }
+
+        /// <summary>
+        /// The outermost nodes of the robot that carry a picture, so a body is scaled once rather than once
+        /// per mesh under it, and a node that also carries a collider is left alone: that one is not a
+        /// picture, it is the shape the physics reacts to.
+        /// </summary>
+        private void CollectVisualRoots(List<Transform> destination)
+        {
+            destination.Clear();
+
+            foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || !renderer.enabled)
+                    continue;
+
+                Transform node = renderer.transform;
+                if (node == null || node == transform || node.GetComponent<Collider>() != null)
+                    continue;
+
+                bool nested = false;
+                for (Transform parent = node.parent; parent != null && parent != transform; parent = parent.parent)
+                {
+                    if (HasRenderer(parent.gameObject))
+                    {
+                        nested = true;
+                        break;
+                    }
+                }
+
+                if (!nested && !destination.Contains(node))
+                    destination.Add(node);
+            }
+        }
+
+        private static bool HasRenderer(GameObject candidate)
+        {
+            foreach (Renderer renderer in candidate.GetComponents<Renderer>())
+            {
+                if (renderer != null && renderer.enabled)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Resizes one picture around the ground it stands on: a larger robot grows upwards rather than
+        /// sinking into the floor, so whatever the type its wheels keep touching the same plane.
+        /// </summary>
+        private static void ScaleVisual(Transform node, float scale)
+        {
+            if (node == null)
+                return;
+
+            float bottomBefore = LowestPoint(node);
+            node.localScale *= scale;
+            float bottomAfter = LowestPoint(node);
+
+            if (float.IsInfinity(bottomBefore) || float.IsInfinity(bottomAfter))
+                return;
+
+            node.position += Vector3.up * (bottomBefore - bottomAfter);
+        }
+
+        private static float LowestPoint(Transform node)
+        {
+            float lowest = float.PositiveInfinity;
+            foreach (Renderer renderer in node.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || !renderer.enabled)
+                    continue;
+
+                lowest = Mathf.Min(lowest, renderer.bounds.min.y);
+            }
+
+            return lowest;
+        }
+
+        private void ApplyWheelGeometry()
+        {
+            if (wheelController == null)
+                return;
+
+            if (!_wheelGeometryCaptured)
+            {
+                _baseWheelTrackLength = wheelController.wheelTrackLength;
+                _baseWheelRadius = wheelController.wheelRadius;
+                _wheelGeometryCaptured = true;
+            }
+
+            // The wheels keep the size the prefab gave them, because only the picture of the robot is
+            // resized: the metres the controller converts into wheel rotations stay true to the geometry the
+            // articulation actually drives, whatever the type looks like.
+            wheelController.wheelTrackLength = _baseWheelTrackLength;
+            wheelController.wheelRadius = _baseWheelRadius;
+        }
+
+        private void ApplyLidar(RobotProfile profile)
+        {
+            RaycastLaserScanner scanner = GetLaserScanner();
+            if (scanner != null)
+            {
+                scanner.samples = profile.LidarRays;
+                scanner.angle_min = profile.LidarAngleMin;
+                scanner.angle_max = profile.LidarAngleMax;
+                scanner.range_max = profile.LidarRange;
+
+                // The height of the laser plane is what decides whether a wall, a table or a pedestrian
+                // blocks the beam, so the profile gives the height above the ground and the offset the
+                // scanner carries is what remains once its mount has been taken into account.
+                float mountHeight = scanner.transform.position.y - Position.y;
+                scanner.laserHeight = Mathf.Max(0f, profile.LidarHeight - mountHeight);
+
+                // Rebuilds the rays and the buffers the scan writes into.
+                scanner.Init();
+            }
+
+            LaserScanPublisher publisher = GetLaserPublisher();
+            if (publisher != null)
+                publisher.SetPublishFrequency(profile.LidarFrequencyHz);
+        }
+
+        private void ApplyBodyColor(Color color)
+        {
+            // A clear colour means "leave the materials of the prefab alone", which is what the legacy
+            // default asks for so an existing scenario keeps the exact look it was authored against.
+            if (color.a <= 0.01f)
+                return;
+
+            var block = new MaterialPropertyBlock();
+            foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null)
+                    continue;
+
+                renderer.GetPropertyBlock(block);
+                // Both names are written because the project renders through HDRP and the tests run on the
+                // built-in pipeline: whichever material is in use finds its own property.
+                block.SetColor("_BaseColor", color);
+                block.SetColor("_Color", color);
+                renderer.SetPropertyBlock(block);
             }
         }
 
@@ -210,6 +412,9 @@ namespace RobotSNAP.Agents
                 return;
             }
             ab.TeleportRoot(position, rotation);
+            // A teleported articulation is settled where it was put, and a drive command on a body that is
+            // asleep is ignored: the robot of a scenario would sit at its start with its wheels commanded.
+            ab.WakeUp();
             Stop();
             EnforceParentOrigin();
         }
@@ -225,6 +430,7 @@ namespace RobotSNAP.Agents
                 return;
             }
             ab.TeleportRoot(position, baseLink.transform.rotation);
+            ab.WakeUp();
             Stop();
             EnforceParentOrigin();
         }
@@ -239,6 +445,7 @@ namespace RobotSNAP.Agents
                 return;
             }
             ab.TeleportRoot(baseLink.transform.position, rotation);
+            ab.WakeUp();
             Stop();
             EnforceParentOrigin();
         }

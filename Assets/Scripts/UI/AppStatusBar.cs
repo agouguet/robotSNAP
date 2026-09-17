@@ -190,20 +190,25 @@ public sealed class AppStatusBar : IDisposable
 
     private void CountAgents()
     {
-        _robotCount = UnityEngine.Object.FindObjectsByType<Robot>().Length;
+        // A scenario's robots are owned by the roster, which lists every one of them whether or not the
+        // scene search would reach it; a scene without a roster - a hand-placed robot, or a test - keeps
+        // the old count.
+        RobotRoster roster = RobotRoster.Current;
+        _robotCount = roster != null && roster.Count > 0
+            ? roster.Count
+            : UnityEngine.Object.FindObjectsByType<Robot>().Length;
+
         _humanCount = UnityEngine.Object.FindObjectsByType<HumanAgent>().Length;
 
         if (_agentsLabel == null) return;
 
         int total = _robotCount + _humanCount;
-        string text = $"{total} {Plural("agent", total)}";
-
-        // The breakdown goes in the tooltip: the bar is narrow, and the chip only has to answer
-        // "how many" at a glance.
         string breakdown = $"{_robotCount} {Plural("robot", _robotCount)}, {_humanCount} {Plural("human", _humanCount)}";
-        _agentsLabel.tooltip = breakdown;
 
-        _agentsLabel.text = text;
+        // "8 agents" says nothing about a scenario that runs two robots among six pedestrians, so the chip
+        // spells the split out; the tooltip carries the same figures for a pointer that hovers it.
+        _agentsLabel.text = $"{total} {Plural("agent", total)} ({breakdown})";
+        _agentsLabel.tooltip = breakdown;
     }
 
     private static string StateText(SimulationState state) => state switch

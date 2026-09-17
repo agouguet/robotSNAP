@@ -301,7 +301,7 @@ public class SimulationTabController : MonoBehaviour
         // orbit onto the pivot. Selecting an agent moves the pivot onto it.
         if (cameraController != null)
         {
-            RobotSNAP.Agents.Robot robot = FindAnyObjectByType<RobotSNAP.Agents.Robot>();
+            RobotSNAP.Agents.Robot robot = FindScenarioRobot();
             Vector3 pivot = robot != null
                 ? new Vector3(robot.Position.x, 0f, robot.Position.z)
                 : hasGrid
@@ -396,9 +396,25 @@ public class SimulationTabController : MonoBehaviour
     {
         if (cameraController == null || cameraController.IsFollowing) return;
 
-        RobotSNAP.Agents.Robot robot = FindAnyObjectByType<RobotSNAP.Agents.Robot>();
+        RobotSNAP.Agents.Robot robot = FindScenarioRobot();
         if (robot != null)
             cameraController.FocusAgent(robot.RobotTransform);
+    }
+
+    /// <summary>
+    /// The robot of the scenario, which is the one the view and the selection open on.
+    ///
+    /// That is the primary robot of the roster, and not whichever instance a scene search happens to
+    /// return first: with several robots around, an arbitrary pick would open the tool on a robot the
+    /// scenario never meant as the subject of a run. A scene with no roster - a hand-placed robot, or a
+    /// test - keeps the old lookup.
+    /// </summary>
+    private static RobotSNAP.Agents.Robot FindScenarioRobot()
+    {
+        RobotSNAP.Agents.RobotRoster roster = RobotSNAP.Agents.RobotRoster.Current;
+        RobotSNAP.Agents.Robot primary = roster != null ? roster.Primary : null;
+
+        return primary != null ? primary : UnityEngine.Object.FindAnyObjectByType<RobotSNAP.Agents.Robot>();
     }
 
     private void UpdateUI()

@@ -18,16 +18,16 @@ scenario_info:
   duration: 0
 points: 
   start_robot: 
-    x: 9.43463
+    x: 9.48
     y: 0
-    z: 0.04240322
+    z: -0.12
     yaw: -90
     center: null
     size: null
   end_robot: 
-    x: -0.02120304
+    x: 0
     y: 0
-    z: -9.498233
+    z: -9.36
     yaw: null
     center: null
     size: null
@@ -58,16 +58,16 @@ points:
       y: 1
       z: 1
   pedestrians_start: 
-    x: 0.02120233
+    x: -0.83
     y: 0
-    z: -9.455832
+    z: -9.31
     yaw: null
     center: null
     size: null
   pedestrians_goal_1: 
-    x: 9.477033
+    x: 8.46
     y: 0
-    z: 0.1272097
+    z: -0.02
     yaw: null
     center: null
     size: null
@@ -85,8 +85,9 @@ humans:
     ref: pedestrians_start
     position: null
     zone: null
-    formation: null
-    spacing: 0
+    formation: pair
+    formation_parameter: 0
+    spacing: 0.8
     relative_to: null
   goal: 
     type: point
@@ -96,6 +97,8 @@ humans:
     target: null
     radius: 0
   goals: null
+  end_behavior: stay
+  group: null
   movement_controller: 
     type: SFM
     sfm_params: null

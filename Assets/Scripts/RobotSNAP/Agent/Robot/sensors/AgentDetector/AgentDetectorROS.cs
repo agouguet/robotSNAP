@@ -42,7 +42,11 @@ namespace RobotSNAP
 
         [SerializeField] private EnvROS _envROS;
         private AgentDetector _detector;
-        private string _fullAgentsTopic;
+        /// <summary>
+        /// Every name this stream answers on: the id of this robot, plus the legacy name for the first robot.
+        /// The agents a client reads are the ones the robot *this* stream belongs to can see.
+        /// </summary>
+        private readonly System.Collections.Generic.List<string> _fullAgentsTopics = new System.Collections.Generic.List<string>(2);
         private float _publishInterval;
         private float _lastPublishTime;
 
@@ -86,16 +90,18 @@ namespace RobotSNAP
             // Joined by the topic table. This line used to concatenate the prefix and the name and rely on
             // the leading slash of the configured topic to separate them, so a name configured without one
             // came out as `/myenvsimulation/agents`.
-            _fullAgentsTopic = RobotSNAPTopics.Full(agentsTopic, prefix);
+            _fullAgentsTopics.Clear();
+            _fullAgentsTopics.AddRange(RobotIdentity.StreamNamesFor(this, agentsTopic, prefix));
 
-            _envROS.RegisterPublisher<StringMsg>(_fullAgentsTopic);
+            foreach (string topic in _fullAgentsTopics)
+                _envROS.RegisterPublisher<StringMsg>(topic);
 
             _publishInterval = 1f / publishFrequencyHz;
 
             if (logPublishEvents)
             {
                 Debug.Log($"[{name}] Publishing JSON strings to:\n" +
-                          $"  Agents: {_fullAgentsTopic}\n" +
+                          $"  Agents: {string.Join(", ", _fullAgentsTopics)}\n" +
                           $"  Frequency: {publishFrequencyHz} Hz");
             }
         }
@@ -127,11 +133,13 @@ namespace RobotSNAP
             };
 
             string json = JsonConvert.SerializeObject(payload);
-            _envROS.Publish(_fullAgentsTopic, new StringMsg { data = json });
+            var message = new StringMsg { data = json };
+            foreach (string topic in _fullAgentsTopics)
+                _envROS.Publish(topic, message);
 
             if (logPublishEvents)
             {
-                Debug.Log($"[{name}] Published {agents.Count} agents as JSON on {_fullAgentsTopic}");
+                Debug.Log($"[{name}] Published {agents.Count} agents as JSON on {string.Join(", ", _fullAgentsTopics)}");
             }
         }
 
@@ -208,7 +216,7 @@ namespace RobotSNAP
         private void EditorLogConfiguration()
         {
             Debug.Log($"[{name}] Configuration:\n" +
-                      $"  Agents Topic: {_fullAgentsTopic}\n" +
+                      $"  Agents Topic: {string.Join(", ", _fullAgentsTopics)}\n" +
                       $"  Frequency: {publishFrequencyHz} Hz\n" +
                       $"  Frame: robot\n" +
                       $"  Detector: {(_detector != null ? "OK" : "Missing")}\n" +

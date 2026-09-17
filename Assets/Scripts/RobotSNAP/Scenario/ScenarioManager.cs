@@ -37,7 +37,14 @@ namespace RobotSNAP.Core.Scenario
         private string _currentScenarioId;
         private ScenarioData _currentScenarioData;
         private List<GameManager> _gameManagers = new();
-        [SerializeField] private bool _isLoading;
+
+        /// <summary>
+        /// True while a load is being built. It is deliberately not serialised: it is written during play,
+        /// and a serialised runtime flag is written back into the scene when the Editor leaves play mode -
+        /// so a session stopped in the middle of a load would hand the next one a flag saying a load is
+        /// already in flight, and every scenario would queue behind a coroutine that no longer exists.
+        /// </summary>
+        [System.NonSerialized] private bool _isLoading;
         private Coroutine _loadCoroutine;
 
         // The request that arrived while a load was already running. Building a scenario is a long

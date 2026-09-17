@@ -92,6 +92,22 @@ namespace RobotSNAP.Agents
             reactionTime = Mathf.Clamp(time, 0.1f, 1f);
         }
 
+        /// <summary>
+        /// Sets the footprint of the agent. It is what the crowd keeps away from, what the planner inflates
+        /// an obstacle by, and what the spawn check refuses to overlap, so a robot type sets it from its own
+        /// dimensions rather than leaving it at the default of the prefab.
+        /// </summary>
+        public virtual void SetRadius(float value)
+        {
+            radius = Mathf.Max(0.05f, value);
+        }
+
+        /// <summary>Sets the mass of the agent, in kilograms.</summary>
+        public virtual void SetMass(float value)
+        {
+            mass = Mathf.Max(0.1f, value);
+        }
+
         public virtual void SetActive(bool active)
         {
             gameObject.SetActive(active);

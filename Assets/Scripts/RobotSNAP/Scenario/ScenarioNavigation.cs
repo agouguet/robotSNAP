@@ -102,17 +102,30 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         public static bool TryProjectToWalkable(Vector2 point, float radius, out Vector2 walkable)
         {
+            return TryProjectToWalkable(_walkable, point, radius, out walkable);
+        }
+
+        /// <summary>
+        /// Nearest walkable point of an explicit grid, within <paramref name="radius"/> metres.
+        ///
+        /// The grid of the scenario keeps a pedestrian clear of the walls; a robot with a wider footprint needs
+        /// a grid grown for its own radius, which its caller derives from <see cref="Obstacles"/> and hands
+        /// here. One grid at a time, because the ring search is the only place that knows where a body may
+        /// stand.
+        /// </summary>
+        public static bool TryProjectToWalkable(OccupancyGrid grid, Vector2 point, float radius, out Vector2 walkable)
+        {
             walkable = point;
-            if (!IsAvailable)
+            if (grid == null || !grid.IsValid)
                 return false;
-            if (IsWalkable(point))
+            if (grid.IsWorldWalkable(point))
                 return true;
             if (radius <= 0f)
                 return false;
-            if (!TryClampedWorldToCell(point, out int originX, out int originY))
+            if (!TryClampedWorldToCell(grid, point, out int originX, out int originY))
                 return false;
 
-            float cellSize = Mathf.Max(0.0001f, Mathf.Min(_walkable.CellSizeX, _walkable.CellSizeZ));
+            float cellSize = Mathf.Max(0.0001f, Mathf.Min(grid.CellSizeX, grid.CellSizeZ));
             int range = Mathf.Max(1, Mathf.CeilToInt(radius / cellSize));
             float best = float.PositiveInfinity;
             bool found = false;
@@ -133,10 +146,10 @@ namespace RobotSNAP.Core.Scenario
 
                         int cellX = originX + offsetX;
                         int cellY = originY + offsetY;
-                        if (!_walkable.IsWalkable(cellX, cellY))
+                        if (!grid.IsWalkable(cellX, cellY))
                             continue;
 
-                        Vector2 candidate = _walkable.CellCenter(cellX, cellY);
+                        Vector2 candidate = grid.CellCenter(cellX, cellY);
                         float distance = Vector2.Distance(point, candidate);
                         if (distance > radius || distance >= best)
                             continue;
@@ -282,21 +295,21 @@ namespace RobotSNAP.Core.Scenario
         }
 
         /// <summary>Cell of a world point, clamped into the map so a point just outside is still usable.</summary>
-        private static bool TryClampedWorldToCell(Vector2 world, out int x, out int y)
+        private static bool TryClampedWorldToCell(OccupancyGrid grid, Vector2 world, out int x, out int y)
         {
             x = 0;
             y = 0;
-            if (!IsAvailable)
+            if (grid == null || !grid.IsValid)
                 return false;
 
-            if (_walkable.TryWorldToCell(world, out x, out y))
+            if (grid.TryWorldToCell(world, out x, out y))
                 return true;
 
-            Bounds bounds = _walkable.WorldBounds;
+            Bounds bounds = grid.WorldBounds;
             var clamped = new Vector2(
                 Mathf.Clamp(world.x, bounds.min.x, bounds.max.x),
                 Mathf.Clamp(world.y, bounds.min.z, bounds.max.z));
-            return _walkable.TryWorldToCell(clamped, out x, out y);
+            return grid.TryWorldToCell(clamped, out x, out y);
         }
 
         /// <summary>

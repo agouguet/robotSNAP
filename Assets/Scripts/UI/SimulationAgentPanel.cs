@@ -245,8 +245,9 @@ public sealed class SimulationAgentPanel
         Robot robot = target.GetComponentInParent<Robot>();
         HumanAgent human = robot != null ? null : target.GetComponentInParent<HumanAgent>();
         BaseAgent agent = robot != null ? robot : (BaseAgent)human;
+        RobotProfile profile = RobotProfileOf(robot);
 
-        _info.Add(CreateInfoRow("Type", robot != null ? "Robot" : human != null ? "Human" : "Agent"));
+        _info.Add(CreateInfoRow("Type", DescribeType(robot, human, profile)));
 
         Vector3 position;
         if (robot != null)
@@ -275,6 +276,12 @@ public sealed class SimulationAgentPanel
 
         _info.Add(CreateInfoRow("Orientation", FormatYaw(agent.Rotation.eulerAngles.y)));
         _info.Add(CreateInfoRow("Speed", $"{FormatNumber(agent.Speed)} m/s"));
+
+        // The ceiling of the type sits next to the live figure, so a slow robot reads as that robot
+        // being slow and not as the run being slow.
+        if (profile != null)
+            _info.Add(CreateInfoRow("Max speed", $"{FormatNumber(profile.MaxLinearSpeed)} m/s"));
+
         _info.Add(CreateInfoRow("Goal", agent.HasGoal ? FormatPlanar(agent.Goal) : "—"));
         _info.Add(CreateInfoRow("Goal reached", agent.HasGoal ? "No" : "Yes"));
         _info.Add(CreateInfoRow("Status", agent.IsActive ? "Active" : "Idle"));
@@ -405,12 +412,44 @@ public sealed class SimulationAgentPanel
         if (target == null) return "No agent";
 
         Robot robot = target.GetComponentInParent<Robot>();
-        if (robot != null && !string.IsNullOrEmpty(robot.AgentName)) return robot.AgentName;
+        if (robot != null)
+        {
+            // A robot of a scenario is named by its type and its id - "TurtleBot 4 (robot_2)" - which is
+            // what tells two of them apart in a list. A robot with no identity keeps the name it had.
+            RobotIdentity identity = RobotIdentity.Of(robot);
+            if (identity != null) return identity.DisplayName;
+
+            if (!string.IsNullOrEmpty(robot.AgentName)) return robot.AgentName;
+        }
 
         HumanAgent human = target.GetComponentInParent<HumanAgent>();
         if (human != null && !string.IsNullOrEmpty(human.AgentName)) return human.AgentName;
 
         return target.name;
+    }
+
+    /// <summary>
+    /// What the card calls the selected agent: the readable name of a robot type when there is one -
+    /// "TurtleBot 4" - and the plain kind otherwise. A pedestrian keeps the wording it has always had.
+    /// </summary>
+    private static string DescribeType(Robot robot, HumanAgent human, RobotProfile profile)
+    {
+        if (robot == null)
+            return human != null ? "Human" : "Agent";
+
+        return profile != null && !string.IsNullOrEmpty(profile.DisplayName) ? profile.DisplayName : "Robot";
+    }
+
+    /// <summary>
+    /// The profile of a robot: the one its identity was bound with, and the copy the robot itself carries
+    /// as the fallback for a robot without an identity, such as a hand-placed one.
+    /// </summary>
+    private static RobotProfile RobotProfileOf(Robot robot)
+    {
+        if (robot == null) return null;
+
+        RobotIdentity identity = RobotIdentity.Of(robot);
+        return identity != null && identity.Profile != null ? identity.Profile : robot.Profile;
     }
 
     /// <summary>Textures are loaded once: the list rebuilds on every target or filter change.</summary>

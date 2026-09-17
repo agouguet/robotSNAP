@@ -41,6 +41,8 @@ namespace RobotSNAP.CameraControl
         [Header("Follow Mode Settings")]
         public List<string> followableTags = new List<string> { "Robot", "Human", "Agent" };
         private List<Transform> _followableTargets = new List<Transform>();
+        // Scratch list for the robots of the roster, so a refresh reuses one buffer instead of building one.
+        private readonly List<Robot> _rosterRobots = new List<Robot>();
         private int _currentFollowIndex = -1;
 
         [Header("Orbit View")]
@@ -691,9 +693,34 @@ namespace RobotSNAP.CameraControl
             Debug.Log($"[CameraController] Mode changed to: {mode}");
         }
 
+        /// <summary>
+        /// Rebuilds the list of agents the view can be handed to.
+        ///
+        /// The robots of the scenario come first, the primary leading and the others in the order the roster
+        /// lists them, because the list is read by a person: with several robots around, an order that follows
+        /// whatever the scene search returns first would move the subjects around between two refreshes. The
+        /// pedestrians, and every robot no roster owns - a hand-placed one, or a test - keep the tag lookup
+        /// that used to build the whole list, and each agent lands in the list exactly once.
+        /// </summary>
         public void RefreshFollowableTargets()
         {
             _followableTargets.Clear();
+
+            RobotRoster roster = RobotRoster.Current;
+            if (roster != null)
+            {
+                AddFollowableRobot(roster.Primary);
+
+                _rosterRobots.Clear();
+                roster.FillRobots(_rosterRobots);
+                foreach (Robot robot in _rosterRobots)
+                    AddFollowableRobot(robot);
+            }
+
+            // Everything the tag lookup adds, and only that: the robots of the roster are already in, so the
+            // range sorted below is the part of the list whose order the scene search does not decide.
+            int firstTagged = _followableTargets.Count;
+
             foreach (string tag in followableTags)
             {
                 GameObject[] objects = GameObject.FindGameObjectsWithTag(tag);
@@ -708,12 +735,36 @@ namespace RobotSNAP.CameraControl
                         else
                             Debug.LogWarning($"Robot {obj.name} has no movable child – using parent.");
                     }
-                    if (!_followableTargets.Contains(targetTransform))
-                        _followableTargets.Add(targetTransform);
+
+                    AddFollowable(targetTransform);
                 }
             }
-            _followableTargets.Sort((a, b) => string.Compare(a.name, b.name, System.StringComparison.OrdinalIgnoreCase));
+
+            _followableTargets.Sort(firstTagged, _followableTargets.Count - firstTagged,
+                Comparer<Transform>.Create(
+                    (a, b) => string.Compare(a.name, b.name, System.StringComparison.OrdinalIgnoreCase)));
+
             OnTargetsUpdated?.Invoke(_followableTargets);
+        }
+
+        /// <summary>
+        /// Adds a robot of the roster. It is followed through its base_link, the moving link the camera and the
+        /// scene picking both work with; the root of the prefab stays where the roster put it.
+        /// </summary>
+        private void AddFollowableRobot(Robot robot)
+        {
+            if (robot == null) return;
+
+            AddFollowable(robot.RobotTransform);
+        }
+
+        /// <summary>Adds an agent once: two entries on the same transform would read as a duplicate.</summary>
+        private void AddFollowable(Transform target)
+        {
+            if (target == null) return;
+
+            if (!_followableTargets.Contains(target))
+                _followableTargets.Add(target);
         }
 
         /// <summary>Hands the view to that agent. The orbit angle and distance stay where they are.</summary>

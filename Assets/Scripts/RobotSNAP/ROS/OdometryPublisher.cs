@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Unity.Robotics.ROSTCPConnector.ROSGeometry;
 using RobotSNAP.Agents;
@@ -32,7 +33,11 @@ namespace RobotSNAP.ROS
         [SerializeField] private float angularVelocityCovariance = 0.01f;
         
         [SerializeField] private EnvROS _envROS;
-        private string _fullTopicName;
+        /// <summary>
+        /// Every name this odometry answers on: the id of this robot, plus the legacy name when it is the
+        /// first robot of the scenario.
+        /// </summary>
+        private readonly List<string> _fullTopicNames = new List<string>(2);
         private float _publishInterval;
         // The robot moves through an ArticulationBody rather than a Rigidbody, so this is where the twist
         // comes from when there is no rigidbody to read.
@@ -64,11 +69,14 @@ namespace RobotSNAP.ROS
                 prefix = customPrefix;
             }
             
-            // Build full topic name, with the one rule the whole project joins names with.
-            _fullTopicName = RobotSNAPTopics.Full(topicName, prefix);
+            // Build full topic names, with the one rule the whole project joins names with and the identity
+            // of the robot this odometry belongs to.
+            _fullTopicNames.Clear();
+            _fullTopicNames.AddRange(RobotIdentity.StreamNamesFor(this, topicName, prefix));
             
             // Register publisher
-            _envROS.RegisterPublisher<RosMessageTypes.Nav.OdometryMsg>(_fullTopicName);
+            foreach (string topic in _fullTopicNames)
+                _envROS.RegisterPublisher<RosMessageTypes.Nav.OdometryMsg>(topic);
             
             // Get references
             if (robotRigidbody == null)
@@ -89,7 +97,11 @@ namespace RobotSNAP.ROS
             
             if (robotTransform == null)
             {
-                robotTransform = transform;
+                // The pose that is published is the pose of the base of the robot, not of the root of its
+                // prefab: the root of every robot of a scenario sits at the origin, because the base is what
+                // the scenario moves, so reading it would report one robot at (0,0,0) however far it drove.
+                _robot ??= GetComponentInParent<Robot>();
+                robotTransform = _robot != null && _robot.RobotTransform != null ? _robot.RobotTransform : transform;
             }
             
             // Initialize covariance matrices
@@ -103,7 +115,7 @@ namespace RobotSNAP.ROS
             // Start publishing
             InvokeRepeating(nameof(PublishOdometry), 1f, _publishInterval);
             
-            Debug.Log($"[{name}] Publishing odometry to {_fullTopicName} at {publishFrequencyHz} Hz");
+            Debug.Log($"[{name}] Publishing odometry to {string.Join(", ", _fullTopicNames)} at {publishFrequencyHz} Hz");
         }
         
         private void InitializeCovariance()
@@ -144,7 +156,11 @@ namespace RobotSNAP.ROS
                 header = new RosMessageTypes.Std.HeaderMsg(),
                 pose = new RosMessageTypes.Geometry.PoseWithCovarianceMsg(),
                 twist = new RosMessageTypes.Geometry.TwistWithCovarianceMsg(),
-                child_frame_id = childFrameId.TrimStart('/')
+                // The frame of this robot: the legacy one for the first robot, `robot_2/base_link` for a
+                // second one, so two odometries cannot claim the same body.
+                child_frame_id = RobotIdentity
+                    .FrameIdFor(this, childFrameId, _envROS != null ? _envROS.Prefix : "")
+                    .TrimStart('/')
             };
             
             if (publishCovariance)
@@ -161,7 +177,7 @@ namespace RobotSNAP.ROS
             
             // Update header timestamp
             ROSTimeUtils.UpdateHeader(_message.header);
-            _message.header.frame_id = RobotSNAPTopics.Full(frameId, _envROS.Prefix);
+            _message.header.frame_id = RobotIdentity.FrameIdFor(this, frameId, _envROS.Prefix);
             
             // Position and orientation, in the world frame the scenario and the occupancy grid use: the
             // local position this used to publish only agreed with them while the robot happened to be a
@@ -203,8 +219,9 @@ namespace RobotSNAP.ROS
                 _message.twist.twist.angular = Util.Geometry.GetGeometryVector3(Vector3.zero);
             }
             
-            // Publish
-            _envROS.Publish(_fullTopicName, _message);
+            // Publish, on every name this robot answers on.
+            foreach (string topic in _fullTopicNames)
+                _envROS.Publish(topic, _message);
         }
         
         private void OnDestroy()
@@ -216,7 +233,7 @@ namespace RobotSNAP.ROS
         private void TestPublish()
         {
             PublishOdometry();
-            Debug.Log($"[{name}] Test odometry sent to {_fullTopicName}");
+            Debug.Log($"[{name}] Test odometry sent to {string.Join(", ", _fullTopicNames)}");
         }
     }
 }

@@ -178,11 +178,33 @@ namespace RobotSNAP.Core.Scenario
     }
 
     /// <summary>
-    /// Configuration du robot
+    /// One robot of a scenario: which type drives, where it starts, and the route it follows.
+    ///
+    /// A scenario used to hold exactly one of these, in the <c>robot</c> section. It now holds a list, in
+    /// <c>robots</c>, and the single section is read as a list of one so a scenario written before
+    /// multi-robot keeps working untouched.
     /// </summary>
     [YamlObject]
     public partial class RobotScenarioConfig
     {
+        /// <summary>
+        /// Id of the robot inside the scenario, such as <c>robot_1</c>. It is what a client names on the
+        /// command topic and what the ROS streams of the robot are namespaced with.
+        /// </summary>
+        [YamlMember("id")]
+        public string Id { get; set; }
+
+        /// <summary>
+        /// Type of the robot, as an id of <see cref="RobotSNAP.Agents.RobotProfiles"/>: <c>turtlebot4</c>,
+        /// <c>jackal</c>, <c>husky</c>, <c>pioneer_p3dx</c>, or <c>freight</c> for the default base.
+        ///
+        /// The label the scenario shows in its details (<c>scenario_info.robot_type</c>) is not read here:
+        /// a scenario written before the types existed carries a label that no longer matches the base it
+        /// was authored against, and reading it would change how an old scenario drives.
+        /// </summary>
+        [YamlMember("type")]
+        public string Type { get; set; }
+
         [YamlMember("start")]
         public string StartRef { get; set; }
         
@@ -382,6 +404,17 @@ namespace RobotSNAP.Core.Scenario
         [YamlMember("points")]
         public Dictionary<string, RefPoint> Points { get; set; }
         
+        /// <summary>
+        /// The robots of the scenario, in the order the interface lists them. The first one is the robot a
+        /// client reaches without naming anybody, so the order is what an old single-robot client sees.
+        /// </summary>
+        [YamlMember("robots")]
+        public List<RobotScenarioConfig> Robots { get; set; }
+
+        /// <summary>
+        /// The single robot of a scenario written before several were possible. Read as the first entry of
+        /// <see cref="Robots"/>, and written back as that list once the scenario is saved again.
+        /// </summary>
         [YamlMember("robot")]
         public RobotScenarioConfig Robot { get; set; }
         
@@ -425,6 +458,49 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         [YamlIgnore]
         public float Duration => Info?.Duration ?? 0f;
+
+        /// <summary>
+        /// The robots of the scenario, whichever shape the file was written in, with an id and a type
+        /// filled in for every entry.
+        ///
+        /// A scenario that names a list is used as it is; one that names a single robot becomes a list of
+        /// one; and a scenario that names neither comes back empty, which is what a scenario with no robot
+        /// of its own (a pure crowd, driven from outside) is.
+        /// </summary>
+        public List<RobotScenarioConfig> NormalizedRobots()
+        {
+            var robots = new List<RobotScenarioConfig>();
+
+            if (Robots != null)
+            {
+                foreach (RobotScenarioConfig robot in Robots)
+                {
+                    if (robot != null)
+                        robots.Add(robot);
+                }
+            }
+
+            if (robots.Count == 0 && Robot != null)
+                robots.Add(Robot);
+
+            for (int index = 0; index < robots.Count; index++)
+            {
+                RobotScenarioConfig robot = robots[index];
+                if (string.IsNullOrWhiteSpace(robot.Id))
+                    robot.Id = DefaultRobotId(index);
+                if (string.IsNullOrWhiteSpace(robot.Type))
+                    robot.Type = RobotSNAP.Agents.RobotProfiles.DefaultId;
+            }
+
+            return robots;
+        }
+
+        /// <summary>Id a robot takes when the scenario names none: <c>robot_1</c>, <c>robot_2</c>, ...</summary>
+        public static string DefaultRobotId(int index) => $"robot_{index + 1}";
+
+        /// <summary>Number of robots the scenario drives, legacy section included.</summary>
+        [YamlIgnore]
+        public int RobotCount => NormalizedRobots().Count;
         
         // ========== MÉTHODES (pas d'attribut YamlIgnore nécessaire) ==========
         
@@ -447,22 +523,30 @@ namespace RobotSNAP.Core.Scenario
                 return false;
             }
             
-            if (Robot == null)
+            if (Robot == null && (Robots == null || Robots.Count == 0))
             {
                 error = "Robot configuration is required";
                 return false;
             }
             
-            if (string.IsNullOrEmpty(Robot.StartRef))
+            // Every robot of the scenario needs a start and something to reach, whatever its rank. A single
+            // robot keeps the message it always had, so a client that reads it still recognises the case.
+            List<RobotScenarioConfig> robots = NormalizedRobots();
+            foreach (RobotScenarioConfig robot in robots)
             {
-                error = "Robot start point is required";
-                return false;
-            }
-            
-            if (string.IsNullOrEmpty(Robot.GoalRef))
-            {
-                error = "Robot goal point is required";
-                return false;
+                string subject = robots.Count == 1 ? "Robot" : $"Robot {robot.Id}";
+
+                if (string.IsNullOrEmpty(robot.StartRef))
+                {
+                    error = $"{subject} start point is required";
+                    return false;
+                }
+
+                if (string.IsNullOrEmpty(robot.GoalRef))
+                {
+                    error = $"{subject} goal point is required";
+                    return false;
+                }
             }
             
             return true;

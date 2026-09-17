@@ -215,6 +215,30 @@ namespace RobotSNAP.Agents
             _registered = false;
         }
 
+        /// <summary>
+        /// Pushes the position this agent is standing at into the shared crowd index.
+        ///
+        /// An agent held at its start never runs the movement step, and the index would otherwise keep the
+        /// place it was enabled at - the pool, which sits at the origin of the map - for the whole hold. Every
+        /// other agent then walks around a body that is not there, and a crowd whose destination is that
+        /// origin is pushed away from its own goal. The route is set once the spawn has been applied, so this
+        /// is the moment the index can be told where the agent really stands.
+        /// </summary>
+        public void SyncNeighbourIndex()
+        {
+            if (_humanManager == null)
+                return;
+
+            TryJoinNeighbourIndex();
+            if (!_registered)
+                return;
+
+            _humanManager.UpdateAgent(
+                _agentId,
+                new Vector2(transform.position.x, transform.position.z),
+                _currentVelocity);
+        }
+
         private void InitializeController(MovementControllerType type)
         {
             switch (type)

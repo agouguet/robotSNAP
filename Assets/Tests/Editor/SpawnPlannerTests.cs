@@ -125,5 +125,40 @@ namespace RobotSNAP.Tests.Editor
             Assert.That(placed.z, Is.EqualTo(-3f).Within(0.001f));
             Assert.That(placed.y, Is.EqualTo(0.5f).Within(0.001f));
         }
+
+        [Test]
+        public void SpreadsApart_KeepsANamedFormationTogether()
+        {
+            Assert.That(SpawnPlanner.SpreadsApart("pair", true), Is.False);
+            Assert.That(SpawnPlanner.SpreadsApart("wedge", true), Is.False);
+            Assert.That(SpawnPlanner.SpreadsApart("column", true), Is.False);
+            Assert.That(SpawnPlanner.SpreadsApart("cluster", true), Is.False);
+        }
+
+        [Test]
+        public void SpreadsApart_ReadsTheScatterNamesAsIndependent()
+        {
+            Assert.That(SpawnPlanner.SpreadsApart("scatter", false), Is.True);
+            Assert.That(SpawnPlanner.SpreadsApart("independent", false), Is.True);
+            Assert.That(SpawnPlanner.SpreadsApart("none", false), Is.True);
+        }
+
+        [Test]
+        public void SpreadsApart_TreatsAnUnnamedRouteWithAnAreaAsACrowd()
+        {
+            // The traffic crossing of a scenario names no shape: its agents appear over the whole zone and walk
+            // their own way, instead of falling back on the pair formation that used to make them one block.
+            Assert.That(SpawnPlanner.SpreadsApart(null, true), Is.True);
+            Assert.That(SpawnPlanner.SpreadsApart(string.Empty, true), Is.True);
+            Assert.That(SpawnPlanner.SpreadsApart("   ", true), Is.True);
+        }
+
+        [Test]
+        public void SpreadsApart_KeepsAnUnnamedRouteOnASinglePointInFormation()
+        {
+            // Nowhere to spread into: keeping the formation is what the authored point describes.
+            Assert.That(SpawnPlanner.SpreadsApart(null, false), Is.False);
+            Assert.That(SpawnPlanner.SpreadsApart("", false), Is.False);
+        }
     }
 }

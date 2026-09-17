@@ -265,6 +265,11 @@ namespace RobotSNAP.Agents
             // A group member never walks a route of its own: the group owns the route.
             _followingRoute = _walker.HasCurrent && !IsGroupMember;
 
+            // The spawn was applied a moment ago, and an agent held at its start will not run the movement step
+            // until the hold expires: tell the crowd index where it really stands, instead of leaving every
+            // waiting agent registered at the pool, which sits at the origin of the map.
+            _movement?.SyncNeighbourIndex();
+
             // A held agent keeps its route but gets no destination yet, and no leftover destination from an
             // earlier scenario either: it stands still until the hold expires in Update.
             if (_holdRemaining > 0f && _followingRoute)

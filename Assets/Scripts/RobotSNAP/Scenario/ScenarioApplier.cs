@@ -574,7 +574,7 @@ namespace RobotSNAP.Core.Scenario
 
             // --- Ordered route: the spawn point first, then every goal until the last one ---
             var goals = new List<Vector3>();
-            bool independent = IsIndependentRoute(config);
+            bool independent = WalksIndependently(config);
             float arrivalSpacing = independent ? IndependentSpacing(config, total) : 0f;
 
             // A crowd is not a block: every independent agent gets its own walking speed and its own entry
@@ -590,11 +590,14 @@ namespace RobotSNAP.Core.Scenario
             if (IsSpatialGoal(config.Goal))
             {
                 // A random goal is resolved per agent: the members of a route each draw their own destination
-                // inside the zone, at the moment they are configured.
-                goals.Add(ResolveSpatialGoalPosition(config.Goal, independent, arrivalSpacing));
+                // inside the zone, at the moment they are configured. An arrival the scenario wrote as one
+                // point is spread the same way, but only for a route that really carries several agents: a lone
+                // walker goes to the point itself.
+                bool crowd = independent && total > 1;
+                goals.Add(ResolveSpatialGoalPosition(config.Goal, crowd, arrivalSpacing));
                 if (config.Goals != null)
                     goals.AddRange(config.Goals.Where(IsSpatialGoal)
-                        .Select(goal => ResolveSpatialGoalPosition(goal, independent, arrivalSpacing)));
+                        .Select(goal => ResolveSpatialGoalPosition(goal, crowd, arrivalSpacing)));
             }
 
             // --- Spawn Position ---
@@ -670,9 +673,10 @@ namespace RobotSNAP.Core.Scenario
             if (spawn == null)
                 return Vector3.zero;
 
-            // A scatter route asks for no shape at all: every agent draws its own point in the area, kept clear
-            // of the agents this route has already placed. That is what turns one entry into a crowd.
-            if (GroupFormation.IsScatter(spawn.Formation))
+            // A route whose agents are on their own asks for no shape at all: every agent draws its own point in
+            // the area, kept clear of the agents this route has already placed. That is what turns one entry
+            // into a crowd.
+            if (WalksIndependently(config))
                 return SpawnPlanner.PlaceAnchor(DrawIndependentAnchor(config, spawn));
 
             // Everybody else shares one anchor: the whole formation appears around a single point, which is
@@ -862,7 +866,8 @@ namespace RobotSNAP.Core.Scenario
 
         /// <summary>
         /// Spatial position of one goal, for the agent being configured. A point stays where it is authored; a
-        /// random goal draws its own point inside its zone, kept on navigable ground.
+        /// random goal draws its own point inside its zone, kept on navigable ground. When the route is a
+        /// crowd, both of them hand a place of its own to each agent instead of the same one to everybody.
         ///
         /// Resolving here, per agent, is what makes a random goal a real destination for each member of a
         /// route instead of one frozen point shared by the whole scenario.
@@ -873,7 +878,10 @@ namespace RobotSNAP.Core.Scenario
                 return Vector3.zero;
 
             if (!IsRandomGoal(goal))
-                return ResolveGoalPosition(goal);
+            {
+                Vector3 authored = ResolveGoalPosition(goal);
+                return keepApart ? DrawSharedArrival(goal, authored, minDistance) : authored;
+            }
 
             Bounds bounds = ResolveBoundsFromGoal(goal);
             float height = bounds.center.y;
@@ -886,6 +894,48 @@ namespace RobotSNAP.Core.Scenario
                 position => IsNavigable(position, height),
                 position => ProjectToNavigable(position, height));
             return new Vector3(point.x, bounds.center.y, point.y);
+        }
+
+        /// <summary>
+        /// One agent's own arrival around a goal the scenario wrote as a single point.
+        ///
+        /// A crowd heading for one spot must not land on it: the agents would queue on the same square metre,
+        /// the ones behind could never get close enough to report their arrival, and the route would look
+        /// stuck. The first agent takes the authored point, the others take a place around it - on navigable
+        /// ground, and kept from the arrivals already handed out.
+        /// </summary>
+        private Vector3 DrawSharedArrival(GoalConfig goal, Vector3 authored, float minDistance)
+        {
+            if (!_independentGoals.TryGetValue(goal, out List<Vector3> placed))
+            {
+                placed = new List<Vector3>();
+                _independentGoals[goal] = placed;
+            }
+
+            Vector3 drawn = placed.Count == 0 ? authored : DrawAround(authored, minDistance);
+            for (int attempt = 1; attempt < IndependentDrawAttempts; attempt++)
+            {
+                if (IsClearOf(drawn, placed, minDistance))
+                    break;
+                drawn = DrawAround(authored, minDistance);
+            }
+
+            placed.Add(drawn);
+            return drawn;
+        }
+
+        /// <summary>
+        /// A place in the disc around an authored goal, projected back onto navigable ground. The radius is
+        /// drawn with a square root, so the places spread over the disc instead of crowding its centre.
+        /// </summary>
+        private static Vector3 DrawAround(Vector3 centre, float radius)
+        {
+            float angle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            float reach = Mathf.Sqrt(UnityEngine.Random.value) * Mathf.Max(0f, radius);
+            Vector2 drawn = ProjectToNavigable(
+                new Vector2(centre.x + Mathf.Cos(angle) * reach, centre.z + Mathf.Sin(angle) * reach),
+                centre.y);
+            return new Vector3(drawn.x, centre.y, drawn.y);
         }
 
         /// <summary>
@@ -937,33 +987,46 @@ namespace RobotSNAP.Core.Scenario
         }
 
         /// <summary>
-        /// True when the agents of this route are on their own: a formation that spreads them instead of
-        /// holding a shape. Crowds are authored this way, and every agent then draws its own start and its own
-        /// arrival. No group id is involved: the route itself is the walking unit.
+        /// True when the agents of this route are on their own: every one of them draws its own start and its
+        /// own arrival, and walks there alone. Crowds are authored this way, whether the route spells the
+        /// scatter out or leaves the shape unnamed, and no group id is involved: the route itself is the
+        /// walking unit. <see cref="SpawnPlanner.SpreadsApart"/> holds the rule itself.
         /// </summary>
-        private static bool IsIndependentRoute(HumanScenarioConfig config)
+        private bool WalksIndependently(HumanScenarioConfig config)
         {
-            return config != null &&
-                   config.Spawn != null &&
-                   GroupFormation.IsScatter(config.Spawn.Formation);
+            if (config?.Spawn == null)
+                return false;
+
+            return SpawnPlanner.SpreadsApart(config.Spawn.Formation, HasAreaToAppearIn(config.Spawn));
+        }
+
+        /// <summary>
+        /// True when a spawn describes an area rather than a single point: a zone, or a named reference that
+        /// resolves to one. It is what tells a route that never named a shape apart from a formation pinned to
+        /// one spot, which has nowhere to spread into.
+        /// </summary>
+        private bool HasAreaToAppearIn(SpawnConfig spawn)
+        {
+            Bounds bounds = ResolveBoundsFromSpawn(spawn);
+            return bounds.size.x > 0.01f && bounds.size.z > 0.01f;
         }
 
         /// <summary>
         /// True when the agents of this route walk together, as one small group holding a shape.
         ///
-        /// A route of one agent walks alone by definition, and a route in scatter formation is a crowd whose
-        /// agents each own their start and their arrival. Everything else — several agents and a shape — walks
-        /// as a group keyed on the route itself, so no group id ever has to be written by hand. A route whose
-        /// goal is not spatial (wander, follow, stay) is left out as well: it has no polyline to walk in
+        /// A route of one agent walks alone by definition, and a route whose agents are on their own is a crowd
+        /// whose members each own their start and their arrival. Everything else — several agents and a shape —
+        /// walks as a group keyed on the route itself, so no group id ever has to be written by hand. A route
+        /// whose goal is not spatial (wander, follow, stay) is left out as well: it has no polyline to walk in
         /// formation, so its agents keep their own goal.
         /// </summary>
-        private static bool WalksAsAFormation(HumanScenarioConfig config)
+        private bool WalksAsAFormation(HumanScenarioConfig config)
         {
             return config != null &&
                    !string.IsNullOrWhiteSpace(config.Id) &&
                    config.Count > 1 &&
                    IsSpatialGoal(config.Goal) &&
-                   !GroupFormation.IsScatter(config.Spawn?.Formation);
+                   !WalksIndependently(config);
         }
 
         /// <summary>

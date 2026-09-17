@@ -75,6 +75,25 @@ namespace RobotSNAP.Core.Scenario
         }
 
         /// <summary>
+        /// True when the agents of a route appear and walk on their own instead of holding a shape.
+        ///
+        /// A named formation is the shape its agents hold, and the scatter names are the explicit way of
+        /// asking for none. The case this settles is the route that names nothing: it used to fall back on
+        /// the pair formation, which turned every unnamed crowd - the crossing of a traffic scenario, three
+        /// walkers in a corner - into one compact block sliding down the map. With an area to appear in, the
+        /// missing name is read as a crowd: every agent draws its own start, its own arrival and its own
+        /// walking speed. A route pinned to a single point keeps its formation, because there is no area to
+        /// spread into and stacking the agents on one another is all that would come of it.
+        /// </summary>
+        public static bool SpreadsApart(string formation, bool hasAreaToAppearIn)
+        {
+            if (GroupFormation.IsScatter(formation))
+                return true;
+
+            return string.IsNullOrWhiteSpace(formation) && hasAreaToAppearIn;
+        }
+
+        /// <summary>
         /// Walking direction at spawn: from the anchor towards the first reachable objective.
         /// Falls back on the second objective when the agent already stands on the first one.
         /// </summary>

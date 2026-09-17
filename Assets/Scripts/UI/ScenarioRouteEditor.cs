@@ -244,7 +244,11 @@ public sealed class ScenarioRouteEditor
     private bool _zoneDragActive;
     /// <summary>Index of the point whose area a drag is moving; 0 is the start of the route.</summary>
     private int _zoneDragIndex;
+    /// <summary>World point the press landed on: the drag measures its delta from there instead of from the
+    /// previous frame, so a snapped centre keeps following the pointer instead of sticking to its grid step.</summary>
     private Vector2 _zoneDragGrab;
+    /// <summary>Area of the dragged point when the press happened, so the applied delta stays absolute.</summary>
+    private Rect _zoneDragStartArea;
     private Vector2 _zoneCursorWorld;
     private bool _showGrid = true;
 
@@ -1543,44 +1547,78 @@ public sealed class ScenarioRouteEditor
     }
 
     /// <summary>
-    /// Grabbing the inside of an area drags the whole area: the author moves it where the agents should appear
-    /// instead of retyping four numbers.
+    /// The area a press at that world point grabs, with the point that owns it. A press outside every usable area
+    /// of the active route grabs nothing, so the caller can still move a point or place the pending one.
     /// </summary>
-    private bool TryBeginZoneDrag(Vector2 worldPosition)
+    private bool TryGetZoneAt(Vector2 worldPosition, out int index, out Rect area)
     {
+        index = -1;
+        area = default;
+
         RouteDraft active = ActiveRoute;
         if (active == null || active.IsRobot)
             return false;
 
-        int index = _zonePickIndex >= 0 ? _zonePickIndex : _pendingPointIndex;
-        Rect? area = PointArea(active, index);
-        if (!area.HasValue || !IsUsableZone(area.Value) || !area.Value.Contains(worldPosition))
+        int candidate = _zonePickIndex >= 0 ? _zonePickIndex : _pendingPointIndex;
+        Rect? found = PointArea(active, candidate);
+        if (!found.HasValue || !IsUsableZone(found.Value) || !found.Value.Contains(worldPosition))
             return false;
 
-        _zoneDragActive = true;
-        _zoneDragIndex = index;
-        _zoneDragGrab = worldPosition;
-        _dragUndoSnapshot = PushUndo($"zone-move:{_activeRouteIndex}");
+        index = candidate;
+        area = found.Value;
         return true;
     }
 
-    private void MoveDraggedZone(Vector2 worldPosition)
+    /// <summary>
+    /// Grabbing the inside of an area drags the whole area: the author moves it where the agents should appear
+    /// instead of retyping four numbers. The active route and the selected point stay as they are, so a press can
+    /// select a point for the settings panel and then hand the drag over to the area that point belongs to.
+    /// </summary>
+    private bool TryBeginZoneDrag(Vector2 worldPosition)
+    {
+        if (!TryGetZoneAt(worldPosition, out int index, out Rect area))
+            return false;
+
+        BeginZoneDrag(index, area, worldPosition);
+        return true;
+    }
+
+    private void BeginZoneDrag(int index, Rect area, Vector2 grabPoint)
+    {
+        _zoneDragActive = true;
+        _zoneDragIndex = index;
+        _zoneDragGrab = grabPoint;
+        _zoneDragStartArea = area;
+        _dragUndoSnapshot = PushUndo($"zone-move:{_activeRouteIndex}");
+    }
+
+    /// <summary>
+    /// Moves the grabbed area with the same Blender/Photoshop helpers the points use: Ctrl rounds the centre of the
+    /// rectangle onto the visible grid, Shift keeps only the dominant axis of the drag. The centre is what gets
+    /// snapped because an area has no single authored point, and moving the centre keeps the drawn rectangle the
+    /// exact size it had, which is what the author reads on screen.
+    /// </summary>
+    private void MoveDraggedZone(Vector2 worldPosition, MapPointerState pointer)
     {
         RouteDraft active = ActiveRoute;
         if (active == null)
             return;
 
-        Vector2 delta = worldPosition - _zoneDragGrab;
-        Rect? area = PointArea(active, _zoneDragIndex);
-        if (!area.HasValue)
-            return;
+        // The candidate is measured from the press rather than from the previous frame: a delta accumulated frame
+        // by frame stays below one grid step, and the snapped centre would then never leave the step it sits on.
+        Vector2 centre = _zoneDragStartArea.center;
+        Vector2 target = centre + (worldPosition - _zoneDragGrab);
+        Vector2 moved = ApplyPointerConstraints(target, pointer, centre);
 
         SetPointArea(
             active,
             _zoneDragIndex,
-            new Rect(area.Value.x + delta.x, area.Value.y + delta.y, area.Value.width, area.Value.height));
+            new Rect(
+                moved.x - _zoneDragStartArea.width * 0.5f,
+                moved.y - _zoneDragStartArea.height * 0.5f,
+                _zoneDragStartArea.width,
+                _zoneDragStartArea.height));
 
-        _zoneDragGrab = worldPosition;
         active.RouteModified = true;
     }
 
@@ -2033,9 +2071,19 @@ public sealed class ScenarioRouteEditor
         }
 
         // A point or a route wins over the area it may sit in: the small targets must stay reachable, and only a
-        // click on empty space inside an area grabs the area itself.
+        // click on empty space inside an area grabs the area itself. One exception: the anchor of an area sits on
+        // that area's centre, so a press on it hits the point first even though the author only sees the
+        // rectangle. That press keeps selecting the point for the settings panel and moves the area, exactly like
+        // a press anywhere else inside the rectangle.
         if (TrySelectPointAt(localPosition))
+        {
+            if (TryGetZoneAt(worldPosition, out int zoneIndex, out Rect zoneArea))
+            {
+                EndPointDrag();
+                BeginZoneDrag(zoneIndex, zoneArea, worldPosition);
+            }
             return;
+        }
 
         if (TrySelectRouteAt(localPosition))
             return;
@@ -2071,7 +2119,14 @@ public sealed class ScenarioRouteEditor
             _cursorCoordinatesLabel.text = "X —  Z —";
         else
         {
-            Vector2 shown = _dragActive ? ApplyPointerConstraints(worldPosition, pointer) : worldPosition;
+            // The readout runs the same constraints as the movement it describes, so the "snap" and "axis lock"
+            // hints tell where the grabbed thing is going; a zone drag measures its delta from the press point.
+            Vector2 shown = worldPosition;
+            if (_dragActive)
+                shown = ApplyPointerConstraints(worldPosition, pointer);
+            else if (_zoneDragActive)
+                shown = ApplyPointerConstraints(worldPosition, pointer, _zoneDragGrab);
+
             _cursorCoordinatesLabel.text =
                 $"X {shown.x:0.##}  Z {shown.y:0.##}{DescribeModifiers(pointer)}";
         }
@@ -2087,7 +2142,7 @@ public sealed class ScenarioRouteEditor
         {
             if (_zoneDragActive && onMap)
             {
-                MoveDraggedZone(worldPosition);
+                MoveDraggedZone(worldPosition, pointer);
                 SyncZoneFieldsNoNotify();
                 RefreshOverlay();
             }
@@ -2273,8 +2328,10 @@ public sealed class ScenarioRouteEditor
     }
 
     /// <summary>
-    /// Blender/Photoshop style helpers while placing or dragging a point:
-    /// Ctrl snaps to the visible grid, Shift locks the movement on the dominant axis.
+    /// Blender/Photoshop style helpers while placing or dragging a point, and while dragging an area:
+    /// Ctrl snaps to the visible grid, Shift locks the movement on the dominant axis. The optional reference is
+    /// the anchor the dominant axis is measured from and the coordinate the locked axis keeps; it defaults to the
+    /// world position a point drag started at.
     /// </summary>
     private Vector2 ApplyPointerConstraints(Vector2 worldPosition, MapPointerState pointer, Vector2? reference = null)
     {

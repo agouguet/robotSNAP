@@ -96,6 +96,14 @@ namespace RobotSNAP.Agents
 
         private void FixedUpdate()
         {
+            // The yaw of a pedestrian belongs to the steering step below, never to the solver. Two bodies that
+            // collide hand each other an angular velocity, and nothing in this simulation damps it: the X and Z
+            // axes are frozen, but Y is free, so a pedestrian the crowd bumped into kept turning on the spot for
+            // the rest of the run - measured at 0.7 to 2.4 rad/s with a linear velocity of zero. Cancelling it
+            // here also covers the agents that are not stepping at all, held at a start or stopped at their goal.
+            if (_rb != null)
+                _rb.angularVelocity = Vector3.zero;
+
             if (!_isPlaying || _avatar == null)
                 return;
 
@@ -315,6 +323,13 @@ namespace RobotSNAP.Agents
         {
             _currentPosition = new Vector2(transform.position.x, transform.position.z);
 
+            // What the body really did during the last physics step, which is not what that step asked for:
+            // a wall stops the agent, a neighbour pushes it aside, and a crowd pressed together leaves several
+            // of them standing still with a commanded velocity they cannot use. Facing, the walk animation and
+            // the crowd index all follow this value, so an agent squeezed by the crowd stops turning on the
+            // spot and stops walking in place.
+            Vector2 actualVelocity = new Vector2(_rb.linearVelocity.x, _rb.linearVelocity.z);
+
             UpdateNavMeshPath();
 
             // Récupération des voisins
@@ -386,17 +401,45 @@ namespace RobotSNAP.Agents
             _currentVelocity = new Vector2(finalVelocity3D.x, finalVelocity3D.z);
 
             // Rotation via MoveRotation (pour éviter les conflits)
-            UpdateRotation(desiredVelocity);
+            UpdateRotation(actualVelocity);
 
             // Mise à jour du HumanManager
             if (_humanManager != null)
             {
                 TryJoinNeighbourIndex();
-                _humanManager.UpdateAgent(_agentId, _currentPosition, _currentVelocity);
+                _humanManager.UpdateAgent(_agentId, _currentPosition, actualVelocity);
             }
 
             // Transmission de la vélocité réelle à l'agent (pour l'animation)
-            _avatar?.SetVelocity(finalVelocity3D);
+            _avatar?.SetVelocity(new Vector3(actualVelocity.x, 0f, actualVelocity.y));
+
+            KeepOutOfTheWall();
+        }
+
+        /// <summary>
+        /// Puts an agent the crowd has pushed into a wall back onto walkable ground.
+        ///
+        /// The occupancy grid of the scenario is the authority on where a pedestrian may stand, and physics
+        /// alone does not enforce it: a dense crowd presses an agent through the edge of its capsule, and it
+        /// then has no way out on its own, because the neighbours pushing it in are the ones it would have to
+        /// walk through. The correction is the projection the planner already uses for a waypoint dropped
+        /// against a wall, and it is bounded to twice the agent radius so nobody is teleported across a room.
+        /// </summary>
+        private void KeepOutOfTheWall()
+        {
+            // Only an agent standing in the wall itself is corrected. The walkable grid is inflated by the
+            // agent radius, so it also covers the strip along a wall where a pedestrian may legitimately walk;
+            // correcting against it would push everybody away from every wall.
+            OccupancyGrid obstacles = ScenarioNavigation.Obstacles;
+            if (obstacles == null || !obstacles.IsValid || obstacles.IsWorldWalkable(_currentPosition))
+                return;
+
+            float radius = _config != null ? Mathf.Max(0.1f, _config.agentRadius) : 0.25f;
+            if (!ScenarioNavigation.TryProjectToWalkable(_currentPosition, radius * 2f, out Vector2 walkable))
+                return;
+
+            _rb.position = new Vector3(walkable.x, transform.position.y, walkable.y);
+            _currentPosition = walkable;
         }
 
         #endregion

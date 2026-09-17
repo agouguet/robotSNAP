@@ -247,7 +247,6 @@ MonoBehaviour:
   targetSurface: {fileID: 6262913427228473794}
   surfaceColor: {r: 1, g: 0, b: 0.27234697, a: 0.4}
   yOffset: 0
-  showWireframe: 1
   wireframeColor: {r: 0, g: 0, b: 0, a: 1}
   toggleKey: 284
   visibleByDefault: 1

@@ -154,7 +154,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1e32866a0665bfbde8c4648b27fdea3b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _startPaused: 1
   _defaultConfig: {fileID: 11400000, guid: e01bbc4a376938dab96c8323dcbf2406, type: 2}
   _clock: {fileID: 2049586425}
   _autoSaveOnQuit: 0
@@ -218,8 +217,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _environmentPrefab: {fileID: 3952346748747340638, guid: 2e7ed295921620682b41dbded6e389d5, type: 3}
   _scenarioLoader: {fileID: 4147492}
-  _defaultScenarioName: default
-  _autoApplyAfterLoad: 0
   _applyDelay: 0.5
   _logEvents: 1
   _isLoading: 0
@@ -236,7 +233,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _autoSaveOnQuit: 0
-  _configSavePath: Assets/Configs/SavedConfig.asset
   _configsFolderPath: Assets/Configs/
   _logEvents: 1
 --- !u!114 &4147492
@@ -649,7 +645,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 572700764}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 99a04a6f1ef3476f28286ef2f64416c2, type: 3}
   m_Name: 
@@ -713,7 +709,6 @@ MonoBehaviour:
   _cardTemplate: {fileID: 9197481963319205126, guid: efb4d510811fa6ab5a4752b68470a224, type: 3}
   _columns: 4
   _cardSpacingPercent: 1
-  _searchPlaceholder: Search a scenario...
 --- !u!114 &732435987
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1719,7 +1714,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.CameraSystem.CameraController
   mainCamera: {fileID: 0}
-  cameraTarget: {fileID: 0}
   moveSpeed: 5
   rotateSpeed: 50
   zoomSpeed: 50
@@ -1736,7 +1730,6 @@ MonoBehaviour:
   - Robot
   - Human
   - Agent
-  followableLayers: []
   orbitPitch: 38
   orbitYaw: 45
   orbitDistance: 14
@@ -1744,8 +1737,13 @@ MonoBehaviour:
   topDownOffset: {x: 0, y: 5, z: 0}
   firstPersonOffset: {x: 0, y: 0.3, z: 0}
   thirdPersonOffset: {x: 0, y: 2, z: 5}
-  orbitOffset: {x: 0, y: 5, z: -10}
   activeTool: 0
+  revealThroughWalls: 1
+  occlusionMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  occlusionEyeHeight: 1
+  occlusionGraceSeconds: 0.2
   enableKeyboardControl: 1
   forwardKey: 119
   backwardKey: 115
@@ -1755,8 +1753,6 @@ MonoBehaviour:
   downKey: 101
   rotateKey: 324
   fastMoveKey: 304
-  splitViewCameras: []
-  splitViewContainer: {fileID: 0}
   velocity: {x: 0, y: 0, z: 0}
 --- !u!1 &1672221278
 GameObject:
@@ -1925,7 +1921,7 @@ MonoBehaviour:
   simulationStartHour: 12
   _timeZoneId: Europe/Paris
   logTimeChanges: 0
-  editorTimeDisplay: 17:59:26
+  editorTimeDisplay: 13:59:11
 --- !u!4 &2049586426
 Transform:
   m_ObjectHideFlags: 0

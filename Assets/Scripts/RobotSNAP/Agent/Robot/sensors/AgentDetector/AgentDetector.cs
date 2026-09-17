@@ -148,27 +148,6 @@ namespace RobotSNAP
         }
         
         /// <summary>
-        /// Get the closest visible agents
-        /// </summary>
-        public List<GameObject> GetClosestAgents(int count)
-        {
-            var visible = GetVisibleAgents();
-            if (visible.Count == 0) return new List<GameObject>();
-            
-            var distances = new Dictionary<GameObject, float>();
-            foreach (var agent in visible)
-            {
-                float dist = Vector3.Distance(transform.position, agent.transform.position);
-                distances[agent] = dist;
-            }
-            
-            return distances.OrderBy(kv => kv.Value)
-                           .Take(Mathf.Min(count, visible.Count))
-                           .Select(kv => kv.Key)
-                           .ToList();
-        }
-        
-        /// <summary>
         /// Get the distance to an agent
         /// </summary>
         public float GetDistanceToAgent(GameObject agent)

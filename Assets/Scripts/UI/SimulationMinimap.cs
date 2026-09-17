@@ -37,6 +37,12 @@ public sealed class SimulationMinimap
     /// <summary>Metres-to-pixels used while the scene has no occupancy bounds to scale from.</summary>
     private const float FallbackPixelsPerMetre = 4f;
 
+    /// <summary>Seconds between two enumerations of the agents of the scene.</summary>
+    private const float AgentEnumerationInterval = 0.25f;
+
+    /// <summary>Pixel distance under which a dot is left where it already is.</summary>
+    private const float DotMoveTolerance = 0.5f;
+
     private static readonly Color RobotConeFill = new Color(0.23f, 0.51f, 0.96f, 0.30f);
     private static readonly Color RobotConeStroke = new Color(0.58f, 0.77f, 0.99f, 0.65f);
     private static readonly Color HumanConeFill = new Color(0.96f, 0.62f, 0.04f, 0.24f);
@@ -51,6 +57,14 @@ public sealed class SimulationMinimap
 
     private readonly List<VisualElement> _dotPool = new();
     private readonly List<MinimapVisionCone> _conePool = new();
+
+    /// <summary>Position last written into each pooled dot, so a dot that did not move costs no style write.</summary>
+    private readonly List<Vector2> _dotPositions = new();
+
+    /// <summary>Agents of the scene, re-enumerated at <see cref="AgentEnumerationInterval"/>.</summary>
+    private Robot[] _robots = System.Array.Empty<Robot>();
+    private HumanAgent[] _humans = System.Array.Empty<HumanAgent>();
+    private float _nextAgentEnumeration;
 
     /// <summary>The robot scanner is read from the agent, so it is cached per robot rather than per frame.</summary>
     private Robot _scannerOwner;
@@ -135,6 +149,7 @@ public sealed class SimulationMinimap
         _worldBounds = worldBounds;
         _useOccupancy = occupancy != null;
         ApplyBackground(_useOccupancy ? occupancy : _camera.targetTexture);
+        SyncCameraEnabled(IsPanelVisible());
     }
 
     /// <summary>Marks the agent whose transform is given as the followed one, so its dot gets highlighted.</summary>
@@ -150,7 +165,14 @@ public sealed class SimulationMinimap
     /// <summary>Refreshes the background source and the dot positions; called every frame from Update.</summary>
     public void Tick()
     {
-        if (_inert || !IsPanelVisible())
+        if (_inert)
+            return;
+
+        // A collapsed tab still ticks - the overlay is alive, only its content is hidden - so the camera is
+        // told what to do before the early return, or it would keep drawing a picture nobody is showing.
+        bool visible = IsPanelVisible();
+        SyncCameraEnabled(visible);
+        if (!visible)
             return;
 
         float width = _dots.resolvedStyle.width;
@@ -164,16 +186,13 @@ public sealed class SimulationMinimap
         // Keeps the image ratio after the panel is resized, without writing the style every frame.
         RefreshMapHeight();
 
-        // Unity 6000.4 has no List-filling overload for this call, so the two arrays it returns are the
-        // only per-frame cost; the dot pool below is what must not allocate.
-        Robot[] robots = UnityEngine.Object.FindObjectsByType<Robot>();
-        HumanAgent[] humans = UnityEngine.Object.FindObjectsByType<HumanAgent>();
+        RefreshAgents();
 
         // Resolved once per frame: the dots have to land on the drawn image, not on the map area.
         Rect imageRect = GetDisplayedImageRect(width, height);
 
-        int used = PlaceAgents(robots, true, imageRect, 0);
-        used = PlaceAgents(humans, false, imageRect, used);
+        int used = PlaceAgents(_robots, true, imageRect, 0);
+        used = PlaceAgents(_humans, false, imageRect, used);
 
         for (int index = used; index < _dotPool.Count; index++)
             _dotPool[index].style.display = DisplayStyle.None;
@@ -197,8 +216,16 @@ public sealed class SimulationMinimap
                 continue;
 
             VisualElement dot = GetDot(used);
-            dot.style.left = position.x;
-            dot.style.top = position.y;
+            // Writing a style schedules a layout pass of the panel, so a crowd that stands still would pay for
+            // one per agent per frame. Only a dot that moved a visible distance - or one that has just been
+            // handed a pool slot - is moved; the position is remembered here rather than read back from the
+            // style, which cannot tell "no left yet" from "left at zero".
+            if (NeedsMove(used, position))
+            {
+                dot.style.left = position.x;
+                dot.style.top = position.y;
+                _dotPositions[used] = position;
+            }
             dot.EnableInClassList(RobotClass, isRobot);
             dot.EnableInClassList(HumanClass, !isRobot);
             dot.EnableInClassList(FocusedClass, IsFocused(agent.transform));
@@ -386,6 +413,24 @@ public sealed class SimulationMinimap
     }
 
     /// <summary>
+    /// Keeps the render-texture camera on only while its output is what the panel shows.
+    ///
+    /// The minimap paints either the occupancy grid carried by the scenario or the live render of that
+    /// camera. With a grid - the case of every scenario authored in the app - the camera drew the whole
+    /// crowd into a thousand-pixel texture that no element on screen ever read, and it cost about a third
+    /// of the frame time of a large crowd. The camera follows the source now, not the scene.
+    /// </summary>
+    private void SyncCameraEnabled(bool panelVisible)
+    {
+        if (_camera == null)
+            return;
+
+        bool needed = panelVisible && !_useOccupancy;
+        if (_camera.enabled != needed)
+            _camera.enabled = needed;
+    }
+
+    /// <summary>
     /// Sizes the map height from the source ratio. Only the height moves: the panel owns the width.
     /// </summary>
     private void RefreshMapHeight()
@@ -415,7 +460,40 @@ public sealed class SimulationMinimap
         dot.AddToClassList(DotClass);
         _dots.Add(dot);
         _dotPool.Add(dot);
+        // A dot that has never been placed has no position: a NaN makes the first write always happen.
+        _dotPositions.Add(new Vector2(float.NaN, float.NaN));
         return dot;
+    }
+
+    /// <summary>
+    /// Re-enumerates the agents of the scene at a fixed rate.
+    ///
+    /// The two <c>FindObjectsByType</c> calls walk every object of the scene and allocate an array for the
+    /// result; doing that twice per frame is what the minimap added to a crowd. Only the *set* of agents is
+    /// cached - a dot reads the live position of the agent it points at, so the map still moves at the frame
+    /// rate, and an agent that appears joins it within a quarter of a second.
+    /// </summary>
+    private void RefreshAgents()
+    {
+        if (Time.unscaledTime < _nextAgentEnumeration)
+            return;
+
+        _nextAgentEnumeration = Time.unscaledTime + AgentEnumerationInterval;
+        _robots = UnityEngine.Object.FindObjectsByType<Robot>();
+        _humans = UnityEngine.Object.FindObjectsByType<HumanAgent>();
+    }
+
+    /// <summary>True when the dot of that pool slot has to be written: it is new, or it moved enough to show.</summary>
+    private bool NeedsMove(int index, Vector2 position)
+    {
+        if (index >= _dotPositions.Count)
+            return true;
+
+        Vector2 previous = _dotPositions[index];
+        if (float.IsNaN(previous.x) || float.IsNaN(previous.y))
+            return true;
+
+        return (previous - position).sqrMagnitude > DotMoveTolerance * DotMoveTolerance;
     }
 
     /// <summary>Same pooling as the dots: one cone element per agent, reused across frames.</summary>

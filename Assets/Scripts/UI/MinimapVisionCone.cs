@@ -31,6 +31,9 @@ public sealed class MinimapVisionCone : VisualElement
     private Color _fill = Color.clear;
     private Color _stroke = Color.clear;
 
+    /// <summary>True once a drawing state has been written, so a repeat of it can be skipped.</summary>
+    private bool _painted;
+
     public MinimapVisionCone()
     {
         // The minimap must not steal clicks meant for whatever it overlays.
@@ -67,7 +70,22 @@ public sealed class MinimapVisionCone : VisualElement
     /// </summary>
     private void SetState(float radius, float headingDegrees, float fovDegrees, Color fill, Color stroke)
     {
-        _radius = Mathf.Max(0f, radius);
+        float clampedRadius = Mathf.Max(0f, radius);
+
+        // A cone nobody has moved or turned keeps the drawing it already has: the owner calls this every frame
+        // for every agent, and a crowd standing still would otherwise rebuild one path per agent per frame on
+        // the UI renderer for a picture that did not change. The element's own position is the owner's, and it
+        // does not affect the drawing, so it is not part of this comparison.
+        if (_painted &&
+            Mathf.Approximately(clampedRadius, _radius) &&
+            Mathf.Approximately(headingDegrees, _headingDegrees) &&
+            Mathf.Approximately(fovDegrees, _fovDegrees) &&
+            fill.r == _fill.r && fill.g == _fill.g && fill.b == _fill.b && fill.a == _fill.a &&
+            stroke.r == _stroke.r && stroke.g == _stroke.g && stroke.b == _stroke.b && stroke.a == _stroke.a)
+            return;
+
+        _painted = true;
+        _radius = clampedRadius;
         _headingDegrees = headingDegrees;
         _fovDegrees = fovDegrees;
         _fill = fill;

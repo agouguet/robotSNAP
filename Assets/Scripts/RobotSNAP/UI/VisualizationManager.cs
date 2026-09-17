@@ -78,6 +78,14 @@ namespace RobotSNAP.UI
         private float _lastLaserUpdateTime;
         private RaycastLaserScanner _robotLaserScanner;
 
+        /// <summary>Seconds between two enumerations of the robot and of the crowd.</summary>
+        private const float AgentEnumerationInterval = 0.25f;
+
+        /// <summary>Agents of the scene, re-enumerated at <see cref="AgentEnumerationInterval"/>.</summary>
+        private HumanAgent[] _humans = System.Array.Empty<HumanAgent>();
+        private Robot _robot;
+        private float _nextAgentEnumeration;
+
         private SimulationState _currentState = SimulationState.Idle;
         
         #region Unity Lifecycle
@@ -90,6 +98,7 @@ namespace RobotSNAP.UI
         
         private void Update()
         {
+            RefreshAgents();
             UpdateVisualizations();
             UpdatePositionHistory();
         }
@@ -245,17 +254,36 @@ namespace RobotSNAP.UI
         private void UpdatePositionHistory()
         {
             // Update robot history
-            Robot robot = FindAnyObjectByType<Robot>();
+            Robot robot = _robot;
             if (robot != null)
             {
                 AddPositionToHistory(robot.GetEntityId(), robot.Position);
             }
             // Update humans history
-            HumanAgent[] humans = FindObjectsByType<HumanAgent>();
+            HumanAgent[] humans = _humans;
             foreach (var human in humans)
             {
+                if (human == null) continue;
                 AddPositionToHistory(human.GetEntityId(), human.transform.position);
             }
+        }
+
+        /// <summary>
+        /// Re-enumerates the robot and the crowd at a fixed rate.
+        ///
+        /// Both used to be looked up per agent per frame - the colour of a pedestrian is read against the
+        /// robot, so a crowd cost eighty walks of the whole scene every frame on top of the two arrays the
+        /// enumerations allocate. Only the *set* is cached: every position read below is still the live one,
+        /// and an agent that leaves or joins is picked up within a quarter of a second.
+        /// </summary>
+        private void RefreshAgents()
+        {
+            if (Time.unscaledTime < _nextAgentEnumeration)
+                return;
+
+            _nextAgentEnumeration = Time.unscaledTime + AgentEnumerationInterval;
+            _robot = FindAnyObjectByType<Robot>();
+            _humans = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
         }
         
         private void AddPositionToHistory(EntityId id, Vector3 pos)
@@ -299,7 +327,7 @@ namespace RobotSNAP.UI
             if (_currentState == SimulationState.Idle || _currentState == SimulationState.Ready)
                 return;
 
-            Robot robot = FindAnyObjectByType<Robot>();
+            Robot robot = _robot;
             if (robot == null) return;
             
             EntityId id = robot.GetEntityId();
@@ -360,9 +388,10 @@ namespace RobotSNAP.UI
         
         private void UpdateHumanVisualizations()
         {
-            HumanAgent[] humans = FindObjectsByType<HumanAgent>();
+            HumanAgent[] humans = _humans;
             foreach (var human in humans)
             {
+                if (human == null) continue;
                 EntityId id = human.GetEntityId();
                 Vector3 pos = human.transform.position;
                 Color humanColor = GetHumanColor(human);
@@ -629,7 +658,7 @@ namespace RobotSNAP.UI
         {
             if (!colorHumansByState) return humanDefaultColor;
             // simple distance to robot
-            Robot robot = FindAnyObjectByType<Robot>();
+            Robot robot = _robot;
             if (robot != null)
             {
                 float dist = Vector3.Distance(human.transform.position, robot.Position);
@@ -687,9 +716,10 @@ namespace RobotSNAP.UI
         
         private void DrawBoundingBoxes()
         {
-            var agents = FindObjectsByType<HumanAgent>();
+            var agents = _humans;
             foreach (var a in agents)
             {
+                if (a == null) continue;
                 Vector3 center = a.transform.position;
                 Vector3 size = new Vector3(0.5f, 1.5f, 0.5f);
                 DrawWireCube(center, size, Color.white);
@@ -725,11 +755,12 @@ namespace RobotSNAP.UI
         private void UpdateDistanceLabels()
         {
             // optional: distance between robot and each human
-            Robot robot = FindAnyObjectByType<Robot>();
+            Robot robot = _robot;
             if (robot == null) return;
-            var humans = FindObjectsByType<HumanAgent>();
+            var humans = _humans;
             foreach (var h in humans)
             {
+                if (h == null) continue;
                 float dist = Vector3.Distance(robot.Position, h.transform.position);
                 var label = GetOrCreateAgentIdLabel(h.GetEntityId(), "dist", Color.white);
                 label.transform.position = (robot.Position + h.transform.position) / 2f + Vector3.up * 1.2f;

@@ -14,22 +14,24 @@
                                    tooltip="Select: click an agent to work with it"/>
                         <ui:Button name="ToolMoveButton" text="✥" class="view-tool"
                                    tooltip="Move: left drag slides the view and releases the agent, right drag turns it, the wheel zooms it"/>
-                        <ui:Button name="ToolRotateButton" text="↻" class="view-tool"
-                                   tooltip="Rotate: drag to turn around the scene"/>
-                        <ui:Button name="ToolZoomButton" text="⌕" class="view-tool"
-                                   tooltip="Zoom: drag up and down, or use the wheel"/>
-                    </ui:VisualElement>
 
-                    <!-- The view selector mirrors the toolbar on the other side of the shot. Its three
-                         names are the three views of the camera; the highlight follows the camera, so a
-                         view the code picked (a run hands it back to the robot) lights up here too. -->
-                    <ui:VisualElement name="ViewModeSelector" class="view-modes">
-                        <ui:Button name="ViewIsometricButton" text="Isometric" class="view-tool view-mode is-active"
-                                   tooltip="Isometric: the angled view over the map"/>
-                        <ui:Button name="ViewFirstPersonButton" text="First person" class="view-tool view-mode"
-                                   tooltip="First person: look through the eyes of the selected agent"/>
-                        <ui:Button name="ViewThirdPersonButton" text="Third person" class="view-tool view-mode"
-                                   tooltip="Third person: follow the selected agent from behind"/>
+                        <!-- The three camera views share this rail instead of living in a selector of
+                             their own: the rail is already what drives the view, and one column keeps
+                             the hand in one place. They carry ASCII labels while the tools above get
+                             drawn pictograms, because the default font has no dependable glyph for a
+                             camera view and a missing one draws as an empty square - the tooltip
+                             carries the long name. The divider is what reads the two groups apart. The
+                             highlight is read back from the camera rather than from the click, so a
+                             view the code picked (a run hands it back to the robot) lights up here
+                             too. -->
+                        <ui:VisualElement class="view-tool-divider"/>
+
+                        <ui:Button name="ViewIsometricButton" text="ISO" class="view-tool view-mode is-active"
+                                   tooltip="Isometric view: the angled overview of the map"/>
+                        <ui:Button name="ViewFirstPersonButton" text="1P" class="view-tool view-mode"
+                                   tooltip="First person view: look through the eyes of the selected agent"/>
+                        <ui:Button name="ViewThirdPersonButton" text="3P" class="view-tool view-mode"
+                                   tooltip="Third person view: follow the selected agent from behind"/>
                     </ui:VisualElement>
 
                     <ui:VisualElement name="MinimapPanel" class="minimap-panel">

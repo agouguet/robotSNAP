@@ -21,6 +21,12 @@ namespace RobotSNAP.Agents
         [SerializeField] private float _angleStepDegrees = 30f;
         [SerializeField] private float _verticalOffset = 0.5f;
 
+        /// <summary>Distance an agent walks before its fan of static-obstacle casts is recomputed, in metres.</summary>
+        private const float ObstacleScanStep = 0.35f;
+
+        /// <summary>How far the heading may turn before the fan is cast again, as a dot product (about 10 degrees).</summary>
+        private const float ObstacleScanFacing = 0.985f;
+
         // References
         private HumanManager _humanManager;
         private int _agentId;
@@ -32,6 +38,11 @@ namespace RobotSNAP.Agents
         private IMovementController _controller;
         private HumanConfig _config;
         private Rigidbody _rb;
+
+        /// <summary>Where the fan of static-obstacle casts was last cast from, and which way the agent faced.</summary>
+        private Vector2 _obstacleScanOrigin;
+        private Vector2 _obstacleScanForward;
+        private bool _hasObstacleScan;
 
         // NavMesh
         private NavMeshPath _navMeshPath;
@@ -349,32 +360,7 @@ namespace RobotSNAP.Agents
             }
 
             // Détection des obstacles statiques (SphereCast)
-            _tempObstacles.Clear();
-            int layerMask = 1 << LayerMask.NameToLayer("Obstacle");
-            float sphereRadius = _config.agentRadius * _sphereCastRadiusScale;
-            float maxDistance = _config.obstaclePerceptionRadius;
-            Vector3 origin = transform.position + Vector3.up * _verticalOffset;
-            Vector3 forward = transform.forward;
-
-            void CastAndAdd(Vector3 direction)
-            {
-                if (Physics.SphereCast(origin, sphereRadius, direction, out RaycastHit hit, maxDistance, layerMask))
-                {
-                    Vector3 closestPoint = hit.point - hit.normal * sphereRadius;
-                    Vector2 obsPos = new Vector2(closestPoint.x, closestPoint.z);
-                    float dist = Vector2.Distance(_currentPosition, obsPos);
-                    if (dist > 0.01f)
-                        _tempObstacles.Add(obsPos);
-                }
-            }
-
-            CastAndAdd(forward);
-            for (int i = 1; i <= _raycastCountPerSide; i++)
-            {
-                float angle = i * _angleStepDegrees;
-                CastAndAdd(Quaternion.AngleAxis(angle, Vector3.up) * forward);
-                CastAndAdd(Quaternion.AngleAxis(-angle, Vector3.up) * forward);
-            }
+            RefreshObstacleScan();
 
             // Calcul de la nouvelle vitesse via le contrôleur
             Vector2 desiredVelocity = _controller.ComputeVelocity(
@@ -414,6 +400,54 @@ namespace RobotSNAP.Agents
             _avatar?.SetVelocity(new Vector3(actualVelocity.x, 0f, actualVelocity.y));
 
             KeepOutOfTheWall();
+        }
+
+        /// <summary>
+        /// Casts the fan of static-obstacle rays, but only when the answer can have changed.
+        ///
+        /// The walls do not move: the fan is a function of where the agent stands and which way it faces, so
+        /// thirteen sphere casts per agent per physics step mostly repeated an empty result - it was the most
+        /// expensive thing a crowd did, and every agent paid for it on every step. An agent standing still now
+        /// casts nothing at all, and one walking a straight line casts about three times a second.
+        /// </summary>
+        private void RefreshObstacleScan()
+        {
+            Vector2 forward2D = new Vector2(transform.forward.x, transform.forward.z);
+            if (_hasObstacleScan &&
+                Vector2.Distance(_currentPosition, _obstacleScanOrigin) < ObstacleScanStep &&
+                Vector2.Dot(forward2D, _obstacleScanForward) > ObstacleScanFacing)
+                return;
+
+            _hasObstacleScan = true;
+            _obstacleScanOrigin = _currentPosition;
+            _obstacleScanForward = forward2D;
+
+            _tempObstacles.Clear();
+            int layerMask = 1 << LayerMask.NameToLayer("Obstacle");
+            float sphereRadius = _config.agentRadius * _sphereCastRadiusScale;
+            float maxDistance = _config.obstaclePerceptionRadius;
+            Vector3 origin = transform.position + Vector3.up * _verticalOffset;
+            Vector3 forward = transform.forward;
+
+            void CastAndAdd(Vector3 direction)
+            {
+                if (Physics.SphereCast(origin, sphereRadius, direction, out RaycastHit hit, maxDistance, layerMask))
+                {
+                    Vector3 closestPoint = hit.point - hit.normal * sphereRadius;
+                    Vector2 obsPos = new Vector2(closestPoint.x, closestPoint.z);
+                    float dist = Vector2.Distance(_currentPosition, obsPos);
+                    if (dist > 0.01f)
+                        _tempObstacles.Add(obsPos);
+                }
+            }
+
+            CastAndAdd(forward);
+            for (int i = 1; i <= _raycastCountPerSide; i++)
+            {
+                float angle = i * _angleStepDegrees;
+                CastAndAdd(Quaternion.AngleAxis(angle, Vector3.up) * forward);
+                CastAndAdd(Quaternion.AngleAxis(-angle, Vector3.up) * forward);
+            }
         }
 
         /// <summary>
@@ -718,6 +752,9 @@ namespace RobotSNAP.Agents
             _avatar?.SetVelocity(Vector3.zero);
             _pathCorners = new Vector3[0];
             _currentGoalPoint = Vector2.zero;
+            // A pooled agent is about to be put down somewhere else entirely, so the fan of obstacle casts
+            // taken where it stood before says nothing about where it lands.
+            _hasObstacleScan = false;
             _plannedPath.Clear();
             _plannedGoal = Vector2.zero;
             _scenarioPathInUse = false;

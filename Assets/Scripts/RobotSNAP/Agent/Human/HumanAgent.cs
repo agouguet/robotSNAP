@@ -209,7 +209,11 @@ namespace RobotSNAP.Agents
                 _animator.runtimeAnimatorController = humanConfig.animationController;
 
             _animator.applyRootMotion = false;
-            _animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            // Skinning is the single largest cost of a crowd, and a pedestrian nobody can see does not have to
+            // be posed: the crowd scenario watches a handful of agents on screen while the rest walk out of
+            // frame. Culling keeps the state machine running and updates the pose the moment the agent comes
+            // back into view, which is the behaviour of every imported character in a project by default.
+            _animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
         }
 
         #endregion

@@ -9,8 +9,8 @@ using UnityEngine.UIElements;
 /// <summary>
 /// Wires the simulation tab: the play controls of the top bar, the minimap camera, and the widgets
 /// of the HUD. The widgets take the camera controller as their single source of truth for the
-/// selection, and the camera itself is driven by the view toolbar, by the view selector of the
-/// overlay and by clicks in the scene.
+/// selection, and the camera itself is driven by the view toolbar of the overlay - its tools and
+/// its three camera views - and by clicks in the scene.
 /// </summary>
 public class SimulationTabController : MonoBehaviour
 {
@@ -42,6 +42,15 @@ public class SimulationTabController : MonoBehaviour
 
     private Transform _minimapTarget;
     private SimulationState _currentState = SimulationState.Idle;
+
+    /// <summary>
+    /// Seconds between two refreshes of the widgets of the overlay. The minimap is a map of dots and the
+    /// agent panel a list: both are read at a glance, so twenty updates a second look identical to one per
+    /// frame and leave the crowd the frame budget instead.
+    /// </summary>
+    private const float WidgetTickInterval = 0.05f;
+
+    private float _nextWidgetTick;
 
     private void OnEnable()
     {
@@ -147,9 +156,9 @@ public class SimulationTabController : MonoBehaviour
     }
 
     /// <summary>
-    /// Wires the view selector of the overlay: the buttons that hand the camera to another view. The
-    /// camera controller stays the only one that knows how a switch is carried out, so the buttons
-    /// only ask it for a view and read it back for their highlight.
+    /// Wires the three camera views of the rail: the buttons that hand the camera to another view.
+    /// The camera controller stays the only one that knows how a switch is carried out, so the
+    /// buttons only ask it for a view and read it back for their highlight.
     /// </summary>
     private void WireViewSelector()
     {
@@ -173,7 +182,7 @@ public class SimulationTabController : MonoBehaviour
     }
 
     /// <summary>
-    /// Highlights the view the camera is in. The view changes without a click on the selector (a run
+    /// Highlights the view the camera is in. The view changes without a click on these buttons (a run
     /// hands it back to the robot, and a click on an agent focuses it), so the highlight is read from
     /// the camera rather than from the button the user pressed.
     /// </summary>
@@ -234,6 +243,9 @@ public class SimulationTabController : MonoBehaviour
 
     private void Update()
     {
+        if (Time.unscaledTime < _nextWidgetTick) return;
+        _nextWidgetTick = Time.unscaledTime + WidgetTickInterval;
+
         UpdateMinimap();
 
         _minimap?.Tick();

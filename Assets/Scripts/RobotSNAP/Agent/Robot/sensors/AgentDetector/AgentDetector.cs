@@ -231,7 +231,10 @@ namespace RobotSNAP
                     obstructionMask
                 );
                 
-                Debug.Log($"[{name}] Checking {target.name}: Distance={distanceToTarget:F2}, LOS={hasLineOfSight}");
+                // One line per candidate per check: a crowd of eighty turned the console - and the editor log
+                // the editor writes it to - into a stream of a megabyte every few seconds.
+                if (logDetections)
+                    Debug.Log($"[{name}] Checking {target.name}: Distance={distanceToTarget:F2}, LOS={hasLineOfSight}");
 
                 if (hasLineOfSight && distanceToTarget <= radius)
                 {

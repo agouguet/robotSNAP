@@ -1233,7 +1233,7 @@ MonoBehaviour:
   updateInterval: 0.2
   autoStart: 1
   showGizmos: 1
-  logDetections: 1
+  logDetections: 0
 --- !u!114 &6025281825966062069
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1250,7 +1250,7 @@ MonoBehaviour:
   customPrefix: 
   agentsTopic: /simulation/agents
   publishFrequencyHz: 10
-  logPublishEvents: 1
+  logPublishEvents: 0
 --- !u!114 &415146196078287761
 MonoBehaviour:
   m_ObjectHideFlags: 0

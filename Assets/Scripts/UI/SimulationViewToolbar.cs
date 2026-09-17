@@ -3,9 +3,10 @@ using RobotSNAP.CameraControl;
 using UnityEngine.UIElements;
 
 /// <summary>
-/// The rail of tools in the top-left corner of the view. It decides what the left mouse button
-/// does in the camera view — pick an agent, slide, turn or zoom — and offers a shortcut to
-/// re-frame the view on the agent the camera already works with.
+/// The rail of tools in the top-left corner of the view. It decides what the mouse does in the camera
+/// view — pick an agent, or move the view — and offers a shortcut to re-frame the shot on the agent the
+/// camera already works with. Turning and zooming are not buttons any more: they belong to the move tool,
+/// where the right button turns and the wheel zooms, so the hand never has to leave the mouse.
 /// </summary>
 public sealed class SimulationViewToolbar
 {
@@ -19,8 +20,6 @@ public sealed class SimulationViewToolbar
 
         _buttons[CameraController.CameraTool.Select] = root.Q<Button>("ToolSelectButton");
         _buttons[CameraController.CameraTool.Move] = root.Q<Button>("ToolMoveButton");
-        _buttons[CameraController.CameraTool.Rotate] = root.Q<Button>("ToolRotateButton");
-        _buttons[CameraController.CameraTool.Zoom] = root.Q<Button>("ToolZoomButton");
 
         if (_camera == null)
         {
@@ -39,8 +38,6 @@ public sealed class SimulationViewToolbar
 
         Attach(_buttons[CameraController.CameraTool.Select], SimulationToolIcon.Shape.Pointer);
         Attach(_buttons[CameraController.CameraTool.Move], SimulationToolIcon.Shape.Move);
-        Attach(_buttons[CameraController.CameraTool.Rotate], SimulationToolIcon.Shape.Rotate);
-        Attach(_buttons[CameraController.CameraTool.Zoom], SimulationToolIcon.Shape.Zoom);
 
         _camera.OnToolChanged += _ => Refresh();
 

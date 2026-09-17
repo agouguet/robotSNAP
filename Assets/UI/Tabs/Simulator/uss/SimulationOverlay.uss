@@ -106,9 +106,13 @@
 
 /* --------------------------- view toolbar ------------------------- */
 
+/* The rail floats over the camera view, and .overlay-layer - its parent - is stretched to the whole
+   of .viewport-column, whose top edge is the top edge of the shot. Both offsets are therefore
+   measured from the shot itself, so the top takes the same 14px as the left and the rail breathes
+   the same on both edges. */
 .view-toolbar {
     position: absolute;
-    top: 68px;
+    top: 14px;
     left: 14px;
     flex-direction: column;
     padding: 6px;
@@ -141,36 +145,19 @@
     color: rgb(255, 255, 255);
 }
 
+/* Separates the tools from the camera views inside the rail. */
 .view-tool-divider {
     height: 1px;
     margin: 6px 4px;
     background-color: var(--border-color);
 }
 
-/* ------------------------- view selector -------------------------- */
-
-/* The three views of the camera, in the corner opposite the tool rail. Three short names read
-   faster than a dropdown and, unlike one, they show the view the camera is actually in without a
-   click, which matters because a run and a click on an agent both change it from the code. */
-.view-modes {
-    position: absolute;
-    top: 68px;
-    right: 14px;
-    flex-direction: row;
-    align-items: center;
-    padding: 6px;
-    background-color: var(--panel-bg);
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 12px;
-}
-
-/* A named button rather than the rail's square glyph: it borrows the rail's colours and its
-   hover and active states, and only takes back the box a whole word needs. */
+/* The three camera views of the rail. They take back only the width of their label - the rest of
+   the rail's look, the hover and the active state included, is the .view-tool rule above. */
 .view-mode {
     width: auto;
-    height: 28px;
-    padding: 0 10px;
+    min-width: 32px;
+    padding: 0 6px;
     font-size: 12px;
     -unity-font-style: bold;
 }

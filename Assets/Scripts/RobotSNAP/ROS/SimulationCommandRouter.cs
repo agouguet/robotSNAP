@@ -148,7 +148,10 @@ namespace RobotSNAP.ROS
             else
                 supervisor.Resume();
 
-            return new CommandResult(true, command, clock.IsPaused ? "simulation paused" : "simulation running");
+            // The state is read from the supervisor, which is the object that just did the pausing. The clock
+            // looked up by ResolveClock is not necessarily the one the supervisor drives when a scene carries
+            // more than one, and reading that one made "pause" answer "simulation running".
+            return new CommandResult(true, command, supervisor.IsPaused ? "simulation paused" : "simulation running");
         }
 
         /// <summary>Flips the pause state of the clock and reports where it landed.</summary>
@@ -161,7 +164,7 @@ namespace RobotSNAP.ROS
 
             supervisor.TogglePause();
 
-            return new CommandResult(true, command, clock.IsPaused ? "simulation paused" : "simulation running");
+            return new CommandResult(true, command, supervisor.IsPaused ? "simulation paused" : "simulation running");
         }
 
         #endregion

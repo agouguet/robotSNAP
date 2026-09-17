@@ -23,7 +23,7 @@ namespace RobotSNAP
         [Header("ROS Settings")]
         [SerializeField] private bool autoDetectPrefix = true;
         [SerializeField] private string customPrefix = "";
-        [SerializeField] private string cmdVelTopic = "/cmd_vel";
+        [SerializeField] private string cmdVelTopic = RobotSNAPTopics.CmdVel;
         [SerializeField] private float rosCommandTimeout = 0.5f;
 
         [Header("Debug")]
@@ -111,7 +111,10 @@ namespace RobotSNAP
             string prefix = "";
             if (autoDetectPrefix && _envROS != null) prefix = _envROS.Prefix;
             else if (!string.IsNullOrEmpty(customPrefix)) prefix = customPrefix;
-            _fullCmdVelTopic = string.IsNullOrEmpty(prefix) ? cmdVelTopic : $"/{prefix.TrimStart('/')}{cmdVelTopic}";
+            // Joined by the topic table. This line used to concatenate the prefix and the name and rely on
+            // the leading slash of `/cmd_vel` to separate them, so a topic configured without one came out
+            // as `/myenvcmd_vel`.
+            _fullCmdVelTopic = RobotSNAPTopics.Full(cmdVelTopic, prefix);
             _envROS.RegisterSubscriber<RosMessageTypes.Geometry.TwistMsg>(_fullCmdVelTopic, OnRosCommandReceived);
             _rosSubscribed = true;
         }

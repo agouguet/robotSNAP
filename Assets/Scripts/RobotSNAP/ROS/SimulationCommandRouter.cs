@@ -25,12 +25,26 @@ namespace RobotSNAP.ROS
         /// <summary>What happened, in one sentence, or the reason the command was refused.</summary>
         public string Message { get; }
 
+        /// <summary>
+        /// Ids a crowd command did not find in the scene, so the client can spot a typo instead of waiting for
+        /// a human that never moves. Null for every other command, which is what keeps the key out of their
+        /// answers.
+        /// </summary>
+        public IReadOnlyList<int> UnknownIds { get; }
+
         /// <summary>Builds a result; a null name or message is stored as an empty string.</summary>
         public CommandResult(bool ok, string command, string message)
+            : this(ok, command, message, null)
+        {
+        }
+
+        /// <summary>Builds a result that carries the ids a crowd command could not find.</summary>
+        public CommandResult(bool ok, string command, string message, IReadOnlyList<int> unknownIds)
         {
             Ok = ok;
             Command = command ?? "";
             Message = message ?? "";
+            UnknownIds = unknownIds;
         }
     }
 
@@ -39,10 +53,11 @@ namespace RobotSNAP.ROS
     /// play, pause, reset, scenario, clock, robot, crowd - without reaching into the Unity scene.
     ///
     /// The body carries a "command" key plus the keys that command needs, for instance
-    /// <c>{"command":"set_robot_goal","x":4.5,"z":2.0}</c>. The answer says what actually happened, so the
-    /// client never has to guess which part of a request was honoured. A malformed body, a missing key and an
-    /// unknown command are all answered the same way, as a result with Ok=false, because a peer on the other
-    /// end of the connector can do nothing with a thrown exception.
+    /// <c>{"command":"set_robot_goal","x":4.5,"z":2.0}</c> or
+    /// <c>{"command":"humans","commands":[{"id":3,"vx":1.0,"vz":0.0},{"id":4,"stop":true}]}</c>. The answer
+    /// says what actually happened, so the client never has to guess which part of a request was honoured. A
+    /// malformed body, a missing key and an unknown command are all answered the same way, as a result with
+    /// Ok=false, because a peer on the other end of the connector can do nothing with a thrown exception.
     ///
     /// No reference is held between two commands: a scenario load destroys and rebuilds the environments, and
     /// the managers, robot, controller and crowd that live inside them, so every one of them is looked up
@@ -59,7 +74,8 @@ namespace RobotSNAP.ROS
         private static readonly string[] AcceptedCommands =
         {
             "play", "pause", "toggle_pause", "reset", "load_scenario", "set_time_scale", "set_random_seed",
-            "set_robot_goal", "clear_robot_goal", "stop_robot", "set_control_mode", "set_agent_controller"
+            "set_robot_goal", "clear_robot_goal", "stop_robot", "set_control_mode", "set_agent_controller",
+            "humans"
         };
 
         /// <summary>Control modes of the robot input controller, as this topic spells them.</summary>
@@ -122,6 +138,7 @@ namespace RobotSNAP.ROS
                 case "stop_robot": return StopRobot(command);
                 case "set_control_mode": return SetControlMode(body, command);
                 case "set_agent_controller": return SetAgentController(body, command);
+                case "humans": return SetHumans(body, command);
                 default:
                     return new CommandResult(false, requested,
                         $"unknown command '{requested}'; accepted commands: {string.Join(", ", AcceptedCommands)}");
@@ -518,6 +535,107 @@ namespace RobotSNAP.ROS
             return UnityEngine.Object.FindObjectsByType<HumanAgent>(FindObjectsInactive.Exclude);
         }
 
+        /// <summary>
+        /// Drives the crowd in one message: one entry per human, each carrying an id and a velocity in world
+        /// metres per second, or "stop": true, which gives the human back to its own controller. The answer
+        /// reports what was applied and which ids are not in the scene, because a client cannot see the crowd
+        /// it is driving and a typo would otherwise look like a human that never moves.
+        /// </summary>
+        private static CommandResult SetHumans(JObject body, string command)
+        {
+            var unknownIds = new List<int>();
+
+            if (!HasValue(body, "commands"))
+                return new CommandResult(false, command, "missing key 'commands'", unknownIds);
+
+            JToken commands = body["commands"];
+            if (commands.Type != JTokenType.Array)
+                return new CommandResult(false, command, "key 'commands' must be an array", unknownIds);
+
+            HumanManager manager = ResolveHumanManager();
+            if (manager == null)
+                return new CommandResult(false, command, "no human manager in the scene", unknownIds);
+
+            int applied = 0;
+            int refused = 0;
+
+            foreach (JToken entry in commands)
+            {
+                if (!TryReadHumanCommand(entry, out int id, out bool stop, out float vx, out float vz))
+                {
+                    refused++;
+                    continue;
+                }
+
+                bool known = stop
+                    ? manager.ClearExternalVelocity(id)
+                    : manager.SetExternalVelocity(id, new Vector2(vx, vz));
+
+                if (known)
+                    applied++;
+                else
+                    unknownIds.Add(id);
+            }
+
+            // Counts are written with the invariant culture, so the answer reads the same in every locale.
+            var parts = new List<string>
+            {
+                applied == 1 ? "1 command applied" : FormattableString.Invariant($"{applied} commands applied"),
+                unknownIds.Count == 1
+                    ? "1 unknown id"
+                    : FormattableString.Invariant($"{unknownIds.Count} unknown ids")
+            };
+
+            if (refused > 0)
+            {
+                parts.Add(refused == 1
+                    ? "1 entry ignored"
+                    : FormattableString.Invariant($"{refused} entries ignored"));
+            }
+
+            string summary = string.Join(", ", parts);
+            bool ok = unknownIds.Count == 0 && refused == 0;
+
+            return new CommandResult(ok, command, summary, unknownIds);
+        }
+
+        /// <summary>
+        /// Reads one crowd entry. A missing velocity reads as zero, which is what a "stop" entry sends, and
+        /// "stop" wins over a velocity given in the same entry. An entry whose keys are there but unreadable,
+        /// or that carries no id, is refused rather than applied to agent 0.
+        /// </summary>
+        private static bool TryReadHumanCommand(JToken entry, out int id, out bool stop, out float vx, out float vz)
+        {
+            id = 0;
+            stop = false;
+            vx = 0f;
+            vz = 0f;
+
+            if (entry == null || entry.Type != JTokenType.Object)
+                return false;
+
+            var command = (JObject)entry;
+            if (!TryGetInt(command, "id", out id))
+                return false;
+
+            if (TryGetBool(command, "stop", false, out bool wantsStop) && wantsStop)
+            {
+                stop = true;
+                return true;
+            }
+
+            if (HasValue(command, "stop"))
+                return false;
+
+            if (HasValue(command, "vx") && !TryGetFloat(command, "vx", out vx))
+                return false;
+
+            if (HasValue(command, "vz") && !TryGetFloat(command, "vz", out vz))
+                return false;
+
+            return true;
+        }
+
         #endregion
 
         #region Scene Lookup
@@ -538,6 +656,15 @@ namespace RobotSNAP.ROS
         private static Robot ResolveRobot()
         {
             return UnityEngine.Object.FindAnyObjectByType<Robot>();
+        }
+
+        /// <summary>
+        /// Crowd of the scene, the one that owns the id-to-agent map a velocity command goes through. It is
+        /// rebuilt with the environments, so it is looked up on the call that needs it like the others.
+        /// </summary>
+        private static HumanManager ResolveHumanManager()
+        {
+            return UnityEngine.Object.FindAnyObjectByType<HumanManager>();
         }
 
         /// <summary>Input controller of the robot, when the scene gave it one.</summary>
@@ -561,8 +688,7 @@ namespace RobotSNAP.ROS
         #region Body Reading
 
         /// <summary>
-        /// Reads a body as a JSON object, or returns null with the reason in <paramref name="error"/>. Shared
-        /// with the control bridge, which reads the crowd body with the same rules.
+        /// Reads a body as a JSON object, or returns null with the reason in <paramref name="error"/>.
         /// </summary>
         internal static JObject ParseBody(string json, out string error)
         {

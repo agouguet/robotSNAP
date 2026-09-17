@@ -16,7 +16,7 @@ namespace RobotSNAP.ROS
         [Header("ROS Configuration")]
         [SerializeField] private bool autoDetectPrefix = true;
         [SerializeField] private string customPrefix = "";
-        [SerializeField] private string topicName = "clock";
+        [SerializeField] private string topicName = RobotSNAPTopics.Clock;
         
         [Header("Publishing")]
         [SerializeField] private bool publishInFixedUpdate = true;
@@ -92,8 +92,9 @@ namespace RobotSNAP.ROS
                 prefix = customPrefix;
             }
             
-            // Build topic name
-            _fullTopicName = string.IsNullOrEmpty(prefix) ? topicName : $"/{prefix}{topicName}";
+            // Build topic name with the one rule the whole project joins names with: with a prefix, `clock`
+            // used to come out as `/myenvclock` instead of `/myenv/clock`.
+            _fullTopicName = RobotSNAPTopics.Full(topicName, prefix);
             
             // Register publisher
             _envROS.RegisterPublisher<ClockMsg>(_fullTopicName);

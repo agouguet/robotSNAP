@@ -1248,12 +1248,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.AgentDetectorROS
   autoDetectPrefix: 1
   customPrefix: 
-  localAgentsTopic: /agents
-  globalAgentsTopic: /agents/global
-  poseArrayTopic: /agents/pose
+  agentsTopic: /simulation/agents
   publishFrequencyHz: 10
-  numberOfClosestAgents: 5
-  frameId: base_link
   logPublishEvents: 1
 --- !u!114 &415146196078287761
 MonoBehaviour:
@@ -2565,7 +2561,6 @@ GameObject:
   - component: {fileID: 8613081162212639488}
   - component: {fileID: 7168983752804348378}
   - component: {fileID: 8938137609293910173}
-  - component: {fileID: 7406557896309216385}
   - component: {fileID: 4511825116760562859}
   - component: {fileID: 5891441973325114755}
   m_Layer: 8
@@ -2634,26 +2629,6 @@ MonoBehaviour:
   detector: {fileID: 0}
   wheelController: {fileID: 0}
   keepParentAtOrigin: 0
---- !u!114 &7406557896309216385
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7195339433518795282}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9979b5fcbd7bf415e869fca0c59e8836, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  autoDetectPrefix: 1
-  customPrefix: 
-  topicName: /robot_pose
-  publishFrequencyHz: 20
-  messageType: 2
-  sourceTransform: {fileID: 2134897379475526177}
-  useLocalPosition: 0
-  frameId: /map
 --- !u!114 &4511825116760562859
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2668,7 +2643,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   autoDetectPrefix: 1
   customPrefix: 
-  topicName: /robot_odom
+  topicName: /odom
   publishFrequencyHz: 50
   robotRigidbody: {fileID: 0}
   robotTransform: {fileID: 0}

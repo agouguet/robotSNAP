@@ -2,16 +2,17 @@ using System;
 using UnityEngine;
 using Unity.Robotics.ROSTCPConnector;
 using Unity.Robotics.ROSTCPConnector.MessageGeneration;
-using RosMessageTypes.Std;
-using RosMessageTypes.Geometry;
-using NavMsgs = RosMessageTypes.Nav;
-using SimMsgs = RosMessageTypes.Simulation;
 
 namespace RobotSNAP.ROS
 {
     /// <summary>
-    /// Centralized ROS communication manager for the RobotSNAP environment.
-    /// Handles publishers, subscribers, and service callbacks.
+    /// Plumbing of the ROS bridge of one environment: it creates the connection, owns the topic prefix every
+    /// stream of the environment is named with, and creates the two components that speak on it - the
+    /// publisher of the session state and the listener of the commands sent back.
+    ///
+    /// It publishes no message and implements no service of its own. The components it creates register the
+    /// topics they own, either on the connection directly or through <see cref="RegisterPublisher{T}"/> and
+    /// <see cref="Publish{T}"/>, which name those topics with the prefix held here.
     /// </summary>
     public class EnvROS : MonoBehaviour
     {
@@ -22,39 +23,14 @@ namespace RobotSNAP.ROS
                  "simulation topics. The publisher lives on this same object, so a client always sees the " +
                  "bridge that is actually running.")]
         [SerializeField] private bool publishSimulationState = true;
-        [Tooltip("Listen for the commands a client sends back - play, pause, reset, load a scenario, drive a " +
-                 "human - on the simulation topics and on the /unity services. Off means the run is " +
-                 "read-only.")]
+        [Tooltip("Listen for the commands a client sends back - play, pause, reset, load a scenario, drive the " +
+                 "robot, drive a human - on the simulation control topic. Off means the run is read-only.")]
         [SerializeField] private bool acceptRemoteControl = true;
-        
-        [Header("Topic Names (will be prefixed)")]
-        [SerializeField] private string resetDoneTopic = "/reset_done";
-        [SerializeField] private string globalPathTopic = "/global_path";
-        [SerializeField] private string localGoalFromRobotTopic = "/local_goal_from_robot";
-        [SerializeField] private string localGoalFromMapTopic = "/local_goal_from_map";
-        [SerializeField] private string mapTopic = "/map";
-        
-        [Header("Service Names (will be prefixed)")]
-        [SerializeField] private string resetService = "/unity/reset";
-        [SerializeField] private string playService = "/unity/play";
         
         // ROS Connection
         private ROSConnection _ros;
         private string _prefix = "";
         private bool _initialized;
-        
-        // Stored topic names with prefix
-        private string _resetDoneTopicName;
-        private string _globalPathTopicName;
-        private string _localGoalFromRobotTopicName;
-        private string _localGoalFromMapTopicName;
-        private string _mapTopicName;
-        private string _resetServiceName;
-        private string _playServiceName;
-        
-        // Events for external systems
-        public event Action<SimMsgs.ResetRequest> OnResetRequested;
-        public event Action<bool> OnPlayStateChanged;
         
         public ROSConnection Ros => _ros;
         public bool IsInitialized => _initialized;
@@ -82,13 +58,6 @@ namespace RobotSNAP.ROS
             }
         }
         
-        private void OnDestroy()
-        {
-            // Clean up event subscriptions
-            OnResetRequested = null;
-            OnPlayStateChanged = null;
-        }
-        
         #endregion
         
         #region Initialization
@@ -105,22 +74,6 @@ namespace RobotSNAP.ROS
             }
             
             _prefix = prefix?.Trim() ?? "";
-            
-            // Build topic names with prefix
-            _resetDoneTopicName = BuildTopicName(resetDoneTopic);
-            _globalPathTopicName = BuildTopicName(globalPathTopic);
-            _localGoalFromRobotTopicName = BuildTopicName(localGoalFromRobotTopic);
-            _localGoalFromMapTopicName = BuildTopicName(localGoalFromMapTopic);
-            _mapTopicName = BuildTopicName(mapTopic);
-            _resetServiceName = BuildTopicName(resetService);
-            _playServiceName = BuildTopicName(playService);
-            
-            // Register publishers
-            _ros.RegisterPublisher<BoolMsg>(_resetDoneTopicName);
-            _ros.RegisterPublisher<NavMsgs.PathMsg>(_globalPathTopicName);
-            _ros.RegisterPublisher<PointMsg>(_localGoalFromRobotTopicName);
-            _ros.RegisterPublisher<PointMsg>(_localGoalFromMapTopicName);
-            _ros.RegisterPublisher<NavMsgs.OccupancyGridMsg>(_mapTopicName);
             
             _initialized = true;
             
@@ -152,25 +105,18 @@ namespace RobotSNAP.ROS
             
             _prefix = newPrefix?.Trim() ?? "";
             
-            _resetDoneTopicName = BuildTopicName(resetDoneTopic);
-            _globalPathTopicName = BuildTopicName(globalPathTopic);
-            _localGoalFromRobotTopicName = BuildTopicName(localGoalFromRobotTopic);
-            _localGoalFromMapTopicName = BuildTopicName(localGoalFromMapTopic);
-            _mapTopicName = BuildTopicName(mapTopic);
-            _resetServiceName = BuildTopicName(resetService);
-            _playServiceName = BuildTopicName(playService);
-            
             if (logPublishEvents)
             {
                 Debug.Log($"[EnvROS] Prefix updated to: '{_prefix}'");
             }
         }
         
-        private string BuildTopicName(string topic)
-        {
-            topic = topic.TrimStart('/');
-            return string.IsNullOrEmpty(_prefix) ? $"/{topic}" : $"/{_prefix}/{topic}";
-        }
+        /// <summary>
+        /// The full name of a stream, in the one shape the whole project uses. The rule lives in
+        /// <see cref="RobotSNAPTopics.Full"/>, together with the names themselves, so a prefix configured as
+        /// `/env/` and a topic given as `/scan` still meet as `/env/scan`.
+        /// </summary>
+        private string BuildTopicName(string topic) => RobotSNAPTopics.Full(topic, _prefix);
 
         /// <summary>
         /// Creates the publisher of the whole application state on this object the first time the bridge
@@ -265,136 +211,9 @@ namespace RobotSNAP.ROS
             }
         }
         
-        /// <summary>
-        /// Alias for Publish (maintains compatibility)
-        /// </summary>
-        public void Send<T>(string topic, T message) where T : Message
-        {
-            Publish(topic, message);
-        }
-        
-        #endregion
-        
-        #region Convenience Publish Methods
-        
-        /// <summary>
-        /// Publish reset done status
-        /// </summary>
-        public void PublishResetDone(bool success)
-        {
-            if (!_initialized) return;
-            _ros.Publish(_resetDoneTopicName, new BoolMsg(success));
-            
-            if (logPublishEvents)
-            {
-                Debug.Log($"[EnvROS] Published reset done: {success}");
-            }
-        }
-        
-        /// <summary>
-        /// Publish global path
-        /// </summary>
-        public void PublishGlobalPath(NavMsgs.PathMsg path)
-        {
-            if (!_initialized) return;
-            _ros.Publish(_globalPathTopicName, path);
-        }
-        
-        /// <summary>
-        /// Publish local goal from robot frame
-        /// </summary>
-        public void PublishLocalGoalFromRobot(PointMsg goal)
-        {
-            if (!_initialized) return;
-            _ros.Publish(_localGoalFromRobotTopicName, goal);
-        }
-        
-        /// <summary>
-        /// Publish local goal from map frame
-        /// </summary>
-        public void PublishLocalGoalFromMap(PointMsg goal)
-        {
-            if (!_initialized) return;
-            _ros.Publish(_localGoalFromMapTopicName, goal);
-        }
-        
-        /// <summary>
-        /// Publish occupancy grid map
-        /// </summary>
-        public void PublishMap(NavMsgs.OccupancyGridMsg map)
-        {
-            if (!_initialized) return;
-            _ros.Publish(_mapTopicName, map);
-        }
-        
-        #endregion
-        
-        #region Services
-        
-        /// <summary>
-        /// Register the reset service callback
-        /// </summary>
-        public void RegisterResetService(Func<SimMsgs.ResetRequest, SimMsgs.ResetResponse> callback)
-        {
-            EnsureInitialized();
-            _ros.ImplementService<SimMsgs.ResetRequest, SimMsgs.ResetResponse>(_resetServiceName, (req) =>
-            {
-                OnResetRequested?.Invoke(req);
-                return callback(req);
-            });
-            
-            if (logPublishEvents)
-            {
-                Debug.Log($"[EnvROS] Registered reset service on: {_resetServiceName}");
-            }
-        }
-        
-        /// <summary>
-        /// Register the pause/play service callback
-        /// </summary>
-        public void RegisterPausePlayService(Func<SimMsgs.PausePlayRequest, SimMsgs.PausePlayResponse> callback)
-        {
-            EnsureInitialized();
-            _ros.ImplementService<SimMsgs.PausePlayRequest, SimMsgs.PausePlayResponse>(_playServiceName, (req) =>
-            {
-                OnPlayStateChanged?.Invoke(req.play);
-                return callback(req);
-            });
-            
-            if (logPublishEvents)
-            {
-                Debug.Log($"[EnvROS] Registered pause/play service on: {_playServiceName}");
-            }
-        }
-        
-        /// <summary>
-        /// Register a generic service
-        /// </summary>
-        public void RegisterService<TRequest, TResponse>(string serviceName, Func<TRequest, TResponse> callback)
-            where TRequest : Message
-            where TResponse : Message
-        {
-            EnsureInitialized();
-            string fullServiceName = BuildTopicName(serviceName);
-            _ros.ImplementService<TRequest, TResponse>(fullServiceName, callback);
-            
-            if (logPublishEvents)
-            {
-                Debug.Log($"[EnvROS] Registered service on: {fullServiceName}");
-            }
-        }
-        
         #endregion
         
         #region Getters
-        
-        public string GetResetServiceName() => _resetServiceName;
-        public string GetPlayServiceName() => _playServiceName;
-        public string GetResetDoneTopicName() => _resetDoneTopicName;
-        public string GetGlobalPathTopicName() => _globalPathTopicName;
-        public string GetLocalGoalFromRobotTopicName() => _localGoalFromRobotTopicName;
-        public string GetLocalGoalFromMapTopicName() => _localGoalFromMapTopicName;
-        public string GetMapTopicName() => _mapTopicName;
         
         /// <summary>
         /// Get the full topic name with prefix
@@ -423,20 +242,9 @@ namespace RobotSNAP.ROS
         {
             Debug.Log($"[EnvROS] Configuration:\n" +
                       $"  Prefix: '{_prefix}'\n" +
-                      $"  Reset Service: {_resetServiceName}\n" +
-                      $"  Play Service: {_playServiceName}\n" +
-                      $"  Reset Done Topic: {_resetDoneTopicName}\n" +
-                      $"  Global Path Topic: {_globalPathTopicName}\n" +
-                      $"  Local Goal (Robot) Topic: {_localGoalFromRobotTopicName}\n" +
-                      $"  Local Goal (Map) Topic: {_localGoalFromMapTopicName}\n" +
-                      $"  Map Topic: {_mapTopicName}\n" +
-                      $"  Initialized: {_initialized}");
-        }
-        
-        [ContextMenu("Test Publish Reset Done")]
-        private void TestPublishResetDone()
-        {
-            PublishResetDone(true);
+                      $"  Initialized: {_initialized}\n" +
+                      $"  Publish simulation state: {publishSimulationState}\n" +
+                      $"  Accept remote control: {acceptRemoteControl}");
         }
         
         #endregion

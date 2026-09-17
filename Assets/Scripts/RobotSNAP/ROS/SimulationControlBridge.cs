@@ -1,22 +1,20 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using RosMessageTypes.Std;
-using RobotSNAP.Agents;
 using RobotSNAP.Core;
 using RobotSNAP.Core.Scenario;
 using Unity.Robotics.ROSTCPConnector;
 using Unity.Robotics.ROSTCPConnector.MessageGeneration;
 using UnityEngine;
-using SimMsgs = RosMessageTypes.Simulation;
 
 namespace RobotSNAP.ROS
 {
     /// <summary>
-    /// Drives a running session from outside Unity: it listens on two command topics, runs what they carry -
-    /// through <see cref="SimulationCommandRouter"/> for the session, through <see cref="HumanManager"/> for
-    /// the crowd - and answers on a third topic with what happened.
+    /// Drives a running session from outside Unity: it listens on one command topic, runs what it carries
+    /// through <see cref="SimulationCommandRouter"/>, and answers on a second topic with what happened. One
+    /// topic carries every command there is - session and crowd alike - so a client has a single place to
+    /// send to and a single place to read the answer from.
     ///
     /// The bodies are JSON carried in std_msgs/String rather than a message of their own, so the same client
     /// drives the scene whether the peer is a ROS2 ros_tcp_endpoint or the pure-Python server of
@@ -24,7 +22,7 @@ namespace RobotSNAP.ROS
     ///
     ///   /simulation/control         {"command":"pause"}
     ///                                {"command":"set_robot_goal","x":4.5,"z":2.0}
-    ///   /simulation/humans/control  {"commands":[{"id":3,"vx":1.0,"vz":0.0},{"id":4,"stop":true}]}
+    ///                                {"command":"humans","commands":[{"id":3,"vx":1.0,"vz":0.0},{"id":4,"stop":true}]}
     ///   /simulation/control_result  {"command":"pause","ok":true,"message":"simulation paused",
     ///                                "sim_time_seconds":12.34}
     ///
@@ -43,14 +41,11 @@ namespace RobotSNAP.ROS
         [SerializeField] private string customPrefix = "";
 
         [Header("Topic Names (the EnvROS prefix is prepended)")]
-        [Tooltip("Topic carrying one session command per message.")]
-        [SerializeField] private string controlTopic = "/simulation/control";
-
-        [Tooltip("Topic carrying a batch of crowd commands.")]
-        [SerializeField] private string humansControlTopic = "/simulation/humans/control";
+        [Tooltip("Topic carrying one command per message, session or crowd.")]
+        [SerializeField] private string controlTopic = RobotSNAPTopics.SimulationControl;
 
         [Tooltip("Topic the answer to every command is published on.")]
-        [SerializeField] private string resultTopic = "/simulation/control_result";
+        [SerializeField] private string resultTopic = RobotSNAPTopics.SimulationControlResult;
 
         [Header("Debug")]
         [SerializeField] private bool logPublishEvents = false;
@@ -62,7 +57,6 @@ namespace RobotSNAP.ROS
         private ROSConnection _ros;
         private string _prefix = "";
         private string _controlTopicName;
-        private string _humansControlTopicName;
         private string _resultTopicName;
         private bool _initialized;
 
@@ -70,9 +64,6 @@ namespace RobotSNAP.ROS
         // lazily because a scenario load destroys and rebuilds the environments, and this hook with them.
         private readonly SimulationCommandRouter _router = new SimulationCommandRouter();
         private ScenarioManager _scenarioManager;
-
-        // The command of the crowd topic, as it is named in its answers.
-        private const string HumansCommand = "humans/control";
 
         #region Unity Lifecycle
 
@@ -98,7 +89,7 @@ namespace RobotSNAP.ROS
         #region Initialization
 
         /// <summary>
-        /// Resolves the connection, registers the result publisher and subscribes to the two command topics.
+        /// Resolves the connection, registers the result publisher and subscribes to the command topic.
         /// Called from Start, and once more from the inspector menu to retry by hand.
         /// </summary>
         public void Initialize()
@@ -122,21 +113,18 @@ namespace RobotSNAP.ROS
 
             Subscribe();
 
-            RegisterServices();
-
             _initialized = true;
 
             if (logPublishEvents)
             {
                 Debug.Log($"[{name}] Listening for simulation control:\n" +
                           $"  Commands: {_controlTopicName}\n" +
-                          $"  Crowd: {_humansControlTopicName}\n" +
                           $"  Answers: {_resultTopicName}");
             }
         }
 
         /// <summary>
-        /// Builds the three topic names from the EnvROS prefix and registers the result topic. Loading a
+        /// Builds the two topic names from the EnvROS prefix and registers the result topic. Loading a
         /// scenario destroys and rebuilds the environments, so the EnvROS instance - and the prefix it
         /// carries - can change mid-session; the names are rebuilt, and the topics re-registered, only when it
         /// did change, because the connector warns about a topic that is registered twice.
@@ -158,7 +146,6 @@ namespace RobotSNAP.ROS
 
             _prefix = prefix;
             _controlTopicName = BuildTopic(prefix, controlTopic);
-            _humansControlTopicName = BuildTopic(prefix, humansControlTopic);
             _resultTopicName = BuildTopic(prefix, resultTopic);
 
             RegisterTopic<StringMsg>(_resultTopicName);
@@ -179,63 +166,14 @@ namespace RobotSNAP.ROS
         }
 
         /// <summary>
-        /// Topic name in the house shape (/prefix/topic). The prefix is trimmed so a configured value carrying
-        /// its own slashes cannot produce a topic with a doubled separator.
+        /// Topic name in the house shape (/prefix/topic), built by the one rule of the project so this bridge
+        /// and the client cannot disagree on a name. See <see cref="RobotSNAPTopics.Full"/>.
         /// </summary>
         private static string BuildTopic(string prefix, string topic)
-        {
-            string stream = (topic ?? "").Trim('/');
-            if (string.IsNullOrEmpty(stream)) return null;
-            return string.IsNullOrEmpty(prefix) ? $"/{stream}" : $"/{prefix}/{stream}";
-        }
+            => RobotSNAPTopics.Full(topic, prefix);
 
         /// <summary>
-        /// Answers the two ROS2 services with the same router the command topic uses, so a roboticist whose
-        /// client already calls /unity/reset and /unity/play does not have to learn the JSON topics as well.
-        /// Both were declared on EnvROS and never registered, so calling them did nothing at all.
-        /// </summary>
-        private void RegisterServices()
-        {
-            if (_envROS == null || !_envROS.IsInitialized) return;
-
-            _envROS.RegisterResetService(OnResetService);
-            _envROS.RegisterPausePlayService(OnPausePlayService);
-        }
-
-        /// <summary>
-        /// Reset asked over the service: the dataset of the request names the scenario to load, and an empty
-        /// one simply replays the scenario that is already loaded.
-        /// </summary>
-        private SimMsgs.ResetResponse OnResetService(SimMsgs.ResetRequest request)
-        {
-            string scenario = request.dataset?.Trim();
-            string body = string.IsNullOrEmpty(scenario)
-                ? "{\"command\":\"reset\"}"
-                : $"{{\"command\":\"reset\",\"scenario\":\"{scenario}\"}}";
-
-            CommandResult result = _router.Execute(body);
-            if (!result.Ok)
-                Debug.LogWarning($"[{name}] Reset service refused: {result.Message}");
-
-            // The scenario has just been put back on its marks, so the distance that matters is the one the
-            // robot still has to cover: from where it stands now to its goal. Zero when it has none.
-            Robot robot = FindAnyObjectByType<Robot>();
-            float distance = robot != null && robot.HasGoal ? Vector3.Distance(robot.Position, robot.Goal) : 0f;
-
-            return new SimMsgs.ResetResponse(result.Ok, distance);
-        }
-
-        /// <summary>Play or pause asked over the service.</summary>
-        private SimMsgs.PausePlayResponse OnPausePlayService(SimMsgs.PausePlayRequest request)
-        {
-            string body = request.play ? "{\"command\":\"play\"}" : "{\"command\":\"pause\"}";
-            CommandResult result = _router.Execute(body);
-
-            return new SimMsgs.PausePlayResponse(result.Ok, result.Message);
-        }
-
-        /// <summary>
-        /// Subscribes to the two command topics, through the connection rather than through
+        /// Subscribes to the command topic, through the connection rather than through
         /// <see cref="EnvROS.RegisterSubscriber{T}"/>: the names are already built from the prefix here, and
         /// the EnvROS registration would prepend the prefix of its own instance a second time, which would
         /// also ignore the configured prefix and listen on the wrong topic. The topic is taken over from a
@@ -248,13 +186,11 @@ namespace RobotSNAP.ROS
             // This project runs with "Enter Play Mode Options" and no domain reload, so the connection - and
             // the callbacks its topic states carry - survive a Play session. A new bridge looking at a name
             // that already holds the callback of the session before would find it busy and leave itself
-            // unsubscribed, while every command went to the dead bridge. These two topics belong to this
-            // component alone, so it clears them and takes them over rather than asking whether they are free.
+            // unsubscribed, while every command went to the dead bridge. This topic belongs to this component
+            // alone, so it clears it and takes it over rather than asking whether it is free.
             Unsubscribe(_controlTopicName);
-            Unsubscribe(_humansControlTopicName);
 
             SubscribeTo(_controlTopicName, OnControlMessage);
-            SubscribeTo(_humansControlTopicName, OnHumansControlMessage);
         }
 
         /// <summary>
@@ -333,144 +269,7 @@ namespace RobotSNAP.ROS
             if (this == null) return;
 
             CommandResult result = _router.Execute(message != null ? message.data : null);
-            PublishResult(result.Command, result.Ok, result.Message, null);
-        }
-
-        /// <summary>
-        /// One batch of crowd commands. Every entry carries an id and a velocity in world metres per second,
-        /// or "stop": true, which gives the human back to its own controller. The answer reports what was
-        /// applied and which ids are not in the scene, because a client cannot see the crowd it is driving.
-        /// </summary>
-        private void OnHumansControlMessage(StringMsg message)
-        {
-            if (this == null) return;
-
-            var unknownIds = new List<int>();
-            bool ok = ApplyHumanCommands(message != null ? message.data : null, unknownIds, out string summary);
-            PublishResult(HumansCommand, ok, summary, unknownIds);
-        }
-
-        /// <summary>
-        /// Applies a crowd body and builds the sentence that describes it. Ids the scene does not hold are
-        /// collected rather than dropped, and an entry that cannot be read makes the answer a refusal.
-        /// </summary>
-        private static bool ApplyHumanCommands(string json, List<int> unknownIds, out string summary)
-        {
-            summary = "";
-            unknownIds.Clear();
-
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                summary = "empty command body";
-                return false;
-            }
-
-            JObject body = SimulationCommandRouter.ParseBody(json, out string parseError);
-            if (body == null)
-            {
-                summary = parseError;
-                return false;
-            }
-
-            if (!SimulationCommandRouter.HasValue(body, "commands"))
-            {
-                summary = "missing key 'commands'";
-                return false;
-            }
-
-            JToken commands = body["commands"];
-            if (commands.Type != JTokenType.Array)
-            {
-                summary = "key 'commands' must be an array";
-                return false;
-            }
-
-            HumanManager manager = FindAnyObjectByType<HumanManager>();
-            if (manager == null)
-            {
-                summary = "no human manager in the scene";
-                return false;
-            }
-
-            int applied = 0;
-            int refused = 0;
-
-            foreach (JToken entry in commands)
-            {
-                if (!TryReadHumanCommand(entry, out int id, out bool stop, out float vx, out float vz))
-                {
-                    refused++;
-                    continue;
-                }
-
-                bool known = stop
-                    ? manager.ClearExternalVelocity(id)
-                    : manager.SetExternalVelocity(id, new Vector2(vx, vz));
-
-                if (known)
-                    applied++;
-                else
-                    unknownIds.Add(id);
-            }
-
-            // Counts are written with the invariant culture, so the answer reads the same in every locale.
-            var parts = new List<string>
-            {
-                applied == 1 ? "1 command applied" : FormattableString.Invariant($"{applied} commands applied"),
-                unknownIds.Count == 1
-                    ? "1 unknown id"
-                    : FormattableString.Invariant($"{unknownIds.Count} unknown ids")
-            };
-
-            if (refused > 0)
-            {
-                parts.Add(refused == 1
-                    ? "1 entry ignored"
-                    : FormattableString.Invariant($"{refused} entries ignored"));
-            }
-
-            summary = string.Join(", ", parts);
-
-            return unknownIds.Count == 0 && refused == 0;
-        }
-
-        /// <summary>
-        /// Reads one crowd entry. A missing velocity reads as zero, which is what a "stop" entry sends, and
-        /// "stop" wins over a velocity given in the same entry. An entry whose keys are there but unreadable,
-        /// or that carries no id, is refused rather than applied to agent 0.
-        /// </summary>
-        private static bool TryReadHumanCommand(JToken entry, out int id, out bool stop, out float vx, out float vz)
-        {
-            id = 0;
-            stop = false;
-            vx = 0f;
-            vz = 0f;
-
-            if (entry == null || entry.Type != JTokenType.Object)
-                return false;
-
-            var command = (JObject)entry;
-            if (!SimulationCommandRouter.TryGetInt(command, "id", out id))
-                return false;
-
-            if (SimulationCommandRouter.TryGetBool(command, "stop", false, out bool wantsStop) && wantsStop)
-            {
-                stop = true;
-                return true;
-            }
-
-            if (SimulationCommandRouter.HasValue(command, "stop"))
-                return false;
-
-            if (SimulationCommandRouter.HasValue(command, "vx")
-                && !SimulationCommandRouter.TryGetFloat(command, "vx", out vx))
-                return false;
-
-            if (SimulationCommandRouter.HasValue(command, "vz")
-                && !SimulationCommandRouter.TryGetFloat(command, "vz", out vz))
-                return false;
-
-            return true;
+            PublishResult(result.Command, result.Ok, result.Message, result.UnknownIds);
         }
 
         #endregion
@@ -479,10 +278,10 @@ namespace RobotSNAP.ROS
 
         /// <summary>
         /// Publishes the answer to one command: the command that ran, whether it did what it asked, what
-        /// happened, and the simulation time it happened at. Crowd commands also carry the ids the scene does
-        /// not hold, so a client can spot a typo instead of waiting for a human that never moves.
+        /// happened, and the simulation time it happened at. The crowd command also carries the ids the scene
+        /// does not hold, so a client can spot a typo instead of waiting for a human that never moves.
         /// </summary>
-        private void PublishResult(string command, bool ok, string message, List<int> unknownIds)
+        private void PublishResult(string command, bool ok, string message, IReadOnlyList<int> unknownIds)
         {
             if (!CanPublish(_resultTopicName))
             {
@@ -534,7 +333,6 @@ namespace RobotSNAP.ROS
             Debug.Log($"[{name}] Configuration:\n" +
                       $"  Prefix: '{_prefix}'\n" +
                       $"  Commands: {_controlTopicName}\n" +
-                      $"  Crowd: {_humansControlTopicName}\n" +
                       $"  Answers: {_resultTopicName}\n" +
                       $"  ROS connection: {(_ros != null ? "OK" : "Missing")}\n" +
                       $"  EnvROS: {(_envROS != null ? "OK" : "Missing")}\n" +

@@ -1,8 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using RosMessageTypes.Geometry;
-using RosMessageTypes.Simulation;
 using RosMessageTypes.Std;
 using RobotSNAP.Agents;
 using RobotSNAP.CameraControl;
@@ -12,18 +12,20 @@ using Unity.Robotics.ROSTCPConnector;
 using Unity.Robotics.ROSTCPConnector.MessageGeneration;
 using Unity.Robotics.ROSTCPConnector.ROSGeometry;
 using UnityEngine;
+using NavMsgs = RosMessageTypes.Nav;
 
 namespace RobotSNAP.ROS
 {
     /// <summary>
-    /// Publishes the whole running application on ROS: the scenario that was applied, its occupancy grid,
-    /// the humans of the scene and a JSON snapshot of the rest of the runtime state, so a client can
-    /// follow a session without reading the Unity scene.
+    /// Publishes the whole running application on ROS: the occupancy grid of the applied scenario on
+    /// <c>/map</c>, a JSON snapshot of the runtime state on <c>/simulation/state</c>, and the
+    /// <c>/reset_done</c> handshake that tells a client the world is ready, so a client can follow a
+    /// session without reading the Unity scene.
     ///
-    /// One component owns the four streams because they answer one question together, and because the
-    /// streams do not cost the same: the crowd moves every frame while the grid is heavy and changes only
-    /// when a scenario is applied, so each stream is paced on its own and the grid is built once per
-    /// applied scenario instead of once per frame.
+    /// One component owns those streams because they answer one question together, and because they do not
+    /// cost the same: the state snapshot is small and runs at a steady rate while the grid is heavy and
+    /// changes only when a scenario is applied, so the grid is built once per applied scenario instead of
+    /// once per frame and published at most once per second.
     ///
     /// Nothing here may throw when no ROS server is listening, which is how this project usually runs: the
     /// connector raises an exception on a topic that has no registered publisher, so every publish goes
@@ -38,20 +40,18 @@ namespace RobotSNAP.ROS
         [Tooltip("Prefix used when auto detection is off.")]
         [SerializeField] private string customPrefix = "";
 
-        [Tooltip("Rate of the crowd and of the JSON state snapshot, in Hz. Zero disables those two streams.")]
+        [Tooltip("Rate of the JSON state snapshot, in Hz. Zero disables that stream.")]
         [SerializeField] private float publishFrequencyHz = 10f;
-
-        [Tooltip("Rate of the scenario stream, in Hz. A scenario only changes when it is applied, so this stream runs far below the crowd one.")]
-        [SerializeField] private float sceneInfoFrequencyHz = 1f;
 
         [Tooltip("Shortest delay between two publishes of the occupancy grid, in seconds. The whole grid is serialized on every publish, so the value is floored at one second.")]
         [SerializeField] private float mapIntervalSeconds = 1f;
 
         [Header("Topic Names (the EnvROS prefix is prepended)")]
-        [SerializeField] private string sceneInfoTopic = "/simulation/scene_info";
-        [SerializeField] private string mapTopic = "/simulation/map";
-        [SerializeField] private string peopleTopic = "/simulation/people";
-        [SerializeField] private string stateTopic = "/simulation/state";
+        [Tooltip("Occupancy grid of the applied scenario, as nav_msgs/OccupancyGrid.")]
+        [SerializeField] private string mapTopic = RobotSNAPTopics.Map;
+        [Tooltip("World ready handshake, published as std_msgs/Bool every time a scenario is applied.")]
+        [SerializeField] private string resetDoneTopic = RobotSNAPTopics.ResetDone;
+        [SerializeField] private string stateTopic = RobotSNAPTopics.SimulationState;
 
         [Header("Frame ID")]
         [Tooltip("Frame written in every header this component stamps.")]
@@ -66,9 +66,8 @@ namespace RobotSNAP.ROS
         // ROS side
         private ROSConnection _ros;
         private string _prefix = "";
-        private string _sceneInfoTopicName;
         private string _mapTopicName;
-        private string _peopleTopicName;
+        private string _resetDoneTopicName;
         private string _stateTopicName;
         private bool _initialized;
 
@@ -81,13 +80,9 @@ namespace RobotSNAP.ROS
         private SimulationState? _lastState;
 
         // Pacing: wall-clock intervals, so a paused simulation clock does not stall the bridge.
-        private float _peopleInterval;
         private float _stateInterval;
-        private float _sceneInfoInterval;
         private float _mapInterval;
-        private float _peopleTimer;
         private float _stateTimer;
-        private float _sceneInfoTimer;
         private float _mapTimer;
 
         // Occupancy grid of the applied scenario, rebuilt only on application and never per frame.
@@ -111,26 +106,12 @@ namespace RobotSNAP.ROS
 
             float deltaTime = Time.unscaledDeltaTime;
 
-            _sceneInfoTimer += deltaTime;
-            if (_sceneInfoTimer >= _sceneInfoInterval)
-            {
-                _sceneInfoTimer = 0f;
-                PublishSceneInfo();
-            }
-
             _mapTimer += deltaTime;
             if (_mapPublishPending || _mapTimer >= _mapInterval)
             {
                 _mapTimer = 0f;
                 _mapPublishPending = false;
                 PublishMap();
-            }
-
-            _peopleTimer += deltaTime;
-            if (_peopleTimer >= _peopleInterval)
-            {
-                _peopleTimer = 0f;
-                PublishPeople();
             }
 
             _stateTimer += deltaTime;
@@ -163,9 +144,10 @@ namespace RobotSNAP.ROS
         public string CurrentStateJson => BuildStateJson();
 
         /// <summary>
-        /// Resolves the connection, registers the four publishers and hooks the events whose payload the
-        /// streams need: the applied scenario for the grid, and the state the manager publishes for the
-        /// JSON snapshot. Called from Start, and once more from the inspector menu to retry by hand.
+        /// Resolves the connection, registers the three publishers and hooks the events whose payload the
+        /// streams need: the applied scenario for the grid and the reset handshake, and the state the
+        /// manager publishes for the JSON snapshot. Called from Start, and once more from the inspector
+        /// menu to retry by hand.
         /// </summary>
         public void Initialize()
         {
@@ -192,9 +174,7 @@ namespace RobotSNAP.ROS
 
             // Timing is set here so a rate edited in the inspector is honoured on the next initialize, and
             // a rate of zero parks its stream instead of publishing it every frame.
-            _peopleInterval = Interval(1f / Mathf.Max(0f, publishFrequencyHz));
             _stateInterval = Interval(1f / Mathf.Max(0f, publishFrequencyHz));
-            _sceneInfoInterval = Interval(1f / Mathf.Max(0f, sceneInfoFrequencyHz));
             _mapInterval = Mathf.Max(1f, mapIntervalSeconds);
 
             // The grid of the scenario that is already loaded goes out on the first tick of the loop.
@@ -209,9 +189,8 @@ namespace RobotSNAP.ROS
             if (logPublishEvents)
             {
                 Debug.Log($"[{name}] Publishing simulation state:\n" +
-                          $"  Scene info: {_sceneInfoTopicName} at {_sceneInfoInterval} s\n" +
                           $"  Map: {_mapTopicName} every {_mapInterval} s\n" +
-                          $"  People: {_peopleTopicName} at {_peopleInterval} s\n" +
+                          $"  Reset done: {_resetDoneTopicName}\n" +
                           $"  State: {_stateTopicName} at {_stateInterval} s");
             }
         }
@@ -223,7 +202,7 @@ namespace RobotSNAP.ROS
         }
 
         /// <summary>
-        /// Builds the four topic names from the EnvROS prefix and registers them. Loading a scenario
+        /// Builds the three topic names from the EnvROS prefix and registers them. Loading a scenario
         /// destroys and rebuilds the environments, so the EnvROS instance - and the prefix it carries - can
         /// change mid-session. The names are rebuilt, and the topics re-registered, only when it did change,
         /// because the connector warns about a topic that is registered twice.
@@ -240,18 +219,16 @@ namespace RobotSNAP.ROS
                 prefix = customPrefix;
 
             prefix = (prefix ?? "").Trim('/');
-            if (!force && prefix == _prefix && _sceneInfoTopicName != null)
+            if (!force && prefix == _prefix && _stateTopicName != null)
                 return;
 
             _prefix = prefix;
-            _sceneInfoTopicName = BuildTopic(prefix, sceneInfoTopic);
             _mapTopicName = BuildTopic(prefix, mapTopic);
-            _peopleTopicName = BuildTopic(prefix, peopleTopic);
+            _resetDoneTopicName = BuildTopic(prefix, resetDoneTopic);
             _stateTopicName = BuildTopic(prefix, stateTopic);
 
-            RegisterTopic<SceneInfoMsg>(_sceneInfoTopicName);
-            RegisterTopic<MapMsg>(_mapTopicName);
-            RegisterTopic<PersonEntryArrayMsg>(_peopleTopicName);
+            RegisterTopic<NavMsgs.OccupancyGridMsg>(_mapTopicName);
+            RegisterTopic<BoolMsg>(_resetDoneTopicName);
             RegisterTopic<StringMsg>(_stateTopicName);
         }
 
@@ -270,18 +247,14 @@ namespace RobotSNAP.ROS
         }
 
         /// <summary>
-        /// Topic name in the house shape (/prefix/topic). The prefix is trimmed so a configured value
-        /// carrying its own slashes cannot produce a topic with a doubled separator.
+        /// Topic name in the house shape (/prefix/topic), built by the one rule of the project so this
+        /// publisher and the client cannot disagree on a name. See <see cref="RobotSNAPTopics.Full"/>.
         /// </summary>
         private static string BuildTopic(string prefix, string topic)
-        {
-            string stream = (topic ?? "").Trim('/');
-            if (string.IsNullOrEmpty(stream)) return null;
-            return string.IsNullOrEmpty(prefix) ? $"/{stream}" : $"/{prefix}/{stream}";
-        }
+            => RobotSNAPTopics.Full(topic, prefix);
 
-        /// <summary>Frame id of every header this component stamps.</summary>
-        private string FullFrameId => string.IsNullOrEmpty(_prefix) ? frameId : $"/{_prefix}{frameId}";
+        /// <summary>Frame id of every header this component stamps, prefixed the same way a topic is.</summary>
+        private string FullFrameId => RobotSNAPTopics.Full(frameId, _prefix);
 
         /// <summary>
         /// True when a topic can be published to. The connector throws on a topic that holds no publisher,
@@ -319,8 +292,9 @@ namespace RobotSNAP.ROS
         }
 
         /// <summary>
-        /// A new scenario means a new grid and a new crowd: the grid is sampled once here rather than frame
-        /// after frame, and the scenario stream is pulled forward instead of waiting for its next tick.
+        /// A new scenario means a new grid and a world that is ready to be driven: the grid is sampled once
+        /// here rather than frame after frame, and the reset handshake goes out on the same event, right
+        /// before the grid is published on the next tick.
         /// </summary>
         private void OnScenarioApplied(ScenarioData scenario)
         {
@@ -331,46 +305,30 @@ namespace RobotSNAP.ROS
             _mapPublishPending = true;
             _mapTimer = 0f;
 
-            // Pull the scenario stream forward so a client sees the new scenario on this frame instead of
-            // waiting for its next tick, unless that stream is disabled.
-            if (!float.IsPositiveInfinity(_sceneInfoInterval))
-                _sceneInfoTimer = _sceneInfoInterval;
+            PublishResetDone();
+        }
+
+        /// <summary>
+        /// Tells a client that the world of the applied scenario is ready. The flag is not a status: a
+        /// client that resets waits for this message to know the new world, its grid and its agents exist.
+        /// </summary>
+        private void PublishResetDone()
+        {
+            if (!CanPublish(_resetDoneTopicName)) return;
+
+            _ros.Publish(_resetDoneTopicName, new BoolMsg(true));
+
+            if (logPublishEvents)
+                Debug.Log($"[{name}] Published reset done to {_resetDoneTopicName}");
         }
 
         #endregion
 
-        #region Stream 1 - Scenario
+        #region Scenario Helpers
 
-        /// <summary>
-        /// The scenario that is loaded and the environment it runs in. The message also carries the robot
-        /// start and target the scenario authored, which describe the session rather than its live state,
-        /// and the size of the crowd that is currently in the scene.
-        /// </summary>
-        private void PublishSceneInfo()
-        {
-            if (!CanPublish(_sceneInfoTopicName)) return;
-
-            ScenarioManager manager = _scenarioManager ??= FindAnyObjectByType<ScenarioManager>();
-            ScenarioData scenario = manager != null ? manager.CurrentScenarioData : null;
-
-            var msg = new SceneInfoMsg
-            {
-                scenario_name = scenario != null ? scenario.Name : "",
-                environment = EnvironmentOf(scenario),
-                robot_start_pose = ScenarioPointPose(scenario, scenario?.Robot?.StartRef),
-                robot_target_pose = ScenarioPointPose(scenario, scenario?.Robot?.GoalRef),
-                num_people = ToUshort(FindHumans().Length),
-                num_groups = ToUshort(CountGroups(scenario))
-            };
-
-            ROSTimeUtils.UpdateHeader(msg.header);
-            msg.header.frame_id = FullFrameId;
-
-            _ros.Publish(_sceneInfoTopicName, msg);
-
-            if (logPublishEvents)
-                Debug.Log($"[{name}] Published scene info to {_sceneInfoTopicName}: {msg.scenario_name} ({msg.environment})");
-        }
+        // What the loaded scenario declares - its environment, the poses it authored and the groups of its
+        // crowd - which describe the session rather than its live state, and which /simulation/state carries
+        // so a client needs no other stream to name the scenario.
 
         /// <summary>
         /// The environment the application names for a scenario: its map when it has one, its declared
@@ -383,15 +341,15 @@ namespace RobotSNAP.ROS
             return scenario.Info?.Location ?? "";
         }
 
-        /// <summary>Pose of an authored scenario point, identity when the scenario names none.</summary>
-        private PoseMsg ScenarioPointPose(ScenarioData scenario, string reference)
+        /// <summary>Pose of an authored scenario point in the ROS frame, null when the scenario names none.</summary>
+        private object ScenarioPointJson(ScenarioData scenario, string reference)
         {
             ScenarioLoader loader = _scenarioManager != null ? _scenarioManager.Loader : null;
             if (scenario == null || loader == null || string.IsNullOrEmpty(reference))
-                return new PoseMsg();
+                return null;
 
             (Vector3 position, Quaternion rotation) = loader.GetPositionAndRotation(scenario, reference);
-            return Util.Geometry.GetMPose(position, rotation);
+            return PoseJson(position, rotation);
         }
 
         /// <summary>Groups the scenario declares, read from the authored group ids of its humans.</summary>
@@ -405,17 +363,16 @@ namespace RobotSNAP.ROS
                 .Count();
         }
 
-        private static ushort ToUshort(int value) => (ushort)Mathf.Clamp(value, 0, ushort.MaxValue);
-
         #endregion
 
-        #region Stream 2 - Occupancy Grid
+        #region Occupancy Grid
 
         /// <summary>
-        /// Occupancy grid of the applied scenario, in image order: index = row * width + column, where a
-        /// column steps along the image x axis and a row along its y axis. The origin published with it is
-        /// the corner of cell (0, 0), which the occupancy image places at the (max x, min z) corner of the
-        /// map bounds, so rows advance towards +z and columns towards -x.
+        /// Occupancy grid of the applied scenario, as a standard <c>nav_msgs/OccupancyGrid</c> on
+        /// <c>/map</c>, in image order: index = row * width + column, where a column steps along the image
+        /// x axis and a row along its y axis. The origin published with it is the corner of cell (0, 0),
+        /// which the occupancy image places at the (max x, min z) corner of the map bounds, so rows advance
+        /// towards +z and columns towards -x.
         ///
         /// Walls are 100 and free cells 0, the values the rest of the project uses for occupancy. The
         /// message reuses the cached array, which is only ever replaced when a scenario is applied, so a
@@ -433,12 +390,15 @@ namespace RobotSNAP.ROS
 
             if (_mapData == null || _mapWidth <= 0 || _mapHeight <= 0) return;
 
-            var msg = new MapMsg
+            var msg = new NavMsgs.OccupancyGridMsg
             {
-                resolution = _mapResolution,
-                width = (uint)_mapWidth,
-                height = (uint)_mapHeight,
-                origin = _mapOrigin,
+                info = new NavMsgs.MapMetaDataMsg
+                {
+                    resolution = _mapResolution,
+                    width = (uint)_mapWidth,
+                    height = (uint)_mapHeight,
+                    origin = _mapOrigin
+                },
                 data = _mapData
             };
 
@@ -530,65 +490,7 @@ namespace RobotSNAP.ROS
 
         #endregion
 
-        #region Stream 3 - Humans
-
-        /// <summary>
-        /// One entry per human of the scene, sorted by track id so a client can follow a person from one
-        /// message to the next. The pose comes from the transform and the twist from the velocity the
-        /// movement controller currently applies; the crowd controller exposes no yaw rate, so the angular
-        /// part of the twist stays zero.
-        /// </summary>
-        private void PublishPeople()
-        {
-            if (!CanPublish(_peopleTopicName)) return;
-
-            HumanAgent[] humans = FindHumans();
-            var entries = new PersonEntryMsg[humans.Length];
-
-            for (int index = 0; index < humans.Length; index++)
-            {
-                HumanAgent human = humans[index];
-                Transform humanTransform = human.transform;
-
-                var entry = new PersonEntryMsg
-                {
-                    track_id = (ulong)Mathf.Max(0, human.agentId),
-                    pose = Util.Geometry.GetMPose(humanTransform.position, humanTransform.rotation),
-                    twist = new TwistMsg
-                    {
-                        linear = Util.Geometry.GetGeometryVector3(WorldVelocityOf(human)),
-                        angular = Util.Geometry.GetGeometryVector3(Vector3.zero)
-                    }
-                };
-
-                ROSTimeUtils.UpdateHeader(entry.header);
-                entry.header.frame_id = FullFrameId;
-                entries[index] = entry;
-            }
-
-            var msg = new PersonEntryArrayMsg { people = entries };
-            ROSTimeUtils.UpdateHeader(msg.header);
-            msg.header.frame_id = FullFrameId;
-
-            _ros.Publish(_peopleTopicName, msg);
-
-            if (logPublishEvents)
-                Debug.Log($"[{name}] Published {entries.Length} people to {_peopleTopicName}");
-        }
-
-        /// <summary>
-        /// Planar velocity of a human, in the ROS frame. It is taken from the velocity the movement
-        /// controller reports; the human's own speed property is a scalar and cannot say in which direction
-        /// the agent is walking.
-        /// </summary>
-        private static Vector3<FLU> WorldVelocityOf(HumanAgent human)
-        {
-            HumanMovement movement = human.GetComponent<HumanMovement>();
-            if (movement == null) return Vector3.zero.To<FLU>();
-
-            Vector2 velocity = movement.CurrentVelocity;
-            return new Vector3(velocity.x, 0f, velocity.y).To<FLU>();
-        }
+        #region Human Helpers
 
         /// <summary>
         /// Humans of the scene, pooled ones excluded: a pooled agent is not being simulated and would
@@ -602,11 +504,11 @@ namespace RobotSNAP.ROS
 
         #endregion
 
-        #region Stream 4 - Runtime State
+        #region Runtime State
 
         /// <summary>
-        /// JSON snapshot of what the three typed streams do not carry: the run state, the clock, the
-        /// scenario identity, the grid size, the robot, and what the camera looks at.
+        /// JSON snapshot of everything the session is: the run state, the clock, what the applied scenario
+        /// declares, the placement of the published grid, the crowd, the robot and what the camera looks at.
         ///
         /// Keys, with every pose in the ROS frame the other publishers use (x forward, y left, z up) and
         /// yaw in radians:
@@ -621,11 +523,17 @@ namespace RobotSNAP.ROS
         ///   scenario_name          name declared inside the scenario, null when none is loaded
         ///   environment            map of the scenario, or its declared location
         ///   map_name               map identifier authored in the scenario
+        ///   robot_start_pose       robot start the scenario authored {x, y, z, yaw}, null when it names none
+        ///   robot_target_pose      robot target the scenario authored {x, y, z, yaw}, null when it names none
+        ///   num_groups             groups the scenario declares, read from the group ids of its humans
         ///   map_width              width of the occupancy grid, in cells, 0 without a grid
         ///   map_height             height of the occupancy grid, in cells, 0 without a grid
         ///   map_resolution         metres per grid cell, 0 without a grid
+        ///   map_origin_x           x of the origin of the published grid, in the ROS frame, 0 without a grid
+        ///   map_origin_y           y of the origin of the published grid, in the ROS frame, 0 without a grid
         ///   human_count            humans currently simulated
-        ///   humans                 one entry per human: id, position, velocity, goal, group, controller
+        ///   humans                 one entry per human: id, x, y, z, vx, vy, vz, speed, goal, group,
+        ///                          controller, end_behavior
         ///   robot                  robot pose {x, y, z, yaw}, null when the scene has no robot
         ///   robot_has_goal         true while the robot drives towards a goal
         ///   robot_goal             robot goal {x, y, z}, null when it has none
@@ -636,6 +544,7 @@ namespace RobotSNAP.ROS
         ///   camera_tool            "select", "move", "rotate" or "zoom", the tool of the view
         ///   camera_mode            "free", "topdown", "firstperson", "thirdperson" or "orbit"
         ///   camera_pose            camera pose {x, y, z, yaw}, null without a camera
+        ///   refreshed_at           unix epoch seconds (UTC, fractional) this snapshot was built at
         /// </summary>
         private string BuildStateJson()
         {
@@ -666,9 +575,14 @@ namespace RobotSNAP.ROS
                 { "scenario_name", scenario != null ? scenario.Name : null },
                 { "environment", EnvironmentOf(scenario) },
                 { "map_name", scenario != null ? scenario.MapImage : null },
+                { "robot_start_pose", ScenarioPointJson(scenario, scenario?.Robot?.StartRef) },
+                { "robot_target_pose", ScenarioPointJson(scenario, scenario?.Robot?.GoalRef) },
+                { "num_groups", CountGroups(scenario) },
                 { "map_width", _mapWidth },
                 { "map_height", _mapHeight },
                 { "map_resolution", _mapResolution },
+                { "map_origin_x", _mapOrigin.position.x },
+                { "map_origin_y", _mapOrigin.position.y },
                 { "human_count", FindHumans().Length },
                 { "humans", HumansJson(FindHumans()) },
                 { "robot", robot != null ? PoseJson(robot.RobotTransform) : null },
@@ -680,7 +594,8 @@ namespace RobotSNAP.ROS
                 { "camera_focus_agent_id", focusedHuman != null ? (object)focusedHuman.agentId : null },
                 { "camera_tool", camera != null ? camera.ActiveTool.ToString().ToLowerInvariant() : null },
                 { "camera_mode", camera != null ? camera.CurrentMode.ToString().ToLowerInvariant() : null },
-                { "camera_pose", camera != null && camera.mainCamera != null ? PoseJson(camera.mainCamera.transform) : null }
+                { "camera_pose", camera != null && camera.mainCamera != null ? PoseJson(camera.mainCamera.transform) : null },
+                { "refreshed_at", NowUnixSeconds() }
             };
 
             return JsonConvert.SerializeObject(payload, Formatting.None);
@@ -730,13 +645,24 @@ namespace RobotSNAP.ROS
         {
             if (transform == null) return null;
 
-            Vector3<FLU> position = transform.position.To<FLU>();
+            return PoseJson(transform.position, transform.rotation);
+        }
+
+        /// <summary>
+        /// Pose of a world position and rotation in the ROS frame, in the shape every pose key of the
+        /// snapshot uses.
+        /// </summary>
+        private static object PoseJson(Vector3 worldPosition, Quaternion worldRotation)
+        {
+            Vector3<FLU> position = worldPosition.To<FLU>();
+            Vector3<FLU> forward = (worldRotation * Vector3.forward).To<FLU>();
+
             return new
             {
                 x = position.x,
                 y = position.y,
                 z = position.z,
-                yaw = YawOf(transform)
+                yaw = Mathf.Atan2(forward.y, forward.x)
             };
         }
 
@@ -748,9 +674,9 @@ namespace RobotSNAP.ROS
         }
 
         /// <summary>
-        /// One entry per simulated human, in the ROS frame. The typed people stream carries the same
-        /// information as a real message; this list is what makes the JSON snapshot readable on its own,
-        /// by a client that has no message definitions at all.
+        /// One entry per simulated human, in the ROS frame: the same pose and twist the robot-centric
+        /// <c>/simulation/agents</c> stream reads from the other side, plus what the crowd makes of the
+        /// agent - its goal, its group and the controller that drives it.
         /// </summary>
         private static object HumansJson(HumanAgent[] humans)
         {
@@ -782,13 +708,12 @@ namespace RobotSNAP.ROS
         }
 
         /// <summary>
-        /// Heading of a transform around the ROS z axis, read from its forward vector rather than from the
-        /// Unity euler angles, whose yaw is expressed around the Unity up axis and would come out negated.
+        /// Unix epoch seconds, UTC and fractional, so a client can date a snapshot against its own clock
+        /// instead of assuming the message arrived when it was sent.
         /// </summary>
-        private static float YawOf(Transform transform)
+        private static double NowUnixSeconds()
         {
-            Vector3<FLU> forward = (transform.rotation * Vector3.forward).To<FLU>();
-            return Mathf.Atan2(forward.y, forward.x);
+            return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
         }
 
         #endregion
@@ -800,9 +725,8 @@ namespace RobotSNAP.ROS
         {
             Debug.Log($"[{name}] Configuration:\n" +
                       $"  Prefix: '{_prefix}'\n" +
-                      $"  Scene info: {_sceneInfoTopicName}\n" +
                       $"  Map: {_mapTopicName}\n" +
-                      $"  People: {_peopleTopicName}\n" +
+                      $"  Reset done: {_resetDoneTopicName}\n" +
                       $"  State: {_stateTopicName}\n" +
                       $"  Grid: {_mapWidth}x{_mapHeight} at {_mapResolution} m/cell\n" +
                       $"  ROS connection: {(_ros != null ? "OK" : "Missing")}\n" +

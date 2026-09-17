@@ -1,17 +1,20 @@
 using System.Collections.Generic;
-using UnityEngine;
-using Unity.Robotics.ROSTCPConnector.ROSGeometry;
-using RosMessageTypes.Std;
-using RosMessageTypes.Geometry;
-using RobotSNAP.ROS;
 using Newtonsoft.Json;
+using RobotSNAP.ROS;
+using RosMessageTypes.Std;
+using Unity.Robotics.ROSTCPConnector.ROSGeometry;
+using UnityEngine;
 
 namespace RobotSNAP
 {
     /// <summary>
-    /// ROS bridge for AgentDetector - publishes detection results as JSON strings
-    /// on std_msgs/String topics, and PoseArray for poses.
-    /// No custom ROS messages are used.
+    /// ROS bridge for AgentDetector: every agent the detector tracks, as one JSON snapshot on
+    /// <c>/simulation/agents</c>.
+    ///
+    /// The frame of the snapshot is the robot this component lives on, not the world: each agent is
+    /// brought back into the robot frame with InverseTransformPoint and InverseTransformDirection, then
+    /// converted to the ROS axis convention (x forward, y left, z up), which is what the "frame" field of
+    /// the message names. No custom ROS message is used.
     /// </summary>
     [RequireComponent(typeof(AgentDetector))]
     public class AgentDetectorROS : MonoBehaviour
@@ -19,46 +22,41 @@ namespace RobotSNAP
         [Header("ROS Configuration")]
         [SerializeField] private bool autoDetectPrefix = true;
         [SerializeField] private string customPrefix = "";
-        
+
         [Header("Topics")]
-        [SerializeField] private string localAgentsTopic = "/agents";
-        [SerializeField] private string globalAgentsTopic = "/agents/global";
-        [SerializeField] private string poseArrayTopic = "/agents/pose";
-        
+        [Tooltip("Every agent the detector tracks, with the visibility it computed for it.")]
+        [SerializeField] private string agentsTopic = RobotSNAPTopics.SimulationAgents;
+
         [Header("Publishing")]
         [SerializeField] private float publishFrequencyHz = 10f;
-        [SerializeField] private int numberOfClosestAgents = 5;
-        [SerializeField] private string frameId = "base_link";
-        
+
         [Header("Debug")]
         [SerializeField] private bool logPublishEvents = false;
-        
+
         [SerializeField] private EnvROS _envROS;
         private AgentDetector _detector;
-        private string _fullLocalTopic;
-        private string _fullGlobalTopic;
-        private string _fullPoseArrayTopic;
+        private string _fullAgentsTopic;
         private float _publishInterval;
         private float _lastPublishTime;
-        
+
         #region Unity Lifecycle
-        
+
         private void Start() => Initialize();
-        
+
         private void Update()
         {
             if (_envROS == null || !_envROS.IsInitialized) return;
             if (Time.time >= _lastPublishTime + _publishInterval)
             {
-                PublishAll();
+                PublishAgents();
                 _lastPublishTime = Time.time;
             }
         }
-        
+
         #endregion
-        
+
         #region Initialization
-        
+
         public void Initialize()
         {
             _detector = GetComponent<AgentDetector>();
@@ -68,7 +66,7 @@ namespace RobotSNAP
                 enabled = false;
                 return;
             }
-            
+
             _envROS ??= FindAnyObjectByType<EnvROS>();
             if (_envROS == null)
             {
@@ -76,146 +74,97 @@ namespace RobotSNAP
                 enabled = false;
                 return;
             }
-            
+
             string prefix = autoDetectPrefix ? _envROS.Prefix : customPrefix;
-            _fullLocalTopic = string.IsNullOrEmpty(prefix) ? localAgentsTopic : $"/{prefix}{localAgentsTopic}";
-            _fullGlobalTopic = string.IsNullOrEmpty(prefix) ? globalAgentsTopic : $"/{prefix}{globalAgentsTopic}";
-            _fullPoseArrayTopic = string.IsNullOrEmpty(prefix) ? poseArrayTopic : $"/{prefix}{poseArrayTopic}";
-            
-            _envROS.RegisterPublisher<StringMsg>(_fullLocalTopic);
-            _envROS.RegisterPublisher<StringMsg>(_fullGlobalTopic);
-            _envROS.RegisterPublisher<PoseArrayMsg>(_fullPoseArrayTopic);
-            
+            // Joined by the topic table. This line used to concatenate the prefix and the name and rely on
+            // the leading slash of the configured topic to separate them, so a name configured without one
+            // came out as `/myenvsimulation/agents`.
+            _fullAgentsTopic = RobotSNAPTopics.Full(agentsTopic, prefix);
+
+            _envROS.RegisterPublisher<StringMsg>(_fullAgentsTopic);
+
             _publishInterval = 1f / publishFrequencyHz;
-            
+
             if (logPublishEvents)
             {
                 Debug.Log($"[{name}] Publishing JSON strings to:\n" +
-                          $"  Local: {_fullLocalTopic}\n" +
-                          $"  Global: {_fullGlobalTopic}\n" +
-                          $"  PoseArray: {_fullPoseArrayTopic}\n" +
+                          $"  Agents: {_fullAgentsTopic}\n" +
                           $"  Frequency: {publishFrequencyHz} Hz");
             }
         }
-        
+
         #endregion
-        
+
         #region Publishing
-        
-        private void PublishAll()
+
+        /// <summary>
+        /// Every active agent the detector tracks, in the frame of this robot. The visibility flag is the
+        /// one the detector computed, so a client sees the agents the robot cannot: filtering by distance
+        /// and by line of sight is the detector's business, not the stream's.
+        /// </summary>
+        private void PublishAgents()
         {
             if (_detector == null) return;
-            
-            var closestAgents = _detector.GetClosestAgents(numberOfClosestAgents);
-            Debug.Log($"[{name}] Publishing {closestAgents.Count} closest agents and {_detector.AgentsView.Count} total agents");
-            var allAgents = GetVisibleAgentsWithStatus();
-            
-            PublishLocalAgentsAsJson(closestAgents);
-            PublishGlobalAgentsAsJson(allAgents);
-            PublishPoseArray(closestAgents);
-        }
-        
-        private void PublishLocalAgentsAsJson(List<GameObject> agents)
-        {
-            var jsonArray = new List<string>();
-            foreach (var agent in agents)
+
+            var agents = new List<object>();
+            foreach ((GameObject agent, bool visible) in VisibleAgents())
             {
                 if (agent == null) continue;
-                jsonArray.Add(SerializeAgentToJson(agent, visible: true));
+                agents.Add(AgentJson(agent, visible));
             }
-            PublishJsonArray(_fullLocalTopic, jsonArray);
-        }
-        
-        private void PublishGlobalAgentsAsJson(List<(GameObject agent, bool visible)> agentsWithStatus)
-        {
-            var jsonArray = new List<string>();
-            foreach (var (agent, visible) in agentsWithStatus)
+
+            var payload = new Dictionary<string, object>
             {
-                if (agent == null) continue;
-                jsonArray.Add(SerializeAgentToJson(agent, visible));
-            }
-            PublishJsonArray(_fullGlobalTopic, jsonArray);
-        }
-        
-        private string SerializeAgentToJson(GameObject agent, bool visible)
-        {
-            // Position relative
-            Vector3 relPos = transform.InverseTransformPoint(agent.transform.position);
-            var fluPos = relPos.To<FLU>();     // type: Vector3<FLU>
-            
-            // Vélocité relative
-            Vector3 relVel = Vector3.zero;
-            var rb = agent.GetComponent<Rigidbody>();
-            if (rb != null)
-                relVel = transform.InverseTransformDirection(rb.linearVelocity);
-            var fluVel = relVel.To<FLU>();     // type: Vector3<FLU>
-            
-            string id = agent.GetEntityId().ToString();
-            
-            var jsonObj = new Dictionary<string, object>
-            {
-                ["id"] = id,
-                ["visible"] = visible,
-                ["position"] = new Dictionary<string, float>
-                {
-                    ["x"] = fluPos.x,
-                    ["y"] = fluPos.y,
-                    ["z"] = fluPos.z
-                },
-                ["velocity"] = new Dictionary<string, float>
-                {
-                    ["x"] = fluVel.x,
-                    ["y"] = fluVel.y,
-                    ["z"] = fluVel.z
-                }
+                ["agents"] = agents,
+                ["frame"] = "robot"
             };
-            
-            return JsonConvert.SerializeObject(jsonObj);
-        }
-        
-        private void PublishJsonArray(string topic, List<string> jsonObjects)
-        {
-            string jsonString = "[" + string.Join(",", jsonObjects) + "]";
-            var msg = new StringMsg { data = jsonString };
-            _envROS.Publish(topic, msg);
-            
+
+            string json = JsonConvert.SerializeObject(payload);
+            _envROS.Publish(_fullAgentsTopic, new StringMsg { data = json });
+
             if (logPublishEvents)
             {
-                Debug.Log($"[{name}] Published {jsonObjects.Count} agents as JSON on {topic}");
+                Debug.Log($"[{name}] Published {agents.Count} agents as JSON on {_fullAgentsTopic}");
             }
         }
-        
-        private void PublishPoseArray(List<GameObject> agents)
+
+        /// <summary>
+        /// One agent, in the frame of this robot: position and velocity are both read relative to the
+        /// robot transform and then expressed in the ROS axes, so x is forward for the robot and y is its
+        /// left. An agent without a rigidbody has no velocity to report and goes out at rest.
+        /// </summary>
+        private object AgentJson(GameObject agent, bool visible)
         {
-            var poseArray = new PoseArrayMsg();
-            poseArray.header.frame_id = GetFullFrameId();
-            ROSTimeUtils.UpdateHeader(poseArray.header);
-            
-            poseArray.poses = new PoseMsg[agents.Count];
-            
-            for (int i = 0; i < agents.Count; i++)
+            Vector3<FLU> position = transform.InverseTransformPoint(agent.transform.position).To<FLU>();
+
+            Vector3 relativeVelocity = Vector3.zero;
+            Rigidbody body = agent.GetComponent<Rigidbody>();
+            if (body != null)
+                relativeVelocity = transform.InverseTransformDirection(body.linearVelocity);
+            Vector3<FLU> velocity = relativeVelocity.To<FLU>();
+
+            return new Dictionary<string, object>
             {
-                var agent = agents[i];
-                if (agent == null) continue;
-                
-                Vector3 relPos = transform.InverseTransformPoint(agent.transform.position);
-                Quaternion relRot = Quaternion.Inverse(transform.rotation) * agent.transform.rotation;
-                
-                poseArray.poses[i] = new PoseMsg
-                {
-                    position = relPos.To<FLU>(),
-                    orientation = relRot.To<FLU>()
-                };
-            }
-            
-            _envROS.Publish(_fullPoseArrayTopic, poseArray);
+                ["id"] = agent.GetEntityId().ToString(),
+                ["x"] = position.x,
+                ["y"] = position.y,
+                ["z"] = position.z,
+                ["vx"] = velocity.x,
+                ["vy"] = velocity.y,
+                ["vz"] = velocity.z,
+                ["visible"] = visible
+            };
         }
-        
-        private List<(GameObject agent, bool visible)> GetVisibleAgentsWithStatus()
+
+        /// <summary>
+        /// Agents the detector tracks that are still simulated. A pooled agent is inactive and would
+        /// otherwise be published as an agent standing at the pool's origin.
+        /// </summary>
+        private List<(GameObject agent, bool visible)> VisibleAgents()
         {
             var result = new List<(GameObject, bool)>();
             if (_detector.AgentsView == null) return result;
-            
+
             foreach (var kvp in _detector.AgentsView)
             {
                 if (kvp.Key != null && kvp.Key.activeSelf)
@@ -223,34 +172,25 @@ namespace RobotSNAP
             }
             return result;
         }
-        
-        private string GetFullFrameId()
-        {
-            string prefix = autoDetectPrefix ? _envROS.Prefix : customPrefix;
-            return string.IsNullOrEmpty(prefix) ? frameId : $"/{prefix}{frameId}";
-        }
-        
+
         #endregion
-        
+
         #region Editor Utilities
-        
+
         [ContextMenu("Force Publish")]
-        private void EditorForcePublish() => PublishAll();
-        
+        private void EditorForcePublish() => PublishAgents();
+
         [ContextMenu("Log Configuration")]
         private void EditorLogConfiguration()
         {
             Debug.Log($"[{name}] Configuration:\n" +
-                      $"  Local Topic: {_fullLocalTopic}\n" +
-                      $"  Global Topic: {_fullGlobalTopic}\n" +
-                      $"  PoseArray Topic: {_fullPoseArrayTopic}\n" +
+                      $"  Agents Topic: {_fullAgentsTopic}\n" +
                       $"  Frequency: {publishFrequencyHz} Hz\n" +
-                      $"  Closest Agents: {numberOfClosestAgents}\n" +
-                      $"  Frame ID: {GetFullFrameId()}\n" +
+                      $"  Frame: robot\n" +
                       $"  Detector: {(_detector != null ? "OK" : "Missing")}\n" +
                       $"  EnvROS: {(_envROS != null ? "OK" : "Missing")}");
         }
-        
+
         #endregion
     }
 }

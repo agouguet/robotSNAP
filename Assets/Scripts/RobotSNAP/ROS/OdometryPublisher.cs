@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Robotics.ROSTCPConnector.ROSGeometry;
+using RobotSNAP.Agents;
 using RobotSNAP.Core;
 
 namespace RobotSNAP.ROS
@@ -12,7 +13,7 @@ namespace RobotSNAP.ROS
         [Header("ROS Configuration")]
         [SerializeField] private bool autoDetectPrefix = true;
         [SerializeField] private string customPrefix = "";
-        [SerializeField] private string topicName = "/odom";
+        [SerializeField] private string topicName = RobotSNAPTopics.Odom;
         [SerializeField] private float publishFrequencyHz = 10f;
         
         [Header("References")]
@@ -33,6 +34,9 @@ namespace RobotSNAP.ROS
         [SerializeField] private EnvROS _envROS;
         private string _fullTopicName;
         private float _publishInterval;
+        // The robot moves through an ArticulationBody rather than a Rigidbody, so this is where the twist
+        // comes from when there is no rigidbody to read.
+        private Robot _robot;
         private RosMessageTypes.Nav.OdometryMsg _message;
         private double[] _poseCovariance;
         private double[] _twistCovariance;
@@ -60,8 +64,8 @@ namespace RobotSNAP.ROS
                 prefix = customPrefix;
             }
             
-            // Build full topic name
-            _fullTopicName = string.IsNullOrEmpty(prefix) ? topicName : $"/{prefix}{topicName}";
+            // Build full topic name, with the one rule the whole project joins names with.
+            _fullTopicName = RobotSNAPTopics.Full(topicName, prefix);
             
             // Register publisher
             _envROS.RegisterPublisher<RosMessageTypes.Nav.OdometryMsg>(_fullTopicName);
@@ -70,9 +74,16 @@ namespace RobotSNAP.ROS
             if (robotRigidbody == null)
             {
                 robotRigidbody = GetComponent<Rigidbody>();
-                if (robotRigidbody == null)
+            }
+
+            if (robotRigidbody == null)
+            {
+                _robot = GetComponentInParent<Robot>();
+                if (_robot == null)
                 {
-                    Debug.LogWarning($"[{name}] No Rigidbody found, velocity will be zero");
+                    Debug.LogWarning(
+                        $"[{name}] Neither a Rigidbody nor a Robot to read a velocity from: the odometry " +
+                        "twist will stay at zero");
                 }
             }
             
@@ -150,16 +161,20 @@ namespace RobotSNAP.ROS
             
             // Update header timestamp
             ROSTimeUtils.UpdateHeader(_message.header);
-            _message.header.frame_id = string.IsNullOrEmpty(_envROS.Prefix) ? frameId : $"/{_envROS.Prefix}{frameId}";
+            _message.header.frame_id = RobotSNAPTopics.Full(frameId, _envROS.Prefix);
             
-            // Position and orientation
-            Vector3 position = robotTransform.localPosition;
+            // Position and orientation, in the world frame the scenario and the occupancy grid use: the
+            // local position this used to publish only agreed with them while the robot happened to be a
+            // child of an object sitting at the origin.
+            Vector3 position = robotTransform.position;
             Quaternion rotation = robotTransform.rotation;
             
             _message.pose.pose.position = Util.Geometry.GetGeometryPoint(position.To<FLU>());
             _message.pose.pose.orientation = Util.Geometry.GetGeometryQuaternion(rotation.To<FLU>());
             
-            // Velocity (if Rigidbody is available)
+            // Velocity. This robot moves through an ArticulationBody, not a Rigidbody, so the rigidbody
+            // branch used to report a still robot at all times; the agent is the fallback that actually
+            // knows how fast it is going.
             if (robotRigidbody != null)
             {
                 // Linear velocity in local frame
@@ -170,6 +185,15 @@ namespace RobotSNAP.ROS
                 // Angular velocity in local frame
                 Vector3 angularVelocityWorld = robotRigidbody.angularVelocity;
                 Vector3 angularVelocityLocal = robotTransform.InverseTransformDirection(angularVelocityWorld);
+                _message.twist.twist.angular = Util.Geometry.GetGeometryVector3(angularVelocityLocal.To<FLU>());
+            }
+            else if (_robot != null)
+            {
+                Vector3 linearVelocityLocal = robotTransform.InverseTransformDirection(_robot.Velocity);
+                _message.twist.twist.linear = Util.Geometry.GetGeometryVector3(linearVelocityLocal.To<FLU>());
+
+                Vector3 yawRateWorld = Vector3.up * _robot.AngularSpeed;
+                Vector3 angularVelocityLocal = robotTransform.InverseTransformDirection(yawRateWorld);
                 _message.twist.twist.angular = Util.Geometry.GetGeometryVector3(angularVelocityLocal.To<FLU>());
             }
             else

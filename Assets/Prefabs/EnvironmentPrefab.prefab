@@ -536,17 +536,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f2215113523ce89ac985ceb09004c1a6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  rosServiceName: ros
-  robotName: robot
   logPublishEvents: 0
   autoInitialize: 1
-  resetDoneTopic: /reset_done
-  globalPathTopic: /global_path
-  localGoalFromRobotTopic: /local_goal_from_robot
-  localGoalFromMapTopic: /local_goal_from_map
-  mapTopic: /map
-  resetService: /unity/reset
-  playService: /unity/play
+  publishSimulationState: 1
+  acceptRemoteControl: 1
 --- !u!1 &7742822964801457941
 GameObject:
   m_ObjectHideFlags: 0

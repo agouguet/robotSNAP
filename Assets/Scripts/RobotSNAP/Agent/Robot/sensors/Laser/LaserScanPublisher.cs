@@ -9,7 +9,7 @@ namespace RobotSNAP
         [Header("ROS Configuration")]
         [SerializeField] private bool autoDetectPrefix = true;
         [SerializeField] private string customPrefix = "";
-        [SerializeField] private string laserTopic = "/scan";
+        [SerializeField] private string laserTopic = RobotSNAPTopics.Scan;
         [SerializeField] private float publishFrequencyHz = 10f;
         
         [Header("Frame ID")]
@@ -56,8 +56,9 @@ namespace RobotSNAP
                 prefix = customPrefix;
             }
             
-            // Build full topic name
-            _fullTopicName = string.IsNullOrEmpty(prefix) ? laserTopic : $"/{prefix}{laserTopic}";
+            // The full name is built by the one topic table of the project, which joins the prefix with a
+            // separator: a prefix used to turn `/scan` into `/myenvscan`, which no client could guess.
+            _fullTopicName = RobotSNAPTopics.Full(laserTopic, prefix);
             
             // Get laser scanner component
             _laserScanner = GetComponent<LaserScanner>();
@@ -88,7 +89,7 @@ namespace RobotSNAP
         /// </summary>
         private void InitializeMessage(string prefix)
         {
-            string fullFrameId = string.IsNullOrEmpty(prefix) ? frameId : $"/{prefix}{frameId}";
+            string fullFrameId = RobotSNAPTopics.Full(frameId, prefix);
             _message = _laserScanner.InitializeMessage(fullFrameId);
             
             if (logPublishEvents)

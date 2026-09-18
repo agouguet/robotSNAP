@@ -43,6 +43,9 @@ namespace RobotSNAP.Agents
         /// <summary>The type this robot drives as, or the default one before a roster applied one.</summary>
         public RobotProfile Profile { get; private set; }
 
+        /// <summary>The body picture of this robot's type, or null when it drives as the prefab it came from.</summary>
+        public GameObject Visual { get; private set; }
+
         // ==================== Unity Lifecycle ====================
         private void Awake()
         {
@@ -61,6 +64,7 @@ namespace RobotSNAP.Agents
             if (_hasGoal)
                 UpdateScenarioMovement();
 
+            SyncVisual();
             OnMovementUpdated?.Invoke(Position, Rotation);
         }
 
@@ -142,8 +146,67 @@ namespace RobotSNAP.Agents
             ApplyBodyColor(profile.BodyColor);
         }
 
+        /// <summary>
+        /// Gives this robot the body of its type.
+        ///
+        /// The body is a picture and nothing else: the articulation, the wheels, the sensors and the streams
+        /// stay the ones the prefab was built and proven with, so a scenario that drives a Husky drives
+        /// exactly as well as one that drives the base - it simply looks like a Husky. The picture is dropped
+        /// on the ground the robot stands on rather than on the base itself, whose origin sits above the
+        /// wheels, so a body authored from y = 0 upwards lands with its wheels on the floor.
+        /// </summary>
+        public void ApplyVisual(GameObject prefab)
+        {
+            if (prefab == null || Visual != null)
+                return;
+
+            Visual = Instantiate(prefab, RobotTransform);
+            Visual.name = "Body";
+            SyncVisual();
+
+            // The picture replaces the one of the prefab instead of doubling it: the two would otherwise
+            // stand in the same place, and the crowd would see both.
+            foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || renderer.transform.IsChildOf(Visual.transform))
+                    continue;
+
+                renderer.enabled = false;
+            }
+        }
+
+        /// <summary>
+        /// Keeps the body under the base it belongs to: it follows where the robot drives and which way it
+        /// faces, and it stays on the plane the robot stands on.
+        ///
+        /// The body is not simply parented and left alone because the origin of a mobile base sits above its
+        /// wheels, and the base moves up and down as the physics settles it: a body pinned to that origin
+        /// would float or sink by however much the articulation happened to have risen when it was built.
+        /// The ground of this project is the plane y = 0, which is also where the root of every robot is
+        /// pinned.
+        /// </summary>
+        private void SyncVisual()
+        {
+            if (Visual == null)
+                return;
+
+            Transform reference = RobotTransform;
+            if (reference == null)
+                return;
+
+            Vector3 position = reference.position;
+            Visual.transform.SetPositionAndRotation(
+                new Vector3(position.x, 0f, position.z),
+                Quaternion.Euler(0f, reference.eulerAngles.y, 0f));
+        }
+
         private void ApplyBodyScale(float scale)
         {
+            // A robot that was given the body of its type already looks like that type: resizing the picture
+            // underneath it would move a wheel off its own rim.
+            if (Visual != null)
+                return;
+
             // Only the picture is resized, never the body. An articulation that is scaled keeps the joints it
             // was built with, its collision volume stops matching the space the planner reserved for it, and a
             // base teleported to the ground ends up buried in it. The bodies of every type therefore stay the
@@ -292,6 +355,11 @@ namespace RobotSNAP.Agents
             foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
             {
                 if (renderer == null)
+                    continue;
+
+                // A body of its own already carries the colours of its type, trim and sensor included: tinting
+                // it here would flatten the whole robot into one flat plate of the profile colour.
+                if (Visual != null && renderer.transform.IsChildOf(Visual.transform))
                     continue;
 
                 renderer.GetPropertyBlock(block);

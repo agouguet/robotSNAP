@@ -43,6 +43,17 @@ namespace RobotSNAP.Agents
         [Tooltip("Body per type, for a project that ships more than one robot.")]
         [SerializeField] private List<Body> _bodies = new List<Body>();
 
+        [Tooltip("Body picture per type, for a project whose robots share one physical base. A type with no " +
+                 "entry here falls back to Resources/RobotBodies/<type id>, and then to the picture of the base.")]
+        [SerializeField] private List<Body> _visuals = new List<Body>();
+
+        /// <summary>
+        /// Folder a body picture is looked for under when the project did not pin one by hand. The builder of
+        /// the bodies writes them there, so a project that ships several types works without wiring a single
+        /// reference - and a project that wants its own models pins them in <see cref="_visuals"/> instead.
+        /// </summary>
+        private const string VisualResourceFolder = "RobotBodies";
+
         [Header("Debug")]
         [SerializeField] private bool _logEvents = false;
 
@@ -110,19 +121,7 @@ namespace RobotSNAP.Agents
         /// <summary>Body to build a type from: its own if the project declared one, the default otherwise.</summary>
         public GameObject PrefabFor(string typeId)
         {
-            if (_bodies != null)
-            {
-                foreach (Body body in _bodies)
-                {
-                    if (body == null || body.Prefab == null || string.IsNullOrWhiteSpace(body.TypeId))
-                        continue;
-
-                    if (string.Equals(body.TypeId.Trim(), typeId, System.StringComparison.OrdinalIgnoreCase))
-                        return body.Prefab;
-                }
-            }
-
-            return _defaultPrefab;
+            return FindIn(_bodies, typeId) ?? _defaultPrefab;
         }
 
         /// <summary>The default body, so a caller can hand the environment's prefab over without one.</summary>
@@ -310,12 +309,48 @@ namespace RobotSNAP.Agents
                 identity = instance.AddComponent<RobotIdentity>();
 
             identity.Bind(id, IsPrimary(id), profile);
+            // The picture first: the profile then knows not to resize a body that already has the size of its
+            // own type, and not to tint one that already carries the colours of its type.
+            robot.ApplyVisual(VisualFor(profile.Id));
             robot.ApplyProfile(profile);
 
             if (log)
                 Debug.Log($"[RobotRoster] Built {id} as {profile.DisplayName} (scale {profile.BodyScale:0.##}).");
 
             return new Slot { Id = id, TypeId = profile.Id, Robot = robot, Identity = identity };
+        }
+
+        /// <summary>
+        /// The picture of a robot type: the one the project pinned, the one the convention names, or nothing
+        /// at all - in which case the robot keeps the shape of the base it was built from.
+        /// </summary>
+        public GameObject VisualFor(string typeId)
+        {
+            GameObject pinned = FindIn(_visuals, typeId);
+            if (pinned != null)
+                return pinned;
+
+            if (string.IsNullOrWhiteSpace(typeId) || typeId == RobotProfiles.DefaultId)
+                return null;
+
+            return Resources.Load<GameObject>($"{VisualResourceFolder}/{typeId}");
+        }
+
+        private static GameObject FindIn(List<Body> bodies, string typeId)
+        {
+            if (bodies == null || string.IsNullOrWhiteSpace(typeId))
+                return null;
+
+            foreach (Body body in bodies)
+            {
+                if (body == null || body.Prefab == null || string.IsNullOrWhiteSpace(body.TypeId))
+                    continue;
+
+                if (string.Equals(body.TypeId.Trim(), typeId, System.StringComparison.OrdinalIgnoreCase))
+                    return body.Prefab;
+            }
+
+            return null;
         }
 
         private void Place(

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using RobotSNAP.CameraControl;
 using RobotSNAP.Core;
 using RobotSNAP.ROS;
 using RobotSNAP.Agents;
@@ -11,6 +12,10 @@ namespace RobotSNAP
         [Header("Control Mode")]
         [SerializeField] private ControlMode controlMode = ControlMode.Keyboard;
         [SerializeField] private KeyCode toggleModeKey = KeyCode.M;
+
+        [Tooltip("When set, the keys drive this robot only while the simulation view has it selected. " +
+                 "Turn it off for a scene with a single robot and no agent list to select from.")]
+        [SerializeField] private bool requireSelection = true;
 
         [Header("Keyboard Settings (Arrow Keys)")]
         [SerializeField] private float maxLinearSpeed = 2f;
@@ -39,6 +44,12 @@ namespace RobotSNAP
         /// </summary>
         private readonly List<string> _fullCmdVelTopics = new List<string>(2);
         private float _lastRosCommandTime;
+        /// <summary>What the keys are asking for, kept apart from what a client asks for.</summary>
+        private float _keyLinear;
+        private float _keyAngular;
+        /// <summary>What the last velocity message asked for.</summary>
+        private float _rosLinear;
+        private float _rosAngular;
         private float _targetLinear;
         private float _targetAngular;
         private bool _rosSubscribed;
@@ -50,6 +61,16 @@ namespace RobotSNAP
         /// always driven from outside; the moment a scenario drives several robots, all of them stand still.
         /// </summary>
         private bool _keyboardDriving;
+
+        /// <summary>
+        /// True while the last command given to this robot is still the one it should obey. The wheels keep the
+        /// command they were handed until another arrives, so the step that has no command left has to say so
+        /// once - without this a tap on the forward key left the robot walking for the rest of the session.
+        /// </summary>
+        private bool _driving;
+
+        /// <summary>The simulation view, which owns the selection. Looked up once, on the first frame it is needed.</summary>
+        private CameraController _camera;
 
         // Détection du changement d'état de pause
         private bool _wasPaused = false;
@@ -92,7 +113,12 @@ namespace RobotSNAP
 
             if (controlMode == ControlMode.Scenario) return;
             if (controlMode == ControlMode.Keyboard || controlMode == ControlMode.Hybrid)
-                HandleKeyboardInput();
+            {
+                if (IsSelectedForControl())
+                    HandleKeyboardInput();
+                else
+                    ReleaseKeyboard();
+            }
         }
 
         private void FixedUpdate()
@@ -108,24 +134,112 @@ namespace RobotSNAP
 
             if (controlMode == ControlMode.Scenario) return;
 
-            if (controlMode == ControlMode.Hybrid && Time.time - _lastRosCommandTime > rosCommandTimeout)
+            if (controlMode == ControlMode.Hybrid && Time.time - _lastRosCommandTime > rosCommandTimeout &&
+                !_keyboardDriving && showDebugInfo && Time.frameCount % 60 == 0)
+                Debug.Log("[RobotInputController] ROS timeout, fallback to keyboard");
+
+            float linear, angular;
+            if (!TryResolveCommand(out linear, out angular))
             {
-                if (showDebugInfo && Time.frameCount % 60 == 0)
-                    Debug.Log("[RobotInputController] ROS timeout, fallback to keyboard");
-                HandleKeyboardInput();
+                // Nobody is talking to this robot any more, and a robot nobody talks to stands still: letting
+                // go of a key, or a client that stops publishing, has to take the command back rather than
+                // leave the wheels turning on the last one.
+                if (_driving)
+                {
+                    _driving = false;
+                    _robot.Stop();
+                }
+
+                return;
             }
 
-            // Keyboard mode with no key held: the scenario route of this robot is what drives it.
-            if (controlMode == ControlMode.Keyboard && !_keyboardDriving)
-                return;
-
-            // Hybrid mode, client still talking and no key held: the client drives.
-            if (controlMode == ControlMode.Hybrid && !_keyboardDriving &&
-                Time.time - _lastRosCommandTime <= rosCommandTimeout)
-                return;
-
             // Appliquer la vitesse au robot (les valeurs sont conservées)
-            _robot.SetVelocity(_targetLinear, _targetAngular);
+            _driving = true;
+            _targetLinear = linear;
+            _targetAngular = angular;
+            _robot.SetVelocity(linear, angular);
+        }
+
+        /// <summary>
+        /// The velocity this robot should be driving at, or false when nothing is asking it to move.
+        ///
+        /// The hand and the client are read separately because they die differently: a key is released, a
+        /// publisher simply falls silent, and a third party that published once should not hold the robot for
+        /// the rest of the run. When both are talking the hand wins, which is what an operator reaching for the
+        /// keys expects, and it means a message no longer overwrites the keys the moment they are released.
+        /// </summary>
+        private bool TryResolveCommand(out float linear, out float angular)
+        {
+            bool clientTalking = Time.time - _lastRosCommandTime <= rosCommandTimeout;
+            linear = 0f;
+            angular = 0f;
+
+            switch (controlMode)
+            {
+                case ControlMode.Keyboard:
+                    if (!_keyboardDriving)
+                        return false;
+                    linear = _keyLinear;
+                    angular = _keyAngular;
+                    return true;
+
+                case ControlMode.ROS:
+                    if (!clientTalking)
+                        return false;
+                    linear = _rosLinear;
+                    angular = _rosAngular;
+                    return true;
+
+                case ControlMode.Hybrid:
+                    if (_keyboardDriving)
+                    {
+                        linear = _keyLinear;
+                        angular = _keyAngular;
+                        return true;
+                    }
+
+                    if (!clientTalking)
+                        return false;
+
+                    linear = _rosLinear;
+                    angular = _rosAngular;
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// True when the keys pressed in this frame belong to this robot. Every robot of a scenario carries an
+        /// input controller and every one of them reads the same keys, so without a selection the arrows drove
+        /// the whole fleet at once; the robot the simulation view is on is the one that answers to them.
+        /// </summary>
+        private bool IsSelectedForControl()
+        {
+            if (!requireSelection)
+                return true;
+
+            _camera ??= FindAnyObjectByType<CameraController>();
+            if (_camera == null)
+                return true;
+
+            Transform target = _camera.GetCurrentFollowTarget();
+            if (target == null)
+                return false;
+
+            return target.GetComponentInParent<Robot>() == _robot;
+        }
+
+        /// <summary>Drops whatever the keys were asking for, so the robot comes to a stop on the next step.</summary>
+        private void ReleaseKeyboard()
+        {
+            if (!_keyboardDriving && Mathf.Approximately(_targetLinear, 0f) && Mathf.Approximately(_targetAngular, 0f))
+                return;
+
+            _keyboardDriving = false;
+            _keyLinear = 0f;
+            _keyAngular = 0f;
         }
 
         private void SubscribeToROS()
@@ -153,8 +267,8 @@ namespace RobotSNAP
             _lastRosCommandTime = Time.time;
             if (controlMode == ControlMode.ROS || controlMode == ControlMode.Hybrid)
             {
-                _targetLinear = Mathf.Clamp((float)msg.linear.x, -maxLinearSpeed, maxLinearSpeed);
-                _targetAngular = Mathf.Clamp(-(float)msg.angular.z, -maxAngularSpeed, maxAngularSpeed);
+                _rosLinear = Mathf.Clamp((float)msg.linear.x, -maxLinearSpeed, maxLinearSpeed);
+                _rosAngular = Mathf.Clamp(-(float)msg.angular.z, -maxAngularSpeed, maxAngularSpeed);
             }
         }
 
@@ -166,11 +280,11 @@ namespace RobotSNAP
             if (Input.GetKey(leftKey)) angular = maxAngularSpeed;
             else if (Input.GetKey(rightKey)) angular = -maxAngularSpeed;
             if (Input.GetKeyDown(stopKey)) { linear = 0f; angular = 0f; }
-            _targetLinear = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed);
-            _targetAngular = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
+            _keyLinear = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed);
+            _keyAngular = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
 
             // The hand takes this robot away from the route it was given, so the two never steer it at once.
-            _keyboardDriving = Mathf.Abs(_targetLinear) > 0.01f || Mathf.Abs(_targetAngular) > 0.01f;
+            _keyboardDriving = Mathf.Abs(_keyLinear) > 0.01f || Mathf.Abs(_keyAngular) > 0.01f;
             if (_keyboardDriving)
                 _robot.ClearGoal();
         }
@@ -180,7 +294,15 @@ namespace RobotSNAP
             controlMode = newMode;
             _targetLinear = 0f;
             _targetAngular = 0f;
+            _keyLinear = 0f;
+            _keyAngular = 0f;
+            _rosLinear = 0f;
+            _rosAngular = 0f;
             _keyboardDriving = false;
+            _driving = false;
+            // A mode change also takes the clock out of the client's hands: without this, switching into ROS
+            // mode within the timeout of a command published under the previous mode would drive on it.
+            _lastRosCommandTime = float.NegativeInfinity;
 
             // A robot handed to a client - or to the keyboard - stops walking the route the scenario gave
             // it: without this the scenario and the driver would steer it at the same time.
@@ -205,6 +327,13 @@ namespace RobotSNAP
         {
             _targetLinear = 0f;
             _targetAngular = 0f;
+            _keyLinear = 0f;
+            _keyAngular = 0f;
+            _rosLinear = 0f;
+            _rosAngular = 0f;
+            _keyboardDriving = false;
+            _driving = false;
+            _lastRosCommandTime = float.NegativeInfinity;
             _robot.Stop();
         }
 
@@ -212,8 +341,9 @@ namespace RobotSNAP
         {
             if (controlMode != ControlMode.Scenario)
             {
-                _targetLinear = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed);
-                _targetAngular = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
+                _rosLinear = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed);
+                _rosAngular = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
+                _lastRosCommandTime = Time.time;
             }
         }
 

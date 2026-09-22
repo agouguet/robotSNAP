@@ -10,27 +10,13 @@ scenario_info:
   - Corner
   - Corridor
   - Indoor
-  map: basic/corner
+  map: basic/crowd
   location: null
   dataset: null
   preview: corner.png
-  robot_type: TurtleBot4
+  robot_type: Kuri
   duration: 0
 points: 
-  start_robot: 
-    x: 9.48
-    y: 0
-    z: -0.12
-    yaw: -90
-    center: null
-    size: null
-  end_robot: 
-    x: 0
-    y: 0
-    z: -9.36
-    yaw: null
-    center: null
-    size: null
   spawn_zone: 
     x: null
     y: null
@@ -58,25 +44,42 @@ points:
       y: 1
       z: 1
   pedestrians_start: 
-    x: -0.83
+    x: -6.83
     y: 0
-    z: -9.31
+    z: -6.67
     yaw: null
     center: null
     size: null
   pedestrians_goal_1: 
-    x: 8.46
+    x: 6.58
     y: 0
-    z: -0.02
+    z: -6.71
     yaw: null
     center: null
     size: null
-robot: 
+  start_robot: 
+    x: 0
+    y: 0
+    z: 0
+    yaw: 0
+    center: null
+    size: null
+  end_robot: 
+    x: 2
+    y: 0
+    z: 0
+    yaw: null
+    center: null
+    size: null
+robots: 
+- id: robot_1
+  type: kuri
   start: start_robot
   goal: end_robot
   waypoints: null
   behavior: normal
-  speed: 1.2
+  speed: 1
+robot: null
 humans: 
 - id: pedestrians
   count: 1

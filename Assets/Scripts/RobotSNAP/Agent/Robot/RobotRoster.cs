@@ -28,31 +28,21 @@ namespace RobotSNAP.Agents
         [System.Serializable]
         public sealed class Body
         {
-            [Tooltip("Type id of RobotProfiles, such as turtlebot4 or husky.")]
+            [Tooltip("Type id of RobotProfiles, such as jackal or kuri.")]
             public string TypeId;
 
-            [Tooltip("Prefab instantiated for that type. Its Robot component is configured from the profile.")]
+            [Tooltip("Prefab instantiated for that type. It carries its own Robot, its own wheels and its own sensors.")]
             public GameObject Prefab;
         }
 
         [Header("Robot bodies")]
-        [Tooltip("Body used for a type that has no prefab of its own. The environment hands its own robot " +
-                 "prefab here, so a project with a single base keeps working.")]
+        [Tooltip("Body used for a type the catalogue does not know. The environment hands its own robot prefab " +
+                 "here, so a project with a single base keeps working.")]
         [SerializeField] private GameObject _defaultPrefab;
 
-        [Tooltip("Body per type, for a project that ships more than one robot.")]
+        [Tooltip("Body pinned per type, for a scene that wants to choose the prefab itself. Anything not " +
+                 "pinned here comes from the catalogue the editor tool writes.")]
         [SerializeField] private List<Body> _bodies = new List<Body>();
-
-        [Tooltip("Body picture per type, for a project whose robots share one physical base. A type with no " +
-                 "entry here falls back to Resources/RobotBodies/<type id>, and then to the picture of the base.")]
-        [SerializeField] private List<Body> _visuals = new List<Body>();
-
-        /// <summary>
-        /// Folder a body picture is looked for under when the project did not pin one by hand. The builder of
-        /// the bodies writes them there, so a project that ships several types works without wiring a single
-        /// reference - and a project that wants its own models pins them in <see cref="_visuals"/> instead.
-        /// </summary>
-        private const string VisualResourceFolder = "RobotBodies";
 
         [Header("Debug")]
         [SerializeField] private bool _logEvents = false;
@@ -83,8 +73,29 @@ namespace RobotSNAP.Agents
         private readonly Dictionary<float, OccupancyGrid> _walkablePerRadius = new Dictionary<float, OccupancyGrid>();
         private readonly List<float> _staleRadii = new List<float>();
 
+        /// <summary>
+        /// The catalogue the project ships, read on first use. It is an asset, so the lookup happens once per
+        /// roster rather than once per robot: several robots of several types are built in one application.
+        /// </summary>
+        private RobotCatalog _catalog;
+        private bool _catalogRead;
+
         /// <summary>The roster of the running environment, or null before one is created.</summary>
         public static RobotRoster Current { get; private set; }
+
+        private RobotCatalog Catalog
+        {
+            get
+            {
+                if (!_catalogRead)
+                {
+                    _catalog = RobotCatalog.Load();
+                    _catalogRead = true;
+                }
+
+                return _catalog;
+            }
+        }
 
         /// <summary>Number of robots currently in the scene.</summary>
         public int Count => _slots.Count;
@@ -118,10 +129,22 @@ namespace RobotSNAP.Agents
                 Current = null;
         }
 
-        /// <summary>Body to build a type from: its own if the project declared one, the default otherwise.</summary>
+        /// <summary>
+        /// Body to build a type from: the one pinned in the scene, the one the project catalogued for that
+        /// type, and the default body of the environment in that order.
+        ///
+        /// The catalogue is what makes a scenario's type name mean something: the roster is created at run
+        /// time, so it has nothing wired by hand, and it is the catalogue asset that says a "jackal" is the
+        /// Jackal prefab of this project. A type nobody catalogued still runs - as the base.
+        /// </summary>
         public GameObject PrefabFor(string typeId)
         {
-            return FindIn(_bodies, typeId) ?? _defaultPrefab;
+            GameObject pinned = FindIn(_bodies, typeId);
+            if (pinned != null)
+                return pinned;
+
+            GameObject catalogued = Catalog != null ? Catalog.PrefabFor(typeId) : null;
+            return catalogued != null ? catalogued : _defaultPrefab;
         }
 
         /// <summary>The default body, so a caller can hand the environment's prefab over without one.</summary>
@@ -309,31 +332,20 @@ namespace RobotSNAP.Agents
                 identity = instance.AddComponent<RobotIdentity>();
 
             identity.Bind(id, IsPrimary(id), profile);
-            // The picture first: the profile then knows not to resize a body that already has the size of its
-            // own type, and not to tint one that already carries the colours of its type.
-            robot.ApplyVisual(VisualFor(profile.Id));
+
+            // Where this body rests, read from the body itself: the wheels of a Freight touch the ground under
+            // its base link, those of a Jackal hang 6.5 cm below it. Measuring here, on a fresh instance,
+            // gives a real answer for every type - including one somebody adds later.
+            if (log)
+                Debug.Log($"[RobotRoster] {id} rests {robot.MeasureGroundOffset():0.####} m above its base link.");
+
             robot.ApplyProfile(profile);
 
             if (log)
-                Debug.Log($"[RobotRoster] Built {id} as {profile.DisplayName} (scale {profile.BodyScale:0.##}).");
+                Debug.Log($"[RobotRoster] Built {id} as {profile.DisplayName} (radius {profile.Radius:0.##} m, " +
+                          $"{profile.Mass:0.#} kg).");
 
             return new Slot { Id = id, TypeId = profile.Id, Robot = robot, Identity = identity };
-        }
-
-        /// <summary>
-        /// The picture of a robot type: the one the project pinned, the one the convention names, or nothing
-        /// at all - in which case the robot keeps the shape of the base it was built from.
-        /// </summary>
-        public GameObject VisualFor(string typeId)
-        {
-            GameObject pinned = FindIn(_visuals, typeId);
-            if (pinned != null)
-                return pinned;
-
-            if (string.IsNullOrWhiteSpace(typeId) || typeId == RobotProfiles.DefaultId)
-                return null;
-
-            return Resources.Load<GameObject>($"{VisualResourceFolder}/{typeId}");
         }
 
         private static GameObject FindIn(List<Body> bodies, string typeId)
@@ -371,10 +383,17 @@ namespace RobotSNAP.Agents
                 position = FitToFootprint(slot, position, config.StartRef, log);
                 slot.StartPosition = position;
                 robot.Reset();
-                robot.SetBaseLinkPose(position, rotation);
+
+                // The scenario says where the robot stands; it does not say how far its own base link floats
+                // above the floor. A body dropped with its base link on the ground plane sinks its wheels
+                // into the floor and gets pushed back out by the solver, so the pose is raised by what this
+                // body measured at build time.
+                Vector3 grounded = position + Vector3.up * robot.GroundOffset;
+                robot.SetBaseLinkPose(grounded, rotation);
 
                 if (log)
-                    Debug.Log($"[RobotRoster] {slot.Id} starts at {position}, yaw {rotation.eulerAngles.y:0.#}.");
+                    Debug.Log($"[RobotRoster] {slot.Id} starts at {position} " +
+                              $"(base link at {grounded.y:0.###} m), yaw {rotation.eulerAngles.y:0.#}.");
             }
 
             _route.Clear();

@@ -195,8 +195,8 @@ namespace RobotSNAP.Core.Scenario
         public string Id { get; set; }
 
         /// <summary>
-        /// Type of the robot, as an id of <see cref="RobotSNAP.Agents.RobotProfiles"/>: <c>turtlebot4</c>,
-        /// <c>jackal</c>, <c>husky</c>, <c>pioneer_p3dx</c>, or <c>freight</c> for the default base.
+        /// Type of the robot, as an id of <see cref="RobotSNAP.Agents.RobotProfiles"/>: <c>bibus</c>,
+        /// <c>jackal</c>, <c>kuri</c>, <c>ginger</c>, or <c>freight</c> for the default base.
         ///
         /// The label the scenario shows in its details (<c>scenario_info.robot_type</c>) is not read here:
         /// a scenario written before the types existed carries a label that no longer matches the base it

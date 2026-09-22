@@ -45,7 +45,7 @@ namespace RobotSNAP.Tests.Editor
                     new RobotScenarioConfig
                     {
                         Id = "robot_1",
-                        Type = "turtlebot4",
+                        Type = "kuri",
                         StartRef = "robot_1_start",
                         GoalRef = "robot_1_goal",
                         Speed = 0.31f
@@ -53,7 +53,7 @@ namespace RobotSNAP.Tests.Editor
                     new RobotScenarioConfig
                     {
                         Id = "robot_2",
-                        Type = "husky",
+                        Type = "jackal",
                         StartRef = "robot_2_start",
                         WaypointRefs = new List<string> { "robot_2_waypoint_1" },
                         GoalRef = "robot_2_goal",
@@ -88,8 +88,8 @@ namespace RobotSNAP.Tests.Editor
             editor.Load(BuildTwoRobotScenario());
 
             Assert.That(editor.RobotRouteCount, Is.EqualTo(2));
-            Assert.That(editor.RobotRouteSummary, Does.Contain(RobotProfiles.Find("husky").DisplayName));
-            Assert.That(editor.RobotRouteSummary, Does.Contain(RobotProfiles.Find("turtlebot4").DisplayName));
+            Assert.That(editor.RobotRouteSummary, Does.Contain(RobotProfiles.Find("jackal").DisplayName));
+            Assert.That(editor.RobotRouteSummary, Does.Contain(RobotProfiles.Find("kuri").DisplayName));
         }
 
         [Test]
@@ -134,11 +134,11 @@ namespace RobotSNAP.Tests.Editor
                 "Writing both shapes would leave one scenario holding two different robots.");
 
             Assert.That(saved.Robots[0].Id, Is.EqualTo("robot_1"));
-            Assert.That(saved.Robots[0].Type, Is.EqualTo("turtlebot4"));
+            Assert.That(saved.Robots[0].Type, Is.EqualTo("kuri"));
             Assert.That(saved.Robots[0].Speed, Is.EqualTo(0.31f).Within(0.001f));
 
             Assert.That(saved.Robots[1].Id, Is.EqualTo("robot_2"));
-            Assert.That(saved.Robots[1].Type, Is.EqualTo("husky"));
+            Assert.That(saved.Robots[1].Type, Is.EqualTo("jackal"));
             Assert.That(saved.Robots[1].Speed, Is.EqualTo(1f).Within(0.001f));
             Assert.That(saved.Robots[1].WaypointRefs, Has.Count.EqualTo(1),
                 "The waypoint between start and goal is part of the route.");

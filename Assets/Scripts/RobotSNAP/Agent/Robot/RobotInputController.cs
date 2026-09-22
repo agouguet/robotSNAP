@@ -78,10 +78,28 @@ namespace RobotSNAP
         public enum ControlMode { Keyboard, ROS, Hybrid, Scenario }
         public ControlMode CurrentMode => controlMode;
 
-        private void Start()
+        private void Awake()
         {
             _robot = GetComponent<Robot>();
-            if (_robot == null) { Debug.LogError("Robot component missing"); enabled = false; return; }
+            if (_robot == null)
+            {
+                Debug.LogError("Robot component missing");
+                enabled = false;
+                return;
+            }
+
+            // A scenario hands every robot its route when it is applied, and that route is the robot's only
+            // while the scenario is the one driving it. Saying so before the roster has built or placed
+            // anything keeps a robot left in keyboard mode standing still, instead of walking off to its goal
+            // the moment the scenario loads - which is what it did, and what nobody had asked for.
+            _robot.SetRouteOwnedByScenario(controlMode == ControlMode.Scenario);
+        }
+
+        private void Start()
+        {
+            if (_robot == null)
+                return;
+
             _supervisor ??= Supervisor.Instance;
             _envROS ??= FindAnyObjectByType<EnvROS>();
             if (_envROS != null && (controlMode == ControlMode.ROS || controlMode == ControlMode.Hybrid))
@@ -308,6 +326,7 @@ namespace RobotSNAP
             // it: without this the scenario and the driver would steer it at the same time.
             if (newMode != ControlMode.Scenario)
                 _robot.ClearGoal();
+            _robot.SetRouteOwnedByScenario(newMode == ControlMode.Scenario);
 
             // The subscription used to be created once, in Start, and only when the Inspector already said
             // ROS or Hybrid. A session switched over the bridge therefore drove the robot with a topic

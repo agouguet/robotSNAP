@@ -12,7 +12,6 @@ namespace RobotSNAP.Agents
         [SerializeField] private float maxAngularSpeed = 2.0f;
         [SerializeField] private GameObject baseLink;
         [SerializeField] private AgentDetector detector;
-        [SerializeField] private ArticulationWheelController wheelController;
         [SerializeField] private bool keepParentAtOrigin = true;
 
         private float _targetLinearSpeed;
@@ -22,11 +21,21 @@ namespace RobotSNAP.Agents
         private readonly Queue<Vector3> _routeGoals = new();
         private bool _followingRoute;
 
-        // Geometry of the wheels as the prefab authored them, kept so a second call to ApplyProfile scales
-        // from the prefab and not from the previous type.
-        private float _baseWheelTrackLength;
-        private float _baseWheelRadius;
-        private bool _wheelGeometryCaptured;
+        /// <summary>
+        /// What turns a velocity command into motion: the wheels of a wheeled base, or the kinematic base of
+        /// a body that has none. Resolved on the first frame, so a prefab only has to carry the one it uses.
+        /// </summary>
+        private IRobotDrive _drive;
+
+        /// <summary>
+        /// True while the route a scenario gave this robot is the thing steering it.
+        ///
+        /// A scenario hands every robot its trajectory when it is applied. That trajectory is what the robot
+        /// follows when the scenario drives it, and it is not what happens when a person or a client drives
+        /// it: without this, a robot left in keyboard mode walked off to its goal the moment a scenario was
+        /// loaded, before anybody had touched a key. The route is kept, it simply waits.
+        /// </summary>
+        private bool _routeOwnedByScenario = true;
 
         public event Action<float, float> OnVelocityCommandReceived;
         public event Action<Vector3, Quaternion> OnMovementUpdated;
@@ -43,8 +52,18 @@ namespace RobotSNAP.Agents
         /// <summary>The type this robot drives as, or the default one before a roster applied one.</summary>
         public RobotProfile Profile { get; private set; }
 
-        /// <summary>The body picture of this robot's type, or null when it drives as the prefab it came from.</summary>
-        public GameObject Visual { get; private set; }
+        /// <summary>
+        /// How far the origin of the base link sits above the ground the robot rests on.
+        ///
+        /// A base is authored with its own idea of where its floor is: the wheels of a Freight touch y = 0
+        /// under its base link, the wheels of a Jackal hang 6.5 cm below the chassis link. Placing a robot by
+        /// its base link would bury one and float the other, so the roster raises it by this much and every
+        /// type then stands on the same plane.
+        /// </summary>
+        public float GroundOffset { get; private set; }
+
+        /// <summary>True while the trajectory of the scenario is what steers this robot.</summary>
+        public bool RouteOwnedByScenario => _routeOwnedByScenario;
 
         // ==================== Unity Lifecycle ====================
         private void Awake()
@@ -58,13 +77,12 @@ namespace RobotSNAP.Agents
 
         private void FixedUpdate()
         {
-            if (wheelController != null && (_supervisor ??= Supervisor.Instance) != null && !_supervisor.IsPaused)
-                wheelController.SetRobotVelocity(_targetLinearSpeed, _targetAngularSpeed);
+            if (_drive != null && (_supervisor ??= Supervisor.Instance) != null && !_supervisor.IsPaused)
+                _drive.SetRobotVelocity(_targetLinearSpeed, _targetAngularSpeed);
 
-            if (_hasGoal)
+            if (_hasGoal && _routeOwnedByScenario)
                 UpdateScenarioMovement();
 
-            SyncVisual();
             OnMovementUpdated?.Invoke(Position, Rotation);
         }
 
@@ -86,15 +104,11 @@ namespace RobotSNAP.Agents
             if (_baseLinkArticulation == null)
                 Debug.LogWarning($"[Robot] baseLink {baseLink.name} has no ArticulationBody. Velocity will be zero.");
 
-            // Find wheel controller if not assigned
-            if (wheelController == null)
-            {
-                wheelController = GetComponent<ArticulationWheelController>();
-                if (wheelController == null)
-                    wheelController = GetComponentInChildren<ArticulationWheelController>();
-                if (wheelController == null)
-                    Debug.LogWarning($"[Robot] No ArticulationWheelController found on {name}");
-            }
+            // Find the chassis if not assigned. A wheeled base drives its wheels; a body without wheels is
+            // moved by its base. Both answer the same interface, so nothing below this line has to care which.
+            _drive ??= GetComponent<IRobotDrive>() ?? GetComponentInChildren<IRobotDrive>();
+            if (_drive == null)
+                Debug.LogWarning($"[Robot] No drive found on {name}: it will take commands and never move.");
 
             if (detector == null)
             {
@@ -118,15 +132,15 @@ namespace RobotSNAP.Agents
 
         /// <summary>
         /// Makes this instance drive as <paramref name="profile"/>: its footprint, its mass, the speeds it
-        /// may be commanded, its body size, and the shape of its lidar.
+        /// may be commanded, and the shape of its lidar.
         ///
         /// It is meant to run once, on an instance the roster has just created and before the components of
         /// the prefab had their first frame - the scanner rebuilds its rays here, and the publisher of the
         /// scan reads the rate at its own start.
         ///
         /// The footprint is what the rest of the application reads: the crowd's social force model gives a
-        /// Husky a wider berth than a TurtleBot, and the spawn check uses the same number to decide whether
-        /// two robots may be placed side by side.
+        /// Bibus a wider berth than a Kuri, and the spawn check uses the same number to decide whether two
+        /// robots may be placed side by side.
         /// </summary>
         public void ApplyProfile(RobotProfile profile)
         {
@@ -140,183 +154,63 @@ namespace RobotSNAP.Agents
             SetRadius(profile.Radius);
             SetMass(profile.Mass);
 
-            ApplyBodyScale(profile.BodyScale);
-            ApplyWheelGeometry();
+            ApplyMass();
             ApplyLidar(profile);
-            ApplyBodyColor(profile.BodyColor);
         }
 
-        /// <summary>
-        /// Gives this robot the body of its type.
-        ///
-        /// The body is a picture and nothing else: the articulation, the wheels, the sensors and the streams
-        /// stay the ones the prefab was built and proven with, so a scenario that drives a Husky drives
-        /// exactly as well as one that drives the base - it simply looks like a Husky. The picture is dropped
-        /// on the ground the robot stands on rather than on the base itself, whose origin sits above the
-        /// wheels, so a body authored from y = 0 upwards lands with its wheels on the floor.
-        /// </summary>
-        public void ApplyVisual(GameObject prefab)
+        private void ApplyMass()
         {
-            if (prefab == null || Visual != null)
-                return;
-
-            Visual = Instantiate(prefab, RobotTransform);
-            Visual.name = "Body";
-            SyncVisual();
-
-            // The picture replaces the one of the prefab instead of doubling it: the two would otherwise
-            // stand in the same place, and the crowd would see both.
-            foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
-            {
-                if (renderer == null || renderer.transform.IsChildOf(Visual.transform))
-                    continue;
-
-                renderer.enabled = false;
-            }
-        }
-
-        /// <summary>
-        /// Keeps the body under the base it belongs to: it follows where the robot drives and which way it
-        /// faces, and it stays on the plane the robot stands on.
-        ///
-        /// The body is not simply parented and left alone because the origin of a mobile base sits above its
-        /// wheels, and the base moves up and down as the physics settles it: a body pinned to that origin
-        /// would float or sink by however much the articulation happened to have risen when it was built.
-        /// The ground of this project is the plane y = 0, which is also where the root of every robot is
-        /// pinned.
-        /// </summary>
-        private void SyncVisual()
-        {
-            if (Visual == null)
-                return;
-
-            Transform reference = RobotTransform;
-            if (reference == null)
-                return;
-
-            Vector3 position = reference.position;
-            Visual.transform.SetPositionAndRotation(
-                new Vector3(position.x, 0f, position.z),
-                Quaternion.Euler(0f, reference.eulerAngles.y, 0f));
-        }
-
-        private void ApplyBodyScale(float scale)
-        {
-            // A robot that was given the body of its type already looks like that type: resizing the picture
-            // underneath it would move a wheel off its own rim.
-            if (Visual != null)
-                return;
-
-            // Only the picture is resized, never the body. An articulation that is scaled keeps the joints it
-            // was built with, its collision volume stops matching the space the planner reserved for it, and a
-            // base teleported to the ground ends up buried in it. The bodies of every type therefore stay the
-            // ones the prefab was authored and proven with, and the type is what a person sees.
-            if (!Mathf.Approximately(scale, 1f) && scale > 0f)
-            {
-                var nodes = new List<Transform>();
-                CollectVisualRoots(nodes);
-                foreach (Transform node in nodes)
-                    ScaleVisual(node, scale);
-            }
-
             if (_baseLinkArticulation != null)
                 _baseLinkArticulation.mass = Profile != null ? Profile.Mass : _baseLinkArticulation.mass;
         }
 
         /// <summary>
-        /// The outermost nodes of the robot that carry a picture, so a body is scaled once rather than once
-        /// per mesh under it, and a node that also carries a collider is left alone: that one is not a
-        /// picture, it is the shape the physics reacts to.
+        /// Measures where this body rests: the distance from its base link down to the lowest shape the
+        /// physics knows about, pictures being the fallback when a body declares no collider at all.
+        ///
+        /// It is measured on a live instance rather than read from a table because it is a property of the
+        /// model, not of its type: two prefabs of the same type can differ, and a robot somebody adds later
+        /// gets the right answer without anybody writing its number down.
         /// </summary>
-        private void CollectVisualRoots(List<Transform> destination)
+        public float MeasureGroundOffset()
         {
-            destination.Clear();
-
-            foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
+            Transform reference = RobotTransform;
+            if (reference == null)
             {
-                if (renderer == null || !renderer.enabled)
-                    continue;
-
-                Transform node = renderer.transform;
-                if (node == null || node == transform || node.GetComponent<Collider>() != null)
-                    continue;
-
-                bool nested = false;
-                for (Transform parent = node.parent; parent != null && parent != transform; parent = parent.parent)
-                {
-                    if (HasRenderer(parent.gameObject))
-                    {
-                        nested = true;
-                        break;
-                    }
-                }
-
-                if (!nested && !destination.Contains(node))
-                    destination.Add(node);
-            }
-        }
-
-        private static bool HasRenderer(GameObject candidate)
-        {
-            foreach (Renderer renderer in candidate.GetComponents<Renderer>())
-            {
-                if (renderer != null && renderer.enabled)
-                    return true;
+                GroundOffset = 0f;
+                return GroundOffset;
             }
 
-            return false;
-        }
-
-        /// <summary>
-        /// Resizes one picture around the ground it stands on: a larger robot grows upwards rather than
-        /// sinking into the floor, so whatever the type its wheels keep touching the same plane.
-        /// </summary>
-        private static void ScaleVisual(Transform node, float scale)
-        {
-            if (node == null)
-                return;
-
-            float bottomBefore = LowestPoint(node);
-            node.localScale *= scale;
-            float bottomAfter = LowestPoint(node);
-
-            if (float.IsInfinity(bottomBefore) || float.IsInfinity(bottomAfter))
-                return;
-
-            node.position += Vector3.up * (bottomBefore - bottomAfter);
-        }
-
-        private static float LowestPoint(Transform node)
-        {
             float lowest = float.PositiveInfinity;
-            foreach (Renderer renderer in node.GetComponentsInChildren<Renderer>(true))
+            foreach (Collider collider in GetComponentsInChildren<Collider>(true))
             {
-                if (renderer == null || !renderer.enabled)
+                if (collider == null || !collider.enabled)
                     continue;
 
-                lowest = Mathf.Min(lowest, renderer.bounds.min.y);
+                // A mesh collider whose mesh never came across covers nothing, and its bounds would report
+                // the origin as if it were a shape the robot stands on.
+                if (collider is MeshCollider mesh && (mesh.sharedMesh == null || mesh.sharedMesh.vertexCount == 0))
+                    continue;
+
+                lowest = Mathf.Min(lowest, collider.bounds.min.y);
             }
 
-            return lowest;
-        }
-
-        private void ApplyWheelGeometry()
-        {
-            if (wheelController == null)
-                return;
-
-            if (!_wheelGeometryCaptured)
+            if (float.IsInfinity(lowest))
             {
-                _baseWheelTrackLength = wheelController.wheelTrackLength;
-                _baseWheelRadius = wheelController.wheelRadius;
-                _wheelGeometryCaptured = true;
+                foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
+                {
+                    if (renderer == null || !renderer.enabled)
+                        continue;
+
+                    lowest = Mathf.Min(lowest, renderer.bounds.min.y);
+                }
             }
 
-            // The wheels keep the size the prefab gave them, because only the picture of the robot is
-            // resized: the metres the controller converts into wheel rotations stay true to the geometry the
-            // articulation actually drives, whatever the type looks like.
-            wheelController.wheelTrackLength = _baseWheelTrackLength;
-            wheelController.wheelRadius = _baseWheelRadius;
+            // How far the base link floats above the ground this body rests on: the distance from the lowest
+            // shape up to the origin of the base. A body whose wheels hang below its chassis link has a
+            // positive offset and is raised by that much, instead of being dropped through the floor.
+            GroundOffset = float.IsInfinity(lowest) ? 0f : reference.position.y - lowest;
+            return GroundOffset;
         }
 
         private void ApplyLidar(RobotProfile profile)
@@ -344,38 +238,35 @@ namespace RobotSNAP.Agents
                 publisher.SetPublishFrequency(profile.LidarFrequencyHz);
         }
 
-        private void ApplyBodyColor(Color color)
+        // ==================== Scenario Movement ====================
+
+        /// <summary>
+        /// Hands the trajectory of the scenario back to the robot, or takes it away from it.
+        ///
+        /// A scenario gives every robot its route when it is applied. That route is what steers the robot
+        /// while the scenario owns it - the mode the editor calls "scenario" - and it is deliberately not
+        /// what steers it while a person or a client is driving: a robot left in keyboard mode used to walk
+        /// off to its goal the instant a scenario was loaded, before anybody had touched anything.
+        /// </summary>
+        public void SetRouteOwnedByScenario(bool owned)
         {
-            // A clear colour means "leave the materials of the prefab alone", which is what the legacy
-            // default asks for so an existing scenario keeps the exact look it was authored against.
-            if (color.a <= 0.01f)
+            if (_routeOwnedByScenario == owned)
                 return;
 
-            var block = new MaterialPropertyBlock();
-            foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
-            {
-                if (renderer == null)
-                    continue;
-
-                // A body of its own already carries the colours of its type, trim and sensor included: tinting
-                // it here would flatten the whole robot into one flat plate of the profile colour.
-                if (Visual != null && renderer.transform.IsChildOf(Visual.transform))
-                    continue;
-
-                renderer.GetPropertyBlock(block);
-                // Both names are written because the project renders through HDRP and the tests run on the
-                // built-in pipeline: whichever material is in use finds its own property.
-                block.SetColor("_BaseColor", color);
-                block.SetColor("_Color", color);
-                renderer.SetPropertyBlock(block);
-            }
+            _routeOwnedByScenario = owned;
+            if (!owned)
+                Stop();
         }
 
-        // ==================== Scenario Movement ====================
         private void UpdateScenarioMovement()
         {
-            Vector3 direction = (_currentGoal - Position).normalized;
-            float distance = Vector3.Distance(Position, _currentGoal);
+            // The goal of a scenario is a point on the map, and the map is a plane: measuring the distance in
+            // three dimensions would make a robot whose base link floats above the floor - any type that is
+            // not the base one - aim at a point below its goal and slow down before ever reaching it.
+            Vector3 here = Position;
+            Vector3 planar = new Vector3(_currentGoal.x - here.x, 0f, _currentGoal.z - here.z);
+            Vector3 direction = planar.sqrMagnitude > 0.0001f ? planar.normalized : Forward;
+            float distance = planar.magnitude;
 
             float targetSpeed = _currentSpeed;
             if (distance < 1.0f)
@@ -450,8 +341,8 @@ namespace RobotSNAP.Agents
         {
             _targetLinearSpeed = 0f;
             _targetAngularSpeed = 0f;
-            if (wheelController != null)
-                wheelController.SetRobotVelocity(0f, 0f);
+            if (_drive != null)
+                _drive.SetRobotVelocity(0f, 0f);
         }
 
         public override void Reset()
@@ -461,8 +352,8 @@ namespace RobotSNAP.Agents
             _followingRoute = false;
             ClearGoal();
             EnforceParentOrigin();
-            if (wheelController != null)
-                wheelController.ResetDrives();
+            if (_drive != null)
+                _drive.ResetDrives();
         }
 
         // ==================== Public API - Teleportation ====================
@@ -483,6 +374,13 @@ namespace RobotSNAP.Agents
             // A teleported articulation is settled where it was put, and a drive command on a body that is
             // asleep is ignored: the robot of a scenario would sit at its start with its wheels commanded.
             ab.WakeUp();
+
+            // A chassis that integrates its own pose - a body without wheels - has to be told where it was
+            // put. Left to read its transform, it would read the pose it had before the teleport, which is
+            // only written at the next physics step, and walk the robot back to where it came from.
+            if (_drive is KinematicBaseDrive kinematic)
+                kinematic.SetBasePose(position, rotation);
+
             Stop();
             EnforceParentOrigin();
         }
@@ -499,6 +397,8 @@ namespace RobotSNAP.Agents
             }
             ab.TeleportRoot(position, baseLink.transform.rotation);
             ab.WakeUp();
+            if (_drive is KinematicBaseDrive movedByPosition)
+                movedByPosition.SetBasePose(position, baseLink.transform.rotation);
             Stop();
             EnforceParentOrigin();
         }
@@ -514,6 +414,8 @@ namespace RobotSNAP.Agents
             }
             ab.TeleportRoot(baseLink.transform.position, rotation);
             ab.WakeUp();
+            if (_drive is KinematicBaseDrive turned)
+                turned.SetBasePose(baseLink.transform.position, rotation);
             Stop();
             EnforceParentOrigin();
         }

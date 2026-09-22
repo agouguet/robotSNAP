@@ -219,7 +219,6 @@ MonoBehaviour:
   _scenarioLoader: {fileID: 4147492}
   _applyDelay: 0.5
   _logEvents: 1
-  _isLoading: 0
 --- !u!114 &4147490
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1921,7 +1920,7 @@ MonoBehaviour:
   simulationStartHour: 12
   _timeZoneId: Europe/Paris
   logTimeChanges: 0
-  editorTimeDisplay: 13:59:11
+  editorTimeDisplay: 11:11:45
 --- !u!4 &2049586426
 Transform:
   m_ObjectHideFlags: 0

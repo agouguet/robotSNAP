@@ -162,6 +162,17 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         "was built.")]
     public float driveIntegralUnwind = 6f;
 
+    [Range(0f, 1f)]
+    [Tooltip(
+        "How much the tyres are allowed to decide, from 0 to 1. At 1 - the setting every robot is wired " +
+        "with - the drive may never ask for more force than its tyres can pass, so a wall, a kerb or a " +
+        "person can slow the robot down and stop it. Lower the figure and the drive is allowed to push " +
+        "past what its tyres could ever grip with: 0.5 lets it ask for twice its traction, 0.25 for four " +
+        "times, and the robot then follows its command whatever it is leaning against. It changes nothing " +
+        "on an empty floor - every robot here follows its command to the percent either way - and shows " +
+        "only in what it is up against.")]
+    public float controlRealism = 1f;
+
     // Current speeds (for UI / debug)
     private float _currentLinearSpeed;
     private float _currentAngularSpeed;
@@ -346,13 +357,17 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     /// </summary>
     private float TractionForce(float mass)
     {
-        if (maxDriveForce > 0f)
-            return maxDriveForce;
+        float traction = maxDriveForce > 0f
+            ? maxDriveForce
+            : tractionGrip > 0f ? tractionGrip * mass * Mathf.Abs(Physics.gravity.y) : 0f;
 
-        if (tractionGrip <= 0f)
+        // Zero is the drive asking for no limit at all, and that is what a realism of zero means: the
+        // controller is then free to push as hard as it likes, which is the idealised drive this project
+        // started with - exact tracking, and a collision that cannot be felt.
+        if (traction <= 0f || controlRealism <= 0.01f)
             return 0f;
 
-        return tractionGrip * mass * Mathf.Abs(Physics.gravity.y);
+        return traction / Mathf.Clamp01(controlRealism);
     }
 
     /// <summary>Half the wheel track: where the two driven sides of a differential chassis sit.</summary>
@@ -527,6 +542,16 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     /// </summary>
     public void SetRobotVelocity(float targetLinearSpeed, float targetAngularSpeed)
     {
+        // A command that reverses drops the effort the drive had built up against the resistance of the other
+        // direction. Keeping it is what made a robot asked to turn the other way answer at 46 percent of its
+        // command for the first half second while the old effort was unwound: the turn itself is symmetric -
+        // measured on the Kuri, whichever direction went first was at 99 percent within six tenths of a
+        // second, and whichever went second was at 46 - and only the memory of the previous one was not.
+        if (Mathf.Sign(targetLinearSpeed) != Mathf.Sign(_currentLinearSpeed))
+            _forceIntegral = Vector3.zero;
+        if (Mathf.Sign(targetAngularSpeed) != Mathf.Sign(_currentAngularSpeed))
+            _torqueIntegral = 0f;
+
         _currentLinearSpeed = targetLinearSpeed;
         _currentAngularSpeed = targetAngularSpeed;
 

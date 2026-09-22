@@ -667,59 +667,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e9090ae501ff9cd459bec5271d40249c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!1 &2016669368521831494
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 6757716646015165617}
-  - component: {fileID: 3227071691514239168}
-  m_Layer: 0
-  m_Name: GroundClearance
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &6757716646015165617
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2016669368521831494}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 8037374494088470366}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!65 &3227071691514239168
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2016669368521831494}
-  m_Material: {fileID: 13400000, guid: a6bd167bf275d4ff1a78c624b3e0a717, type: 2}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 0.5248208, y: 0.33896175, z: 0.5707914}
-  m_Center: {x: 0.0024700463, y: 0.18898098, z: 0}
 --- !u!1 &2311500455005760902
 GameObject:
   m_ObjectHideFlags: 0
@@ -845,13 +792,17 @@ MonoBehaviour:
   solverIterations: 6
   solverVelocityIterations: 16
   driveModel: 1
-  maxLinearAcceleration: 6
+  maxLinearAcceleration: 5
   maxAngularAcceleration: 10
   lateralGrip: 1
   tiltRecovery: 6
   maxDriveForce: 0
-  tractionGrip: 0.7
+  tractionGrip: 0.8
   tractionLever: 0
+  driveIntegralGain: 30
+  driveIntegralDeadband: 0.02
+  driveIntegralUnwind: 6
+  controlRealism: 1
 --- !u!1 &2625991535975762110
 GameObject:
   m_ObjectHideFlags: 0
@@ -2112,8 +2063,7 @@ Transform:
   m_LocalPosition: {x: 0, y: 0.0005, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 6757716646015165617}
+  m_Children: []
   m_Father: {fileID: 306245140097115274}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!64 &6259551288726836848
@@ -2123,7 +2073,7 @@ MeshCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5161022865729376873}
-  m_Material: {fileID: 13400000, guid: a6bd167bf275d4ff1a78c624b3e0a717, type: 2}
+  m_Material: {fileID: 13400000, guid: 07bf23f5c4a33b10398a4ebd9662ae41, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -2133,7 +2083,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 0
+  m_Enabled: 1
   serializedVersion: 5
   m_Convex: 1
   m_CookingOptions: 30

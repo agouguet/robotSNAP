@@ -2553,13 +2553,17 @@ MonoBehaviour:
   solverIterations: 6
   solverVelocityIterations: 16
   driveModel: 1
-  maxLinearAcceleration: 6
+  maxLinearAcceleration: 5
   maxAngularAcceleration: 10
   lateralGrip: 1
   tiltRecovery: 6
   maxDriveForce: 0
-  tractionGrip: 0.7
+  tractionGrip: 0.8
   tractionLever: 0
+  driveIntegralGain: 30
+  driveIntegralDeadband: 0.02
+  driveIntegralUnwind: 6
+  controlRealism: 1
 --- !u!1 &3874186667877596425
 GameObject:
   m_ObjectHideFlags: 0

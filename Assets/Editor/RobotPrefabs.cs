@@ -62,6 +62,9 @@ public static class RobotPrefabs
     /// </summary>
     private const string GroundClearanceNodeName = "GroundClearance";
 
+    /// <summary>Name of the ball caster the tool adds to a robot whose own contacts cannot hold it up.</summary>
+    private const string SupportCasterNodeName = "SupportCaster";
+
     /// <summary>
     /// Torque every driven wheel of a base-driven chassis is left with, in N.m.
     ///
@@ -71,6 +74,30 @@ public static class RobotPrefabs
     /// back, which is what they did at the two newton-metres they were first given.
     /// </summary>
     private const float RollingWheelForceLimit = 0.2f;
+
+    /// <summary>
+    /// How much the tyres are allowed to decide, written on every robot. One is the honest figure - the
+    /// drive may never ask for more than its tyres grip - and it is the one number to turn down when a
+    /// robot has to feel more responsive than physical: see
+    /// <see cref="ArticulationWheelController.controlRealism"/>.
+    /// </summary>
+    private const float ControlRealism = 1f;
+
+    /// <summary>
+    /// How fast a robot answers its command, in m/s^2 and rad/s^2. Every robot is given the same figures
+    /// on purpose: a user asking a Kuri and a Freight for the same turn should see the same turn, and what
+    /// makes the two robots different is what they are - their mass and their geometry - not their
+    /// controller. Both are below what the tyres of the lightest robot here can pass, so this is the ramp
+    /// a robot takes when nothing is in its way.
+    /// </summary>
+    private const float DriveLinearAcceleration = 5f;
+    private const float DriveAngularAcceleration = 10f;
+
+    /// <summary>Grip written on every robot. It is a tyre figure, not a floor figure.</summary>
+    private const float DriveTractionGrip = 0.8f;
+
+    /// <summary>How fast every drive makes up the effort a resistance takes from it. See the component.</summary>
+    private const float DriveIntegralGain = 30f;
 
     /// <summary>Name of the link the lidar components are hung from when the model declares no sensor.</summary>
     private const string LaserNodeName = "laser_link";
@@ -166,9 +193,16 @@ public static class RobotPrefabs
             FindFreeRollers(baseLink, left, right, rollers);
 
             int repaired = EnsureWheelColliders(left, right);
-            int resurfaced = ApplyWheelMaterial(left, right, rollers);
-            int cleared = LiftGroundSweepingColliders(left, right, rollers);
+            int resurfaced = ApplyWheelMaterial(root.transform, left, right, rollers);
+            int rollingContacts = CountRollingContacts(root.transform, left, right, rollers);
+            int cleared = rollingContacts >= 3
+                ? LiftGroundSweepingColliders(root.transform, left, right, rollers)
+                : 0;
             int bodied = ApplyBodyMaterial(root.transform, left, right, rollers);
+            string stance = rollingContacts >= 3
+                ? ""
+                : $", only {rollingContacts} rolling contact(s), so the base stays on the floor as the model " +
+                  "designed it and is given the contact that slides";
             Transform plugins = EnsureChild(root.transform, PluginNodeName);
             Transform laser = EnsureLaserLink(root.transform, baseLink, profile);
 
@@ -213,6 +247,7 @@ public static class RobotPrefabs
                    (resurfaced > 0 ? $", {resurfaced} driven wheel(s) given the scrubbing contact" : "") +
                    (cleared > 0 ? $", {cleared} body collider(s) lifted {GroundClearance * 1000f:0} mm off the floor" : "") +
                    (bodied > 0 ? $", {bodied} body collider(s) given the real contact" : "") +
+                   stance +
                    (strays > 0 ? $", {strays} stray articulation(s) made inert" : "");
         }
         finally
@@ -398,6 +433,17 @@ public static class RobotPrefabs
         controller.driveModel = ArticulationWheelController.DriveModel.SkidSteerBase;
         controller.rollingWheelForceLimit = RollingWheelForceLimit;
 
+        // The answer to a command is the same on every robot; see the constants above. The effort a robot
+        // may apply is not written here: it is derived from that robot's own mass and grip, so a Freight
+        // still pushes what a Freight weighs and a Kuri what a Kuri weighs.
+        controller.controlRealism = ControlRealism;
+        controller.maxLinearAcceleration = DriveLinearAcceleration;
+        controller.maxAngularAcceleration = DriveAngularAcceleration;
+        controller.tractionGrip = DriveTractionGrip;
+        controller.maxDriveForce = 0f;
+        controller.tractionLever = 0f;
+        controller.driveIntegralGain = DriveIntegralGain;
+
         // Geometry is only written on a chassis that had none: the base robot was tuned by hand on a bench,
         // and re-deriving its track from the meshes would silently retune a robot that already drives well.
         if (!added && controller.wheelTrackLength > 0.001f && controller.wheelRadius > 0.001f)
@@ -532,7 +578,11 @@ public static class RobotPrefabs
     /// gripping casters gave 85 percent of the commanded turn, slippery casters as well gave 97 - which is
     /// why the material is put on every rolling link and not on the driven ones alone.
     /// </summary>
-    private static int ApplyWheelMaterial(List<Transform> left, List<Transform> right, List<Transform> rollers)
+    private static int ApplyWheelMaterial(
+        Transform root,
+        List<Transform> left,
+        List<Transform> right,
+        List<Transform> rollers)
     {
         PhysicsMaterial wheelMaterial = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(WheelMaterialPath);
         if (wheelMaterial == null)
@@ -543,7 +593,7 @@ public static class RobotPrefabs
         }
 
         int resurfaced = 0;
-        var rolling = new List<Transform>(Rollers(left, right, rollers));
+        List<Transform> rolling = RollingLinks(left, right, rollers, root);
 
         foreach (Transform wheel in rolling)
         {
@@ -585,6 +635,58 @@ public static class RobotPrefabs
     }
 
     /// <summary>
+    /// Everything the model means to slide on the floor: the driven wheels, the casters it declares as
+    /// joints, and the ones it built as fixed links - a ball caster is a fixed sphere in more than one
+    /// model here, and it still belongs on the floor, sliding.
+    ///
+    /// The distinction decides everything that follows: a link on this list is given the contact that
+    /// slides and is never lifted, and every other link is taken off the floor.
+    /// </summary>
+    private static List<Transform> RollingLinks(
+        List<Transform> left,
+        List<Transform> right,
+        List<Transform> rollers,
+        Transform root)
+    {
+        var rolling = new List<Transform>(Rollers(left, right, rollers));
+        foreach (Transform candidate in root.GetComponentsInChildren<Transform>(true))
+        {
+            if (!rolling.Contains(candidate) && IsRollingName(candidate.name))
+                rolling.Add(candidate);
+        }
+
+        return rolling;
+    }
+
+    private static bool IsRollingName(string name)
+    {
+        string lower = name.ToLowerInvariant();
+        return lower.Contains("caster") || lower.Contains("ball") || lower.Contains("roller");
+    }
+
+    /// <summary>
+    /// True when a collider is one the physics can actually use. A mesh that never came across the importer
+    /// leaves a collider that covers nothing, and counting one of those as a contact is how a robot with
+    /// nothing to stand on is declared able to stand.
+    /// </summary>
+    private static bool Covers(Collider collider)
+    {
+        switch (collider)
+        {
+            case MeshCollider mesh:
+                return mesh.sharedMesh != null && mesh.sharedMesh.vertexCount > 0;
+            case SphereCollider sphere:
+                return sphere.radius > 0.0001f;
+            case CapsuleCollider capsule:
+                return capsule.radius > 0.0001f && capsule.height > 0.0001f;
+            case BoxCollider box:
+                return box.size.x > 0.0001f && box.size.y > 0.0001f && box.size.z > 0.0001f;
+            default:
+                return collider != null;
+        }
+    }
+
+    /// <summary>
     /// Takes the body of a robot off the floor, and tells how many colliders it had to raise.
     ///
     /// A model imported from a URDF does not always respect the ground its wheels define. The Freight comes
@@ -599,11 +701,12 @@ public static class RobotPrefabs
     /// reported. The wheels carry the robot, which is what a robot's wheels are for.
     /// </summary>
     private static int LiftGroundSweepingColliders(
+        Transform root,
         List<Transform> left,
         List<Transform> right,
         List<Transform> rollers)
     {
-        var rolling = new List<Transform>(Rollers(left, right, rollers));
+        List<Transform> rolling = RollingLinks(left, right, rollers, root);
         if (rolling.Count == 0)
             return 0;
 
@@ -651,6 +754,54 @@ public static class RobotPrefabs
         return lifted;
     }
 
+    /// <summary>
+    /// How many places the robot already has to stand on: the covering colliders of its wheels and casters
+    /// that reach the floor.
+    ///
+    /// Three is the figure that decides whether the body may be lifted. Two contacts make a line, and a
+    /// chassis resting on a line is a seesaw: the Freight has two wheels and no caster at all, and lifting
+    /// its base left it leaning three degrees back, unable to turn one of the two ways, because one side of
+    /// the base was lifting off the floor while the other pressed into it. Its base reaching the floor is
+    /// not a modelling accident to be corrected - it is the third leg the model gave it, and the contact it
+    /// needs is the one that slides, not a lift.
+    /// </summary>
+    private static int CountRollingContacts(
+        Transform root,
+        List<Transform> left,
+        List<Transform> right,
+        List<Transform> rollers)
+    {
+        List<Transform> rolling = RollingLinks(left, right, rollers, root);
+        if (rolling.Count == 0)
+            return 0;
+
+        float floor = float.PositiveInfinity;
+        foreach (Transform wheel in rolling)
+        {
+            foreach (Collider collider in wheel.GetComponentsInChildren<Collider>(true))
+            {
+                if (collider.enabled && Covers(collider))
+                    floor = Mathf.Min(floor, collider.bounds.min.y);
+            }
+        }
+
+        if (float.IsInfinity(floor))
+            return 0;
+
+        float limit = floor + 0.01f;
+        int contacts = 0;
+        foreach (Transform wheel in rolling)
+        {
+            foreach (Collider collider in wheel.GetComponentsInChildren<Collider>(true))
+            {
+                if (collider.enabled && Covers(collider) && collider.bounds.min.y <= limit)
+                    contacts++;
+            }
+        }
+
+        return contacts;
+    }
+
     /// <summary>True when the collider hangs, directly or not, from one of the links that roll on the floor.</summary>
     private static bool OnARollingLink(Collider collider, List<Transform> rolling)
     {
@@ -677,15 +828,9 @@ public static class RobotPrefabs
             return false;
 
         Transform frame = collider.transform;
-        Bounds bounds = collider.bounds;
-        float rise = bottom - bounds.min.y;
+        float rise = bottom - collider.bounds.min.y;
         if (rise <= 0f)
             return false;
-
-        // A slab thin enough that trimming it would leave nothing is moved bodily instead of trimmed: a base
-        // plate belongs above the ground, not inside it, and a plate left with a centimetre of itself is not
-        // the shape the model described either.
-        bool trim = bounds.size.y - rise > 0.01f;
 
         // The lift is applied along the frame's own up, so the frame has to be upright: on a tilted one the
         // raise would have to be split across two axes and the shape would no longer match the mesh.
@@ -693,43 +838,80 @@ public static class RobotPrefabs
         if (up.y <= 0f || Vector3.Dot(up, Vector3.up) < 0.9f)
             return false;
 
+        // A mesh that never came across the importer has nothing to raise, and the shape it was meant to be
+        // is unknown: it is left alone and the report says so.
+        if (collider is MeshCollider mesh && (mesh.sharedMesh == null || mesh.sharedMesh.vertexCount == 0))
+            return false;
+
         float scale = Mathf.Abs(frame.lossyScale.y);
         float local = rise / (scale > 1e-6f ? scale : 1f);
 
-        if (collider is BoxCollider box)
+        // The shape is copied rather than replaced by a box around it. A box was tried first, and it is what
+        // a shape must not become: the Freight's base is a cylinder, and the box that stood in for it put a
+        // square corner 5 mm below the wheels, so the robot leaned three degrees back and would only turn
+        // one way - the corner lifted on one side of a turn and dug in on the other.
+        var raised = new GameObject(GroundClearanceNodeName);
+        raised.transform.SetParent(frame, false);
+        raised.transform.localPosition = Vector3.up * local;
+        raised.transform.localRotation = Quaternion.identity;
+        raised.transform.localScale = Vector3.one;
+
+        if (!CopyShape(collider, raised))
         {
-            box.center += Vector3.up * (trim ? local * 0.5f : local);
-            if (trim)
-                box.size = new Vector3(box.size.x, box.size.y - local, box.size.z);
-            return true;
+            Object.DestroyImmediate(raised);
+            return false;
         }
 
-        if (collider is MeshCollider mesh)
+        collider.enabled = false;
+        return true;
+    }
+
+    /// <summary>Copies a collider onto another object, keeping the shape the model described.</summary>
+    private static bool CopyShape(Collider source, GameObject target)
+    {
+        switch (source)
         {
-            if (mesh.sharedMesh == null || mesh.sharedMesh.vertexCount == 0)
+            case MeshCollider mesh:
+            {
+                var copy = target.AddComponent<MeshCollider>();
+                copy.sharedMesh = mesh.sharedMesh;
+                copy.convex = mesh.convex;
+                copy.sharedMaterial = mesh.sharedMaterial;
+                return true;
+            }
+
+            case BoxCollider box:
+            {
+                var copy = target.AddComponent<BoxCollider>();
+                copy.center = box.center;
+                copy.size = box.size;
+                copy.sharedMaterial = box.sharedMaterial;
+                return true;
+            }
+
+            case SphereCollider sphere:
+            {
+                var copy = target.AddComponent<SphereCollider>();
+                copy.center = sphere.center;
+                copy.radius = sphere.radius;
+                copy.sharedMaterial = sphere.sharedMaterial;
+                return true;
+            }
+
+            case CapsuleCollider capsule:
+            {
+                var copy = target.AddComponent<CapsuleCollider>();
+                copy.center = capsule.center;
+                copy.radius = capsule.radius;
+                copy.height = capsule.height;
+                copy.direction = capsule.direction;
+                copy.sharedMaterial = capsule.sharedMaterial;
+                return true;
+            }
+
+            default:
                 return false;
-
-            Bounds shape = mesh.sharedMesh.bounds;
-            var raised = new GameObject(GroundClearanceNodeName);
-            raised.transform.SetParent(frame, false);
-            raised.transform.localPosition = Vector3.zero;
-            raised.transform.localRotation = Quaternion.identity;
-            raised.transform.localScale = Vector3.one;
-
-            var replacement = raised.AddComponent<BoxCollider>();
-            // The replacement lives in a child of the frame, so the mesh bounds - which are expressed in the
-            // frame - can be copied as they are, and the frame's own rotation and scale are the child's.
-            replacement.center = new Vector3(
-                shape.center.x, shape.center.y + (trim ? local * 0.5f : local), shape.center.z);
-            replacement.size = trim
-                ? new Vector3(shape.size.x, shape.size.y - local, shape.size.z)
-                : shape.size;
-            replacement.sharedMaterial = collider.sharedMaterial;
-            mesh.enabled = false;
-            return true;
         }
-
-        return false;
     }
 
     /// <summary>
@@ -741,15 +923,20 @@ public static class RobotPrefabs
     {
         foreach (Transform candidate in root.GetComponentsInChildren<Transform>(true))
         {
-            if (candidate.name != GroundClearanceNodeName)
+            // The support caster is a shape an earlier version of this tool added to a robot that turned out
+            // not to need one; it goes with the rest, so that a prefab always rebuilds to the same state.
+            if (candidate.name != GroundClearanceNodeName && candidate.name != SupportCasterNodeName)
                 continue;
 
             Object.DestroyImmediate(candidate.gameObject);
         }
 
+        // Every collider a previous run took out of the physics comes back, whatever its shape: the tool is
+        // the only thing that disables a collider here, and the lift has to be redone from the model's own
+        // shape rather than from the shape of a previous lift.
         foreach (Collider collider in root.GetComponentsInChildren<Collider>(true))
         {
-            if (collider is MeshCollider && !collider.enabled)
+            if (!collider.enabled)
                 collider.enabled = true;
         }
     }
@@ -780,10 +967,30 @@ public static class RobotPrefabs
             return 0;
         }
 
-        var rolling = new List<Transform>(Rollers(left, right, rollers));
+        List<Transform> rolling = RollingLinks(left, right, rollers, root);
+        PhysicsMaterial rollingMaterial = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(WheelMaterialPath);
+
+        // Anything else that reaches the level of the wheels is a skid - a caster the model built as a fixed
+        // link, a bumper low enough to touch - and a skid has to slide, which is what the rolling contact
+        // is for. This is what the Bibus was missing: its two casters are fixed joints, they sit on the
+        // floor, and the body pass gave them the ordinary contact of a chassis, so a robot that should have
+        // pivoted on two slippery balls was held by two gripping ones and would sometimes only turn one way.
+        float floor = float.PositiveInfinity;
+        foreach (Transform wheel in rolling)
+        {
+            foreach (Collider collider in wheel.GetComponentsInChildren<Collider>(true))
+                floor = Mathf.Min(floor, collider.bounds.min.y);
+        }
+
+        float limit = floor + 0.01f;
         int resurfaced = 0;
         foreach (Collider collider in root.GetComponentsInChildren<Collider>(true))
         {
+            if (!collider.enabled)
+                continue;
+            if (!Covers(collider))
+                continue;
+
             bool rolls = false;
             for (Transform frame = collider.transform; frame != null; frame = frame.parent)
             {
@@ -794,10 +1001,15 @@ public static class RobotPrefabs
                 break;
             }
 
-            if (rolls || collider.sharedMaterial == chassisMaterial)
+            if (rolls)
                 continue;
 
-            collider.sharedMaterial = chassisMaterial;
+            bool onTheFloor = collider.bounds.min.y <= limit;
+            PhysicsMaterial wanted = onTheFloor && rollingMaterial != null ? rollingMaterial : chassisMaterial;
+            if (collider.sharedMaterial == wanted)
+                continue;
+
+            collider.sharedMaterial = wanted;
             resurfaced++;
         }
 

@@ -35,6 +35,9 @@ namespace RobotSNAP.Agents
         
         public int ActiveCount => _activeHumans.Count;
         public IReadOnlyList<GameObject> ActiveHumans => _activeHumans;
+
+        /// <summary>Instances built and waiting, which is what a caller has to count to ask for more.</summary>
+        public int AvailableCount => _availablePool.Count;
         private int _totalCreated = 0;
         
         #region Unity Lifecycle

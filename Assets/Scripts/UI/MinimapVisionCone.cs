@@ -42,6 +42,9 @@ public sealed class MinimapVisionCone : VisualElement
     private float[] _spans = System.Array.Empty<float>();
     private int _spanCount;
 
+    /// <summary>Whether the shape carries the needle that shows where the agent looks.</summary>
+    private bool _headingNeedle = true;
+
     /// <summary>True once a drawing state has been written, so a repeat of it can be skipped.</summary>
     private bool _painted;
 
@@ -69,10 +72,13 @@ public sealed class MinimapVisionCone : VisualElement
     /// <summary>
     /// Shows a full disc of <paramref name="radius"/> pixels, for a sensor that sees all around, plus
     /// a needle towards <paramref name="headingDegrees"/> so the agent still shows where it looks.
+    ///
+    /// <paramref name="headingNeedle"/> belongs to the caller: a footprint of what somebody detects is not a
+    /// direction, and the needle of a pedestrian's disc read as a gaze the model does not have.
     /// </summary>
-    public void SetRing(float radius, float headingDegrees, Color fill, Color stroke)
+    public void SetRing(float radius, float headingDegrees, Color fill, Color stroke, bool headingNeedle = true)
     {
-        SetState(radius, headingDegrees, FullTurnDegrees, fill, stroke);
+        SetState(radius, headingDegrees, FullTurnDegrees, fill, stroke, headingNeedle);
     }
 
     /// <summary>
@@ -87,7 +93,8 @@ public sealed class MinimapVisionCone : VisualElement
         float fovDegrees,
         System.Collections.Generic.IReadOnlyList<float> spans,
         Color fill,
-        Color stroke)
+        Color stroke,
+        bool headingNeedle = true)
     {
         float clampedRadius = Mathf.Max(0f, radius);
         int count = spans?.Count ?? 0;
@@ -99,6 +106,7 @@ public sealed class MinimapVisionCone : VisualElement
             Mathf.Approximately(clampedRadius, _radius) &&
             Mathf.Approximately(headingDegrees, _headingDegrees) &&
             Mathf.Approximately(fovDegrees, _fovDegrees) &&
+            headingNeedle == _headingNeedle &&
             SameColours(fill, stroke) &&
             SameSpans(spans, count))
             return;
@@ -109,6 +117,7 @@ public sealed class MinimapVisionCone : VisualElement
         _fovDegrees = fovDegrees;
         _fill = fill;
         _stroke = stroke;
+        _headingNeedle = headingNeedle;
         StoreSpans(spans, count);
         Resize(clampedRadius);
     }
@@ -117,7 +126,8 @@ public sealed class MinimapVisionCone : VisualElement
     /// Stores the drawing state, resizes the element to the bounding box it needs and asks for a
     /// repaint. Nothing but the styles is touched here, so the owner keeps control of the position.
     /// </summary>
-    private void SetState(float radius, float headingDegrees, float fovDegrees, Color fill, Color stroke)
+    private void SetState(float radius, float headingDegrees, float fovDegrees, Color fill, Color stroke,
+        bool headingNeedle = true)
     {
         float clampedRadius = Mathf.Max(0f, radius);
 
@@ -129,6 +139,7 @@ public sealed class MinimapVisionCone : VisualElement
             Mathf.Approximately(clampedRadius, _radius) &&
             Mathf.Approximately(headingDegrees, _headingDegrees) &&
             Mathf.Approximately(fovDegrees, _fovDegrees) &&
+            headingNeedle == _headingNeedle &&
             SameColours(fill, stroke) &&
             _spanCount == 0)
             return;
@@ -139,6 +150,7 @@ public sealed class MinimapVisionCone : VisualElement
         _fovDegrees = fovDegrees;
         _fill = fill;
         _stroke = stroke;
+        _headingNeedle = headingNeedle;
 
         // A plain sector has no silhouette: leaving the spans behind would keep drawing the old one.
         _spanCount = 0;
@@ -253,7 +265,7 @@ public sealed class MinimapVisionCone : VisualElement
             painter.Stroke();
         }
 
-        if (fullTurn)
+        if (fullTurn && _headingNeedle)
         {
             painter.BeginPath();
             painter.MoveTo(PointOnCircle(center, _radius * NeedleInnerRatio));
@@ -299,10 +311,13 @@ public sealed class MinimapVisionCone : VisualElement
         painter.ClosePath();
         painter.Stroke();
 
-        painter.BeginPath();
-        painter.MoveTo(PointOnCircle(center, _radius * NeedleInnerRatio));
-        painter.LineTo(PointOnCircle(center, _radius));
-        painter.Stroke();
+        if (_headingNeedle)
+        {
+            painter.BeginPath();
+            painter.MoveTo(PointOnCircle(center, _radius * NeedleInnerRatio));
+            painter.LineTo(PointOnCircle(center, _radius));
+            painter.Stroke();
+        }
     }
 
     /// <summary>A point of the circle at the current heading, in the screen convention above.</summary>

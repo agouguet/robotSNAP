@@ -1977,6 +1977,10 @@ public sealed class ScenarioRouteEditor
         };
         if (areas > 0)
             parts.Add($"{areas} area{(areas == 1 ? string.Empty : "s")}");
+        // A route that enters over a window does not look like one that starts on the same instant, and the
+        // list is where an author sees at a glance which of their scenarios are spread out.
+        if (route.SpawnWindow > 0f)
+            parts.Add($"enters over {route.SpawnWindow:0.#} s");
 
         return string.Join(" · ", parts);
     }

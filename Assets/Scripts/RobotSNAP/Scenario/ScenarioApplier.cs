@@ -420,6 +420,12 @@ namespace RobotSNAP.Core.Scenario
             // and a seeded run stays reproducible.
             List<Departure> departures = BuildDepartures(totalHumans);
 
+            // The pool is warmed for a small crowd. A scenario of eighty agents would otherwise build sixty
+            // instances inside the frame that applies it - an Instantiate of a humanoid each, logged as "Pool
+            // exhausted" - and that burst, not the crowd itself, is what a big scenario used to cost: the same
+            // scenario now reaches its first frame with the pool it needs.
+            yield return EnsurePool(poolManager, totalHumans);
+
             // Get instances from the pool. A unit that leaves later is switched off here, where the pool left it:
             // an agent that is not due yet must be neither visible nor simulated, and waiting for its delay in an
             // active instance would only hide it from the eye, not from the simulation.
@@ -558,6 +564,18 @@ namespace RobotSNAP.Core.Scenario
             }
 
             return departures;
+        }
+
+        /// <summary>
+        /// Builds the instances a scenario needs before it starts handing them out, in the batches the pool
+        /// already yields between. Asking for the whole crowd at once is still one frame of work per batch, but
+        /// it is the pool's own batching rather than the scenario's frame that pays for it.
+        /// </summary>
+        private static IEnumerator EnsurePool(HumanPoolManager poolManager, int needed)
+        {
+            int missing = needed - (poolManager.ActiveCount + poolManager.AvailableCount);
+            if (missing > 0)
+                yield return poolManager.Prewarm(missing);
         }
 
         /// <summary>

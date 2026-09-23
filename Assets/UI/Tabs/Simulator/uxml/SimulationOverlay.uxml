@@ -75,6 +75,7 @@
 
                             <ui:Label text="Minimap" class="viz-group-title"/>
                             <ui:Toggle name="VizDetectionFootprints" label="Detection footprints" class="viz-toggle"/>
+                            <ui:Toggle name="VizMinimapLidarSweep" label="Robot lidar sweep" class="viz-toggle"/>
                         </ui:ScrollView>
                     </ui:VisualElement>
                 </ui:VisualElement>

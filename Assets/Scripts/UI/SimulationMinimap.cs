@@ -194,6 +194,14 @@ public sealed class SimulationMinimap
     /// </summary>
     public bool ShowDetectionFootprints { get; set; } = true;
 
+    /// <summary>
+    /// Whether a robot's footprint is its lidar sweep rather than its detector. The sweep is the whole of what
+    /// the robot senses - 270 degrees of world on a Jackal - where the detector is only what it makes of the
+    /// other agents; the two answer different questions, so the map draws one and lets the panel ask for the
+    /// other.
+    /// </summary>
+    public bool ShowRobotLidarSweep { get; set; }
+
     /// <summary>Refreshes the background source and the dot positions; called every frame from Update.</summary>
     public void Tick()
     {
@@ -305,8 +313,9 @@ public sealed class SimulationMinimap
         // A robot reads its detector first: that sensor exists for the other agents and nothing else, so it
         // is what "the zone this robot detects" means - a Jackal watches 270 degrees of world with its lidar
         // but a pedestrian only exists for it inside a 90 degree window five metres out. A robot without a
-        // detector falls back to the lidar, which at least says what it can see.
-        AgentDetector detector = GetDetector(agent);
+        // detector falls back to the lidar, which at least says what it can see, and the panel can ask for
+        // that sweep outright when the question is what the robot senses of the world rather than of the crowd.
+        AgentDetector detector = ShowRobotLidarSweep ? null : GetDetector(agent);
         RaycastLaserScanner scanner = detector == null ? GetScanner(agent) : null;
         float rangeMetres;
         float fovDegrees;
@@ -360,7 +369,8 @@ public sealed class SimulationMinimap
                 fovDegrees,
                 trace.Spans,
                 isRobot ? RobotConeFill : HumanConeFill,
-                isRobot ? RobotConeStroke : HumanConeStroke);
+                isRobot ? RobotConeStroke : HumanConeStroke,
+                headingNeedle: isRobot);
         }
         else if (isRobot)
         {
@@ -371,7 +381,9 @@ public sealed class SimulationMinimap
         }
         else
         {
-            cone.SetRing(radius, heading, HumanConeFill, HumanConeStroke);
+            // A pedestrian's footprint is what it perceives, all around, and the social force model has no
+            // gaze to draw a needle for.
+            cone.SetRing(radius, heading, HumanConeFill, HumanConeStroke, headingNeedle: false);
         }
 
         cone.style.display = DisplayStyle.Flex;

@@ -24,6 +24,7 @@ public sealed class SimulationVisualizationPanel
 
     private const string ExpandedGlyph = "▾";
     private const string FoldedGlyph = "▸";
+    private const string CollapsedClass = "is-collapsed";
 
     /// <summary>
     /// One switch: the toggle in the overlay, and the setting behind it. Most settings belong to the manager,
@@ -98,7 +99,8 @@ public sealed class SimulationVisualizationPanel
         "VizDistances",
 
         // Minimap
-        "VizDetectionFootprints"
+        "VizDetectionFootprints",
+        "VizMinimapLidarSweep"
     };
 
     /// <summary>Names of the switches, for whoever holds the overlay and this panel together.</summary>
@@ -143,13 +145,14 @@ public sealed class SimulationVisualizationPanel
         }
 
         if (_collapseButton != null)
-        {
-            _collapseButton.text = ExpandedGlyph;
             _collapseButton.clicked += ToggleCollapsed;
-        }
 
         BuildSwitches(root);
         SyncFromSettings();
+
+        // Folded to its tab: it floats over the shot, and a run nobody is debugging is a run that wants its
+        // view back. One click opens it, and the state it holds is the one the switches show.
+        SetCollapsed(true);
     }
 
     /// <summary>Re-reads the settings on a slow tick, so the panel shows what the scene is doing.</summary>
@@ -219,13 +222,15 @@ public sealed class SimulationVisualizationPanel
         return false;
     }
 
-    private void ToggleCollapsed()
+    private void ToggleCollapsed() => SetCollapsed(!_collapsed);
+
+    private void SetCollapsed(bool collapsed)
     {
-        _collapsed = !_collapsed;
-        _panel?.EnableInClassList("is-collapsed", _collapsed);
+        _collapsed = collapsed;
+        _panel?.EnableInClassList(CollapsedClass, collapsed);
 
         if (_collapseButton != null)
-            _collapseButton.text = _collapsed ? FoldedGlyph : ExpandedGlyph;
+            _collapseButton.text = collapsed ? FoldedGlyph : ExpandedGlyph;
     }
 
     /// <summary>
@@ -278,6 +283,12 @@ public sealed class SimulationVisualizationPanel
                     toggleName,
                     () => minimap != null && minimap.ShowDetectionFootprints,
                     on => { if (minimap != null) minimap.ShowDetectionFootprints = on; },
+                    drivesManager: false);
+            case "VizMinimapLidarSweep":
+                return new SwitchDefinition(
+                    toggleName,
+                    () => minimap != null && minimap.ShowRobotLidarSweep,
+                    on => { if (minimap != null) minimap.ShowRobotLidarSweep = on; },
                     drivesManager: false);
 
             default:

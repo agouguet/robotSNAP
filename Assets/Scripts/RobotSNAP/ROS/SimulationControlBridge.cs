@@ -269,7 +269,7 @@ namespace RobotSNAP.ROS
             if (this == null) return;
 
             CommandResult result = _router.Execute(message != null ? message.data : null);
-            PublishResult(result.Command, result.Ok, result.Message, result.UnknownIds);
+            PublishResult(result.Command, result.Ok, result.Message, result.UnknownIds, result.Robot);
         }
 
         #endregion
@@ -280,8 +280,15 @@ namespace RobotSNAP.ROS
         /// Publishes the answer to one command: the command that ran, whether it did what it asked, what
         /// happened, and the simulation time it happened at. The crowd command also carries the ids the scene
         /// does not hold, so a client can spot a typo instead of waiting for a human that never moves.
+        /// A robot command carries the id it addressed, so a caller can confirm which robot answered
+        /// without re-reading the snapshot.
         /// </summary>
-        private void PublishResult(string command, bool ok, string message, IReadOnlyList<int> unknownIds)
+        private void PublishResult(
+            string command,
+            bool ok,
+            string message,
+            IReadOnlyList<int> unknownIds,
+            string robot)
         {
             if (!CanPublish(_resultTopicName))
             {
@@ -301,6 +308,9 @@ namespace RobotSNAP.ROS
 
             if (unknownIds != null)
                 payload["unknown_ids"] = unknownIds;
+
+            if (!string.IsNullOrEmpty(robot))
+                payload["robot"] = robot;
 
             string json = JsonConvert.SerializeObject(payload, Formatting.None);
             _ros.Publish(_resultTopicName, new StringMsg(json));

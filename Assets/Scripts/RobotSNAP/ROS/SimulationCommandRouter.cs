@@ -32,19 +32,30 @@ namespace RobotSNAP.ROS
         /// </summary>
         public IReadOnlyList<int> UnknownIds { get; }
 
-        /// <summary>Builds a result; a null name or message is stored as an empty string.</summary>
-        public CommandResult(bool ok, string command, string message)
-            : this(ok, command, message, null)
-        {
-        }
+        /// <summary>
+        /// Id of the robot a command addressed, when it addressed one: the id named by the "robot" key, or the
+        /// primary the command reached without it. Null for every other command, which is what keeps the key
+        /// out of their answers.
+        /// </summary>
+        public string Robot { get; }
 
-        /// <summary>Builds a result that carries the ids a crowd command could not find.</summary>
-        public CommandResult(bool ok, string command, string message, IReadOnlyList<int> unknownIds)
+        /// <summary>
+        /// Builds a result; a null name or message is stored as an empty string. <paramref name="unknownIds"/>
+        /// carries the ids a crowd command could not find and <paramref name="robot"/> the id a robot command
+        /// addressed, each left null - and therefore out of the answer - by the commands that have neither.
+        /// </summary>
+        public CommandResult(
+            bool ok,
+            string command,
+            string message,
+            IReadOnlyList<int> unknownIds = null,
+            string robot = null)
         {
             Ok = ok;
             Command = command ?? "";
             Message = message ?? "";
             UnknownIds = unknownIds;
+            Robot = robot;
         }
     }
 
@@ -58,6 +69,9 @@ namespace RobotSNAP.ROS
     /// says what actually happened, so the client never has to guess which part of a request was honoured. A
     /// malformed body, a missing key and an unknown command are all answered the same way, as a result with
     /// Ok=false, because a peer on the other end of the connector can do nothing with a thrown exception.
+    ///
+    /// A robot command may also name the robot it addresses with a "robot" key holding an id such as
+    /// <c>robot_2</c>, and reaches the roster's primary when it names none.
     ///
     /// No reference is held between two commands: a scenario load destroys and rebuilds the environments, and
     /// the managers, robot, controller and crowd that live inside them, so every one of them is looked up
@@ -134,8 +148,8 @@ namespace RobotSNAP.ROS
                 case "set_time_scale": return SetTimeScale(body, command);
                 case "set_random_seed": return SetRandomSeed(body, command);
                 case "set_robot_goal": return SetRobotGoal(body, command);
-                case "clear_robot_goal": return ClearRobotGoal(command);
-                case "stop_robot": return StopRobot(command);
+                case "clear_robot_goal": return ClearRobotGoal(body, command);
+                case "stop_robot": return StopRobot(body, command);
                 case "set_control_mode": return SetControlMode(body, command);
                 case "set_agent_controller": return SetAgentController(body, command);
                 case "humans": return SetHumans(body, command);
@@ -388,9 +402,9 @@ namespace RobotSNAP.ROS
         #region Robot
 
         /// <summary>
-        /// Sends the robot to a point of the scene. Coordinates are Unity world metres on the ground plane;
-        /// the optional "y" key puts the goal higher, for a scenario with levels, and the height of the robot
-        /// is kept otherwise.
+        /// Sends the robot named by the optional "robot" key - the primary when the body names none - to a
+        /// point of the scene. Coordinates are Unity world metres on the ground plane; the optional "y" key
+        /// puts the goal higher, for a scenario with levels, and the height of the robot is kept otherwise.
         /// </summary>
         private static CommandResult SetRobotGoal(JObject body, string command)
         {
@@ -400,7 +414,10 @@ namespace RobotSNAP.ROS
             if (!TryRequireFloat(body, "z", command, out float z, out CommandResult refusalZ))
                 return refusalZ;
 
-            Robot robot = ResolveRobot();
+            Robot robot = ResolveRobot(body, command, out string id, out CommandResult? robotRefusal);
+            if (robotRefusal.HasValue)
+                return robotRefusal.Value;
+
             if (robot == null)
                 return new CommandResult(false, command, "no robot in the scene");
 
@@ -409,53 +426,67 @@ namespace RobotSNAP.ROS
             robot.SetGoal(new Vector3(x, y, z));
 
             return new CommandResult(true, command,
-                $"robot goal set to ({Format(x)}, {Format(y)}, {Format(z)}) in world metres");
+                $"{Label(id)} goal set to ({Format(x)}, {Format(y)}, {Format(z)}) in world metres", null, id);
         }
 
-        /// <summary>Clears the goal and the route the robot is walking.</summary>
-        private static CommandResult ClearRobotGoal(string command)
+        /// <summary>Clears the goal and the route of the robot named by the optional "robot" key.</summary>
+        private static CommandResult ClearRobotGoal(JObject body, string command)
         {
-            Robot robot = ResolveRobot();
+            Robot robot = ResolveRobot(body, command, out string id, out CommandResult? robotRefusal);
+            if (robotRefusal.HasValue)
+                return robotRefusal.Value;
+
             if (robot == null)
                 return new CommandResult(false, command, "no robot in the scene");
 
             robot.ClearGoal();
 
-            return new CommandResult(true, command, "robot goal cleared");
+            return new CommandResult(true, command, $"{Label(id)} goal cleared", null, id);
         }
 
         /// <summary>
-        /// Stops the robot and the input controller driving it. The controller keeps its last target speeds
-        /// and re-applies them on the next fixed step, so stopping the robot alone would be undone a frame
-        /// later; its emergency stop clears those speeds and stops the robot, and is the public way to do both.
+        /// Stops the robot named by the optional "robot" key, and the input controller driving it. The
+        /// controller keeps its last target speeds and re-applies them on the next fixed step, so stopping the
+        /// robot alone would be undone a frame later; its emergency stop clears those speeds and stops the
+        /// robot, and is the public way to do both.
         /// </summary>
-        private static CommandResult StopRobot(string command)
+        private static CommandResult StopRobot(JObject body, string command)
         {
-            Robot robot = ResolveRobot();
+            Robot robot = ResolveRobot(body, command, out string id, out CommandResult? robotRefusal);
+            if (robotRefusal.HasValue)
+                return robotRefusal.Value;
+
             if (robot == null)
                 return new CommandResult(false, command, "no robot in the scene");
 
             robot.Stop();
 
-            RobotInputController controller = ResolveInputController();
+            RobotInputController controller = ResolveInputController(robot);
             if (controller == null)
-                return new CommandResult(true, command, "robot stopped, no robot input controller in the scene");
+                return new CommandResult(true, command,
+                    $"{Label(id)} stopped, no robot input controller in the scene", null, id);
 
             controller.EmergencyStop();
 
-            return new CommandResult(true, command, "robot stopped and its input controller zeroed");
+            return new CommandResult(true, command,
+                $"{Label(id)} stopped and its input controller zeroed", null, id);
         }
 
         /// <summary>
-        /// Chooses who drives the robot: the keyboard, the ROS velocity topic, both, or the scenario. The
-        /// controller clears its target speeds and stops the robot when the mode changes.
+        /// Chooses who drives the robot named by the optional "robot" key - the primary when the body names
+        /// none: the keyboard, the ROS velocity topic, both, or the scenario. The controller clears its target
+        /// speeds and stops the robot when the mode changes.
         /// </summary>
         private static CommandResult SetControlMode(JObject body, string command)
         {
             if (!TryRequireString(body, "mode", command, out string mode, out CommandResult refusal))
                 return refusal;
 
-            RobotInputController controller = ResolveInputController();
+            Robot robot = ResolveRobot(body, command, out string id, out CommandResult? robotRefusal);
+            if (robotRefusal.HasValue)
+                return robotRefusal.Value;
+
+            RobotInputController controller = ResolveInputController(robot);
             if (controller == null)
                 return new CommandResult(false, command, "no robot input controller in the scene");
 
@@ -482,7 +513,7 @@ namespace RobotSNAP.ROS
             controller.SetControlMode(controlMode);
 
             return new CommandResult(true, command,
-                $"robot control mode set to {controlMode.ToString().ToLowerInvariant()}");
+                $"{Label(id)} control mode set to {controlMode.ToString().ToLowerInvariant()}", null, id);
         }
 
         #endregion
@@ -660,12 +691,95 @@ namespace RobotSNAP.ROS
         }
 
         /// <summary>
-        /// Robot of the scene. A session with several environments holds one robot per environment, and this
-        /// command addresses the one the state stream reports.
+        /// Robot a command addresses: the one named by the optional "robot" key when the body carries one,
+        /// otherwise the roster's primary. The roster is the source of truth when the scene runs one; a scene
+        /// without a roster, or with an empty one, keeps the single robot these commands always resolved, so an
+        /// existing client behaves exactly as it did. <paramref name="id"/> is the id the answer echoes, and
+        /// <paramref name="refusal"/> carries the answer when the body names an id the roster does not hold.
         /// </summary>
-        private static Robot ResolveRobot()
+        private static Robot ResolveRobot(JObject body, string command, out string id, out CommandResult? refusal)
         {
-            return UnityEngine.Object.FindAnyObjectByType<Robot>();
+            id = null;
+            refusal = null;
+
+            RobotRoster roster = RobotRoster.Current;
+            if (roster == null || roster.Count == 0)
+            {
+                Robot single = UnityEngine.Object.FindAnyObjectByType<Robot>();
+                id = IdOf(roster, single);
+                return single;
+            }
+
+            string requested = null;
+            if (HasValue(body, "robot"))
+            {
+                if (!TryGetString(body, "robot", out string named))
+                {
+                    refusal = new CommandResult(false, command, "key 'robot' must be a string");
+                    return null;
+                }
+
+                requested = named != null ? named.Trim() : null;
+            }
+
+            // Absent, null or blank names nobody, and the roster's primary is exactly the robot those
+            // commands reached before the key existed.
+            if (string.IsNullOrEmpty(requested))
+            {
+                Robot primary = roster.Primary;
+                id = IdOf(roster, primary);
+                return primary;
+            }
+
+            if (roster.TryGet(requested, out Robot robot))
+            {
+                id = IdOf(roster, robot);
+                return robot;
+            }
+
+            refusal = new CommandResult(false, command,
+                $"unknown robot '{requested}'; robots in the scene: {RosterIds(roster)}");
+            return null;
+        }
+
+        /// <summary>Id a robot is addressed by: the one the roster holds, or the one its identity carries.</summary>
+        private static string IdOf(RobotRoster roster, Robot robot)
+        {
+            if (robot == null)
+                return null;
+
+            string id = roster != null ? roster.IdOf(robot) : null;
+            if (!string.IsNullOrEmpty(id))
+                return id;
+
+            RobotIdentity identity = RobotIdentity.Of(robot);
+            return identity != null ? identity.Id : null;
+        }
+
+        /// <summary>
+        /// Ids the roster carries, comma separated, for the refusal that tells a caller which robots it could
+        /// have addressed instead.
+        /// </summary>
+        private static string RosterIds(RobotRoster roster)
+        {
+            var robots = new List<Robot>();
+            roster.FillRobots(robots);
+
+            var ids = new List<string>(robots.Count);
+            foreach (Robot robot in robots)
+            {
+                string id = roster.IdOf(robot);
+                if (!string.IsNullOrEmpty(id))
+                    ids.Add(id);
+            }
+
+            return ids.Count > 0 ? string.Join(", ", ids) : "none";
+        }
+
+        /// <summary>How an answer names a robot: its id when it has one, "robot" otherwise.</summary>
+        private static string Label(string id)
+        {
+            return string.IsNullOrEmpty(id) ? "robot" : id;
         }
 
         /// <summary>
@@ -675,6 +789,17 @@ namespace RobotSNAP.ROS
         private static HumanManager ResolveHumanManager()
         {
             return UnityEngine.Object.FindAnyObjectByType<HumanManager>();
+        }
+
+        /// <summary>
+        /// Input controller of a robot: the one that lives on the robot, so a command naming a robot drives
+        /// that robot's controller instead of whichever one the scene search happens to find first. A scene
+        /// that keeps the controller elsewhere falls back to the scene-wide lookup of a single-robot session.
+        /// </summary>
+        private static RobotInputController ResolveInputController(Robot robot)
+        {
+            RobotInputController controller = robot != null ? robot.GetComponentInChildren<RobotInputController>() : null;
+            return controller != null ? controller : ResolveInputController();
         }
 
         /// <summary>Input controller of the robot, when the scene gave it one.</summary>

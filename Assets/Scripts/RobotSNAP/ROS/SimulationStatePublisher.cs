@@ -75,7 +75,6 @@ namespace RobotSNAP.ROS
         // that lives inside them - are destroyed and rebuilt each time a scenario is loaded.
         private ScenarioManager _scenarioManager;
         private Clock _clock;
-        private Robot _robot;
         private CameraController _cameraController;
         private SimulationState? _lastState;
 
@@ -523,8 +522,8 @@ namespace RobotSNAP.ROS
         ///   scenario_name          name declared inside the scenario, null when none is loaded
         ///   environment            map of the scenario, or its declared location
         ///   map_name               map identifier authored in the scenario
-        ///   robot_start_pose       robot start the scenario authored {x, y, z, yaw}, null when it names none
-        ///   robot_target_pose      robot target the scenario authored {x, y, z, yaw}, null when it names none
+        ///   robot_start_pose       start the scenario authored for the PRIMARY robot {x, y, z, yaw}, null without one
+        ///   robot_target_pose      target the scenario authored for the PRIMARY robot {x, y, z, yaw}, null without one
         ///   num_groups             groups the scenario declares, read from the group ids of its humans
         ///   map_width              width of the occupancy grid, in cells, 0 without a grid
         ///   map_height             height of the occupancy grid, in cells, 0 without a grid
@@ -534,9 +533,12 @@ namespace RobotSNAP.ROS
         ///   human_count            humans currently simulated
         ///   humans                 one entry per human: id, x, y, z, vx, vy, vz, speed, goal, group,
         ///                          controller, end_behavior
-        ///   robot                  robot pose {x, y, z, yaw}, null when the scene has no robot
-        ///   robot_has_goal         true while the robot drives towards a goal
-        ///   robot_goal             robot goal {x, y, z}, null when it has none
+        ///   robots                 one entry per live robot, in the scenario's order: id, type, is_primary,
+        ///                          x, y, z, yaw, has_goal, goal, start_pose and target_pose; empty without a robot
+        ///   robot_count            robots the session runs, 0 when the scene has none
+        ///   robot                  PRIMARY robot pose {x, y, z, yaw}, null when the scene has no robot
+        ///   robot_has_goal         true while the PRIMARY robot drives towards a goal
+        ///   robot_goal             PRIMARY robot goal {x, y, z}, null when it has none
         ///   camera_focus           name of the agent the camera follows, null when it follows none
         ///   camera_focus_is_robot  true when the followed agent is the robot
         ///   camera_focus_is_human  true when the followed agent is a human
@@ -552,9 +554,15 @@ namespace RobotSNAP.ROS
             Supervisor supervisor = Supervisor.Instance;
             _clock ??= Clock.Instance;
             CameraController camera = _cameraController ??= FindAnyObjectByType<CameraController>();
-            Robot robot = _robot != null ? _robot : (_robot = FindAnyObjectByType<Robot>());
+            List<Robot> robots = ResolveRobots();
+            RobotRoster roster = RobotRoster.Current;
+            Robot primary = PrimaryOf(roster, robots);
 
             ScenarioData scenario = manager != null ? manager.CurrentScenarioData : null;
+            List<RobotScenarioConfig> robotConfigs = scenario != null ? scenario.NormalizedRobots() : null;
+            // The legacy poses keep describing the primary robot: its entry when the scenario names the fleet,
+            // and the single "robot" section the snapshot has always read when no live robot carries an id.
+            RobotScenarioConfig primaryConfig = ConfigOf(robotConfigs, IdOf(roster, primary)) ?? scenario?.Robot;
             SimulationState state = ResolveState(manager, supervisor);
             bool paused = supervisor != null ? supervisor.IsPaused : (_clock != null && _clock.IsPaused);
             bool applied = state == SimulationState.Running || state == SimulationState.Paused;
@@ -575,8 +583,8 @@ namespace RobotSNAP.ROS
                 { "scenario_name", scenario != null ? scenario.Name : null },
                 { "environment", EnvironmentOf(scenario) },
                 { "map_name", scenario != null ? scenario.MapImage : null },
-                { "robot_start_pose", ScenarioPointJson(scenario, scenario?.Robot?.StartRef) },
-                { "robot_target_pose", ScenarioPointJson(scenario, scenario?.Robot?.GoalRef) },
+                { "robot_start_pose", ScenarioPointJson(scenario, primaryConfig?.StartRef) },
+                { "robot_target_pose", ScenarioPointJson(scenario, primaryConfig?.GoalRef) },
                 { "num_groups", CountGroups(scenario) },
                 { "map_width", _mapWidth },
                 { "map_height", _mapHeight },
@@ -585,9 +593,11 @@ namespace RobotSNAP.ROS
                 { "map_origin_y", _mapOrigin.position.y },
                 { "human_count", FindHumans().Length },
                 { "humans", HumansJson(FindHumans()) },
-                { "robot", robot != null ? PoseJson(robot.RobotTransform) : null },
-                { "robot_has_goal", robot != null && robot.HasGoal },
-                { "robot_goal", robot != null && robot.HasGoal ? PositionJson(robot.Goal) : null },
+                { "robots", RobotsJson(robots, roster, primary, scenario, robotConfigs) },
+                { "robot_count", robots.Count },
+                { "robot", primary != null ? PoseJson(primary.RobotTransform) : null },
+                { "robot_has_goal", primary != null && primary.HasGoal },
+                { "robot_goal", primary != null && primary.HasGoal ? PositionJson(primary.Goal) : null },
                 { "camera_focus", focus != null ? focus.name : null },
                 { "camera_focus_is_robot", focus != null && focus.GetComponentInParent<Robot>() != null },
                 { "camera_focus_is_human", focusedHuman != null },
@@ -599,6 +609,125 @@ namespace RobotSNAP.ROS
             };
 
             return JsonConvert.SerializeObject(payload, Formatting.None);
+        }
+
+        /// <summary>
+        /// Live robots of the session, in the order the scenario lists them, which is the order the roster
+        /// walks. A scene without a roster - an editor test, a scene authored before the fleet existed -
+        /// resolves the single robot this snapshot has always described, so it keeps working unchanged.
+        /// </summary>
+        private static List<Robot> ResolveRobots()
+        {
+            var robots = new List<Robot>();
+
+            RobotRoster roster = RobotRoster.Current;
+            if (roster != null)
+                roster.FillRobots(robots);
+
+            if (robots.Count == 0)
+            {
+                Robot single = FindAnyObjectByType<Robot>();
+                if (single != null)
+                    robots.Add(single);
+            }
+
+            return robots;
+        }
+
+        /// <summary>
+        /// The robot the legacy keys describe: the roster's primary, which is <c>robot_1</c> whenever the
+        /// scenario runs one. A scene without a roster runs a single robot, which is the primary by definition.
+        /// </summary>
+        private static Robot PrimaryOf(RobotRoster roster, List<Robot> robots)
+        {
+            Robot primary = roster != null ? roster.Primary : null;
+            if (primary != null)
+                return primary;
+
+            return robots.Count > 0 ? robots[0] : null;
+        }
+
+        /// <summary>
+        /// The robots array of the snapshot: one entry per live robot, in the scenario's order. It is empty
+        /// rather than null when the scene runs no robot, so a client never has to test the key for null.
+        /// </summary>
+        private object RobotsJson(
+            List<Robot> robots,
+            RobotRoster roster,
+            Robot primary,
+            ScenarioData scenario,
+            List<RobotScenarioConfig> configs)
+        {
+            var entries = new List<object>(robots.Count);
+
+            foreach (Robot robot in robots)
+                entries.Add(RobotJson(robot, roster, primary, scenario, configs));
+
+            return entries;
+        }
+
+        /// <summary>
+        /// One entry of the robots array: who the robot is, where it stands in the ROS frame, and the two
+        /// scenario poses it was applied with. Every key is written for every robot, so a reader does not have
+        /// to test whether one is there before reading it.
+        /// </summary>
+        private object RobotJson(
+            Robot robot,
+            RobotRoster roster,
+            Robot primary,
+            ScenarioData scenario,
+            List<RobotScenarioConfig> configs)
+        {
+            Transform transform = robot.RobotTransform;
+            (float x, float y, float z, float yaw) = PoseValues(transform.position, transform.rotation);
+
+            RobotIdentity identity = RobotIdentity.Of(robot);
+            string id = IdOf(roster, robot) ?? RobotRoster.PrimaryId;
+            RobotScenarioConfig config = ConfigOf(configs, id);
+
+            return new
+            {
+                id,
+                type = identity != null ? identity.TypeId : RobotProfiles.DefaultId,
+                is_primary = identity != null ? identity.IsPrimary : robot == primary,
+                x,
+                y,
+                z,
+                yaw,
+                has_goal = robot.HasGoal,
+                goal = robot.HasGoal ? PositionJson(robot.Goal) : null,
+                start_pose = ScenarioPointJson(scenario, config?.StartRef),
+                target_pose = ScenarioPointJson(scenario, config?.GoalRef)
+            };
+        }
+
+        /// <summary>The scenario entry that names an id, or null when the scenario does not carry one.</summary>
+        private static RobotScenarioConfig ConfigOf(List<RobotScenarioConfig> configs, string id)
+        {
+            if (configs == null || string.IsNullOrEmpty(id))
+                return null;
+
+            foreach (RobotScenarioConfig config in configs)
+            {
+                if (config != null && string.Equals(config.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return config;
+            }
+
+            return null;
+        }
+
+        /// <summary>Id a robot is addressed by: the one the roster holds, or the one its identity carries.</summary>
+        private static string IdOf(RobotRoster roster, Robot robot)
+        {
+            if (robot == null)
+                return null;
+
+            string id = roster != null ? roster.IdOf(robot) : null;
+            if (!string.IsNullOrEmpty(id))
+                return id;
+
+            RobotIdentity identity = RobotIdentity.Of(robot);
+            return identity != null ? identity.Id : null;
         }
 
         private void PublishState()
@@ -654,16 +783,21 @@ namespace RobotSNAP.ROS
         /// </summary>
         private static object PoseJson(Vector3 worldPosition, Quaternion worldRotation)
         {
+            (float x, float y, float z, float yaw) = PoseValues(worldPosition, worldRotation);
+
+            return new { x, y, z, yaw };
+        }
+
+        /// <summary>
+        /// The four numbers every pose is made of, in the ROS frame, for the flat entry of the robots array
+        /// which carries them next to the identity of its robot.
+        /// </summary>
+        private static (float x, float y, float z, float yaw) PoseValues(Vector3 worldPosition, Quaternion worldRotation)
+        {
             Vector3<FLU> position = worldPosition.To<FLU>();
             Vector3<FLU> forward = (worldRotation * Vector3.forward).To<FLU>();
 
-            return new
-            {
-                x = position.x,
-                y = position.y,
-                z = position.z,
-                yaw = Mathf.Atan2(forward.y, forward.x)
-            };
+            return (position.x, position.y, position.z, Mathf.Atan2(forward.y, forward.x));
         }
 
         /// <summary>Position in the ROS frame, as a JSON object.</summary>

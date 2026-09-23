@@ -113,6 +113,21 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     public float maxAngularAcceleration = 10f;
 
     [Tooltip(
+        "How hard the drive may take speed off the robot, in m/s per second. Zero - the figure every robot of " +
+        "this project carries - lets the tyres do it: a robot asked to stop brakes with the grip it has and " +
+        "comes to rest in a tenth of a second from two radians per second. A figure here is what a platform " +
+        "whose motors are the limit does instead, and it is how the realistic variant of a robot is built: " +
+        "see maxAngularBraking.")]
+    public float maxLinearBraking = 0f;
+
+    [Tooltip(
+        "How hard the drive may take yaw off the robot, in rad/s per second. Zero lets the tyres decide, as " +
+        "above. The Jackal (realistic) carries 2.5: released from the top of its commanded turn it comes to " +
+        "rest in 1.6 seconds and in about a radian of rotation, where the tyre-braked one stops in 0.13 " +
+        "seconds and a tenth of a radian - and only the second of those is a robot that could exist.")]
+    public float maxAngularBraking = 0f;
+
+    [Tooltip(
         "How much of the sideways velocity the skid steer base removes in one step, from 0 (free to slide) " +
         "to 1 (never slides). A wheeled base does not slide sideways: that constraint is what makes the " +
         "commanded turn happen instead of the robot being carried outwards.")]
@@ -316,14 +331,17 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         float traction = TractionForce(mass);
         Vector3 error = wanted - planar;
 
-        // The ramp is the comfort of a robot getting up to speed, and it has no business limiting a robot
-        // being asked to slow down or to stop: measured on the Kuri, the drive braking from two radians per
-        // second had a tenth of a newton-metre to work with, while the effort it had accumulated holding
-        // the turn was larger than that. A robot slowing down uses its tyres, so the demand is left whole
-        // and the traction budget is what caps it.
-        Vector3 change = Vector3.Dot(error, planar) < 0f
+        // Slowing down is where a robot's ramps and its tyres can be told apart. A robot being asked to stop
+        // uses its tyres, and the demand is left whole so that the traction budget is the only thing that
+        // caps it - which is what every robot here does, and what makes them all come to rest together. A
+        // platform whose motors are the limit instead brakes at the rate it can command, and that is what
+        // maxLinearBraking asks for: it is the figure that separates a robot that stops as its motors allow
+        // from one that stops as its grip would, and only the first of those exists.
+        bool braking = Vector3.Dot(error, planar) < 0f;
+        float linearLimit = braking && maxLinearBraking > 0f ? maxLinearBraking : maxLinearAcceleration;
+        Vector3 change = braking && maxLinearBraking <= 0f
             ? error
-            : Vector3.ClampMagnitude(error, Mathf.Max(0f, maxLinearAcceleration) * step);
+            : Vector3.ClampMagnitude(error, Mathf.Max(0f, linearLimit) * step);
         Vector3 force = change / step * mass;
 
         bool ahead = Vector3.Dot(_forceIntegral, error) < 0f;
@@ -350,10 +368,12 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         // since Unity turns clockwise around +Y. Reading the yaw rate without that flip made the base pull
         // against its own wheels, and the two of them settled at half the commanded rate.
         float inertia = _chassisYawInertia > 0f ? _chassisYawInertia : InertiaAboutUp(body);
-        float yawLimit = Mathf.Max(0f, maxAngularAcceleration) * step;
         Vector3 spin = body.angularVelocity;
         float yawError = -_currentAngularSpeed - spin.y;
-        float yawChange = yawError * spin.y < 0f
+        bool slowingDown = yawError * spin.y < 0f;
+        float yawRate = slowingDown && maxAngularBraking > 0f ? maxAngularBraking : maxAngularAcceleration;
+        float yawLimit = Mathf.Max(0f, yawRate) * step;
+        float yawChange = slowingDown && maxAngularBraking <= 0f
             ? yawError
             : Mathf.Clamp(yawError, -yawLimit, yawLimit);
         float torque = yawChange / step * inertia;

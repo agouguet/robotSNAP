@@ -103,6 +103,7 @@ GameObject:
   - component: {fileID: 3709850022502248538}
   - component: {fileID: 6282422783874715069}
   - component: {fileID: 3081854060104658578}
+  - component: {fileID: 8948343830690363979}
   m_Layer: 0
   m_Name: front_left_wheel_link
   m_TagString: Untagged
@@ -240,6 +241,27 @@ MonoBehaviour:
   jointName: front_left_wheel_joint
   EffortLimit: 1000
   VelocityLimit: 1000
+--- !u!135 &8948343830690363979
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 369267421833139390}
+  m_Material: {fileID: 13400000, guid: 07bf23f5c4a33b10398a4ebd9662ae41, type: 2}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.09983081
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &450682234408902173
 GameObject:
   m_ObjectHideFlags: 0
@@ -289,7 +311,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 5
   m_Convex: 1
   m_CookingOptions: 30
@@ -612,6 +634,7 @@ GameObject:
   - component: {fileID: 5138953112604947618}
   - component: {fileID: 2274279799913971311}
   - component: {fileID: 7457210856831679530}
+  - component: {fileID: 8705300199936426414}
   m_Layer: 0
   m_Name: rear_right_wheel_link
   m_TagString: Untagged
@@ -749,6 +772,27 @@ MonoBehaviour:
   jointName: rear_right_wheel_joint
   EffortLimit: 1000
   VelocityLimit: 1000
+--- !u!135 &8705300199936426414
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 859110136349688351}
+  m_Material: {fileID: 13400000, guid: 07bf23f5c4a33b10398a4ebd9662ae41, type: 2}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.09983081
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &888054377954997214
 GameObject:
   m_ObjectHideFlags: 0
@@ -1062,6 +1106,7 @@ GameObject:
   - component: {fileID: 5286373333787129234}
   - component: {fileID: 3005436036453906462}
   - component: {fileID: 9063505624468158038}
+  - component: {fileID: 7689819596035725108}
   m_Layer: 0
   m_Name: rear_left_wheel_link
   m_TagString: Untagged
@@ -1199,6 +1244,27 @@ MonoBehaviour:
   jointName: rear_left_wheel_joint
   EffortLimit: 1000
   VelocityLimit: 1000
+--- !u!135 &7689819596035725108
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1648746830779333151}
+  m_Material: {fileID: 13400000, guid: 07bf23f5c4a33b10398a4ebd9662ae41, type: 2}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.09983081
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1683906982658163140
 GameObject:
   m_ObjectHideFlags: 0
@@ -1435,6 +1501,7 @@ GameObject:
   - component: {fileID: 7214289030773939997}
   - component: {fileID: 8555251437262835864}
   - component: {fileID: 6113220904108147829}
+  - component: {fileID: 2577025995179511514}
   m_Layer: 0
   m_Name: front_right_wheel_link
   m_TagString: Untagged
@@ -1572,6 +1639,27 @@ MonoBehaviour:
   jointName: front_right_wheel_joint
   EffortLimit: 1000
   VelocityLimit: 1000
+--- !u!135 &2577025995179511514
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2335303801373091303}
+  m_Material: {fileID: 13400000, guid: 07bf23f5c4a33b10398a4ebd9662ae41, type: 2}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.09983081
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &2357429757309293083
 GameObject:
   m_ObjectHideFlags: 0
@@ -1666,7 +1754,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 5
   m_Convex: 1
   m_CookingOptions: 30
@@ -2029,7 +2117,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 5
   m_Convex: 1
   m_CookingOptions: 30
@@ -3117,7 +3205,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 5
   m_Convex: 1
   m_CookingOptions: 30

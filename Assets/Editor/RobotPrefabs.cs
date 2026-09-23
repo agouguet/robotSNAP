@@ -525,17 +525,38 @@ public static class RobotPrefabs
     /// covers nothing and the robot drags its body on the floor instead of rolling. The base robot solves
     /// the same problem with a sphere of the radius of the wheel, which is what is done here.
     /// </summary>
+    /// <summary>
+    /// Gives every driven wheel a sphere to roll on, which is the one shape the physics rolls smoothly.
+    ///
+    /// A wheel rolls on the shape it is given, and the meshes a URDF brings do not roll: the Jackal's and
+    /// the Bibus's wheels are faceted cylinders, and a chassis carried by those is hammered by one facet
+    /// edge per segment of every revolution. Measured on the flat floor of the default scenario with the
+    /// robot driven straight at a metre per second, the pitch and the roll of those two robots oscillate at
+    /// 0.08 and 0.24 rad/s while the Kuri's and the Freight's - whose wheels the importer left without a
+    /// collider and this tool therefore already gave a sphere - sit at 0.0000. It is also why the mesh is
+    /// switched off rather than kept beside the sphere: two shapes on one wheel is a wheel that collides
+    /// with the floor twice per step.
+    ///
+    /// The sphere takes the radius of the wheel itself, from its own mesh or its own renderer, so the robot
+    /// stands at the height its model says it stands at.
+    /// </summary>
     private static int EnsureWheelColliders(List<Transform> left, List<Transform> right)
     {
         int repaired = 0;
         foreach (Transform wheel in All(left, right))
         {
-            if (HasUsableCollider(wheel))
+            if (RollsOnASphere(wheel))
                 continue;
 
             float radius = MeasureWheelRadius(wheel);
             if (radius <= 0.005f)
                 continue;
+
+            foreach (Collider collider in wheel.GetComponentsInChildren<Collider>(true))
+            {
+                if (collider is MeshCollider)
+                    collider.enabled = false;
+            }
 
             var sphere = wheel.gameObject.AddComponent<SphereCollider>();
             sphere.radius = radius;
@@ -546,30 +567,24 @@ public static class RobotPrefabs
         return repaired;
     }
 
+    /// <summary>Whether a wheel already rolls on a sphere of its own.</summary>
+    private static bool RollsOnASphere(Transform wheel)
+    {
+        foreach (Collider collider in wheel.GetComponentsInChildren<Collider>(true))
+        {
+            if (collider is SphereCollider sphere && sphere.enabled)
+                return true;
+        }
+
+        return false;
+    }
+
     private static IEnumerable<Transform> All(List<Transform> left, List<Transform> right)
     {
         foreach (Transform wheel in left)
             yield return wheel;
         foreach (Transform wheel in right)
             yield return wheel;
-    }
-
-    private static bool HasUsableCollider(Transform wheel)
-    {
-        foreach (Collider collider in wheel.GetComponentsInChildren<Collider>(true))
-        {
-            if (collider is MeshCollider mesh)
-            {
-                if (mesh.sharedMesh != null && mesh.sharedMesh.vertexCount > 0)
-                    return true;
-                continue;
-            }
-
-            if (collider != null)
-                return true;
-        }
-
-        return false;
     }
 
     /// <summary>

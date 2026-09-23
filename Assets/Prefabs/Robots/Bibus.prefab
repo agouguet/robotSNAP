@@ -1127,6 +1127,7 @@ GameObject:
   - component: {fileID: 4652583771957542743}
   - component: {fileID: 3034862081782245604}
   - component: {fileID: 3231081422795679141}
+  - component: {fileID: 7635289089309651089}
   m_Layer: 0
   m_Name: swd_left_link
   m_TagString: Untagged
@@ -1264,6 +1265,27 @@ MonoBehaviour:
   jointName: base_swd_left_joint
   EffortLimit: 1000
   VelocityLimit: 1000
+--- !u!135 &7635289089309651089
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3512223398915943209}
+  m_Material: {fileID: 13400000, guid: 07bf23f5c4a33b10398a4ebd9662ae41, type: 2}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.062493738
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &4037374201074677202
 GameObject:
   m_ObjectHideFlags: 0
@@ -2017,7 +2039,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 5
   m_Convex: 1
   m_CookingOptions: 30
@@ -2124,6 +2146,7 @@ GameObject:
   - component: {fileID: 5930322357591198207}
   - component: {fileID: 8359489059031156324}
   - component: {fileID: 922128970133911358}
+  - component: {fileID: 2081004478913365060}
   m_Layer: 0
   m_Name: swd_right_link
   m_TagString: Untagged
@@ -2261,6 +2284,27 @@ MonoBehaviour:
   jointName: base_swd_right_joint
   EffortLimit: 1000
   VelocityLimit: 1000
+--- !u!135 &2081004478913365060
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7727669403441107341}
+  m_Material: {fileID: 13400000, guid: 07bf23f5c4a33b10398a4ebd9662ae41, type: 2}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.062493738
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &8252758308739864070
 GameObject:
   m_ObjectHideFlags: 0
@@ -2645,7 +2689,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 5
   m_Convex: 1
   m_CookingOptions: 30

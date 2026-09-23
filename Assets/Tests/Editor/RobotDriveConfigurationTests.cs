@@ -165,6 +165,81 @@ namespace RobotSNAP.Tests.Editor
                 AssertKinematicChassisIsWired(prefabPath, kinematic);
         }
 
+        /// <summary>
+        /// The effort a chassis drive asks for is sized on the whole robot, and not on the link its joints
+        /// hang from.
+        ///
+        /// A base link is one body of a chain: the Jackal's chassis_link is 24.4 kg of a 32.3 kg robot, and
+        /// the Kuri's base is 7 of 22.6 - and the two of them declare a moment of inertia about the vertical
+        /// of 0.39 and 0.037 against the 6.6 and 1.1 that the chassis they carry actually turns with. A drive
+        /// that reads the base link turns those two robots with a torque a sixteenth and a thirtieth of what
+        /// stopping them needs, which is exactly the robot that keeps spinning after its key is let go while
+        /// the Freight and the Bibus - whose base link happens to carry most of them - come to rest at once.
+        /// This test is that regression: the drive has to read a chassis heavier than its base link, and one
+        /// that resists a turn more than its base link does.
+        /// </summary>
+        [TestCaseSource(nameof(RobotPrefabCases))]
+        public void RobotPrefab_SizesItsDriveOnTheWholeChassis(string typeId, string prefabPath)
+        {
+            Assert.That(RobotProfiles.TryFind(typeId, out RobotProfile profile), Is.True,
+                $"'{typeId}' is not a robot type this build knows.");
+
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            Assert.That(prefab, Is.Not.Null, $"No prefab at {prefabPath}.");
+
+            // A chassis with no wheel is moved by KinematicBaseDrive, which takes the body it is wired to and
+            // has no chain to measure; this test is about the drive that has to size a force.
+            if (FindPluginsNode(prefab)?.GetComponent<ArticulationWheelController>() == null)
+                return;
+
+            GameObject instance = Object.Instantiate(prefab);
+            try
+            {
+                var drive = instance.GetComponentInChildren<ArticulationWheelController>(true);
+                Assert.That(drive, Is.Not.Null,
+                    $"{prefabPath} carries no {nameof(ArticulationWheelController)} once instantiated.");
+
+                drive.MeasureChassis();
+
+                ArticulationBody baseLink = BaseLinkOf(drive);
+                Assert.That(baseLink, Is.Not.Null,
+                    $"{prefabPath}: the wheels of {nameof(ArticulationWheelController)} hang from no base.");
+
+                Assert.That(drive.ChassisMass, Is.GreaterThan(baseLink.mass),
+                    $"{prefabPath}: the drive moves {drive.ChassisMass:0.###} kg, which is not more than the " +
+                    $"{baseLink.mass:0.###} kg of '{baseLink.name}' alone, so it is sizing its effort on the " +
+                    "base link instead of on the robot.");
+
+                Assert.That(drive.ChassisYawInertia, Is.GreaterThan(baseLink.inertiaTensor.y),
+                    $"{prefabPath}: the drive reads a yaw inertia of {drive.ChassisYawInertia:0.####} kg.m2, " +
+                    $"which is not more than the {baseLink.inertiaTensor.y:0.####} of '{baseLink.name}' alone, " +
+                    "so it would brake the robot with a fraction of the torque the turn needs.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        /// <summary>The body the wheels of a chassis hang from: the topmost one above the first left wheel.</summary>
+        private static ArticulationBody BaseLinkOf(ArticulationWheelController controller)
+        {
+            ArticulationBody candidate = controller.leftWheel;
+            while (candidate != null)
+            {
+                ArticulationBody above = candidate.transform.parent != null
+                    ? candidate.transform.parent.GetComponentInParent<ArticulationBody>()
+                    : null;
+
+                if (above == null)
+                    return candidate;
+
+                candidate = above;
+            }
+
+            return null;
+        }
+
         /// <summary>What a wheeled chassis needs to turn a velocity into wheel speeds.</summary>
         private static void AssertWheelChassisIsWired(string prefabPath, ArticulationWheelController controller)
         {

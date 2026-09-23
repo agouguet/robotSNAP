@@ -181,6 +181,18 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     private ArticulationBody _articulationRoot;
 
     /// <summary>
+    /// Mass of the whole chassis, in kilograms, and its moment of inertia about the vertical, in kilogram
+    /// square metres. Read from the articulated chain, and not from the base link; see
+    /// <see cref="MeasureChassis"/> for why that distinction is the whole of whether a robot stops when its
+    /// command is let go.
+    /// </summary>
+    private float _chassisMass;
+    private float _chassisYawInertia;
+
+    /// <summary>Mass the base link carried when the chassis was last measured, to notice a profile written on it.</summary>
+    private float _measuredRootMass = -1f;
+
+    /// <summary>
     /// Effort the drive has had to add to hold its command, in newtons and in newton-metres. It is what the
     /// force and the torque would otherwise have to ask for all at once, and it is bounded by the traction.
     /// </summary>
@@ -190,6 +202,12 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     public float CurrentLinearSpeed => _currentLinearSpeed;
     public float CurrentAngularSpeed => _currentAngularSpeed;
 
+    /// <summary>Mass of the chassis this drive moves, in kilograms.</summary>
+    public float ChassisMass => _chassisMass;
+
+    /// <summary>Moment of inertia of the chassis about the vertical, in kilogram square metres.</summary>
+    public float ChassisYawInertia => _chassisYawInertia;
+
     // Threshold to consider angular speed as "straight line"
     private const float ANGULAR_THRESHOLD = 0.01f;
 
@@ -197,6 +215,7 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     {
         ConfigureArticulation();
         _articulationRoot = ArticulationRoot();
+        MeasureChassis();
 
         foreach (ArticulationBody wheel in AllWheels())
             ConfigureWheel(wheel);
@@ -212,6 +231,7 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         // the order Unity picks between two Start methods is not something a prefab should depend on.
         ConfigureArticulation();
         _articulationRoot = ArticulationRoot();
+        MeasureChassis();
 
         foreach (ArticulationBody wheel in AllWheels())
             ConfigureWheel(wheel);
@@ -265,6 +285,11 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         ArticulationBody body = _articulationRoot;
         body.WakeUp();
 
+        // The robot type is written on the base link after this prefab woke up, and the profile carries a
+        // mass, so a chassis read at Awake can be a chassis the robot no longer has.
+        if (!Mathf.Approximately(_measuredRootMass, body.mass))
+            MeasureChassis();
+
         float step = Time.fixedDeltaTime;
         Vector3 forward = body.transform.forward;
         forward.y = 0f;
@@ -283,10 +308,18 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         // The change of velocity this step is allowed to ask for, and the force that produces it on the
         // mass of the robot. Traction then caps it: whatever the command, a tyre cannot pass more force
         // than its grip times the weight it carries, and the difference is exactly what a collision is.
-        float mass = Mathf.Max(0.001f, body.mass);
+        float mass = Mathf.Max(0.001f, _chassisMass > 0f ? _chassisMass : body.mass);
         float traction = TractionForce(mass);
         Vector3 error = wanted - planar;
-        Vector3 change = Vector3.ClampMagnitude(error, Mathf.Max(0f, maxLinearAcceleration) * step);
+
+        // The ramp is the comfort of a robot getting up to speed, and it has no business limiting a robot
+        // being asked to slow down or to stop: measured on the Kuri, the drive braking from two radians per
+        // second had a tenth of a newton-metre to work with, while the effort it had accumulated holding
+        // the turn was larger than that. A robot slowing down uses its tyres, so the demand is left whole
+        // and the traction budget is what caps it.
+        Vector3 change = Vector3.Dot(error, planar) < 0f
+            ? error
+            : Vector3.ClampMagnitude(error, Mathf.Max(0f, maxLinearAcceleration) * step);
         Vector3 force = change / step * mass;
 
         bool ahead = Vector3.Dot(_forceIntegral, error) < 0f;
@@ -312,11 +345,13 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         // axis: a positive angular command means a turn to the left, which is a *decreasing* Unity yaw,
         // since Unity turns clockwise around +Y. Reading the yaw rate without that flip made the base pull
         // against its own wheels, and the two of them settled at half the commanded rate.
-        float inertia = InertiaAboutUp(body);
+        float inertia = _chassisYawInertia > 0f ? _chassisYawInertia : InertiaAboutUp(body);
         float yawLimit = Mathf.Max(0f, maxAngularAcceleration) * step;
         Vector3 spin = body.angularVelocity;
         float yawError = -_currentAngularSpeed - spin.y;
-        float yawChange = Mathf.Clamp(yawError, -yawLimit, yawLimit);
+        float yawChange = yawError * spin.y < 0f
+            ? yawError
+            : Mathf.Clamp(yawError, -yawLimit, yawLimit);
         float torque = yawChange / step * inertia;
 
         bool turningTooFar = _torqueIntegral * yawError < 0f;
@@ -339,12 +374,24 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
 
         body.AddTorque(Vector3.up * torque);
 
-        // The lean is brought back by a torque of the same shape, through the same inertia. It is a
-        // stabiliser and not a tyre force, so it is not asked of the traction budget.
+        // The lean is brought back by a torque of the same shape, through the inertia of the base link and
+        // not through the yaw inertia above: it is a stabiliser and not a tyre force, so it is not asked of
+        // the traction budget, and sizing it on the inertia of the whole chassis - which this same robot
+        // reads as thirty times the base link's - would have it slam the body back at the first kerb.
+        float tiltInertia = InertiaAboutUp(body);
         float tiltLimit = Mathf.Max(0f, tiltRecovery) * step;
         float pitchChange = Mathf.Clamp(-spin.x, -tiltLimit, tiltLimit);
         float rollChange = Mathf.Clamp(-spin.z, -tiltLimit, tiltLimit);
-        body.AddTorque(new Vector3(pitchChange / step * inertia, 0f, rollChange / step * inertia));
+        body.AddTorque(new Vector3(pitchChange / step * tiltInertia, 0f, rollChange / step * tiltInertia));
+    }
+
+    /// <summary>True when the command asks for no motion at all.</summary>
+    private static bool Stops(float command) => Mathf.Abs(command) <= 0.001f;
+
+    /// <summary>True when the two commands ask for opposite directions, one of them being a real one.</summary>
+    private static bool Opposite(float wanted, float current)
+    {
+        return !Stops(wanted) && !Stops(current) && wanted * current < 0f;
     }
 
     /// <summary>
@@ -448,16 +495,18 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     /// </summary>
     private ArticulationBody ArticulationRoot()
     {
-        ArticulationBody candidate = null;
         foreach (ArticulationBody wheel in AllWheels())
-        {
-            candidate = wheel;
-            break;
-        }
+            return TopOf(wheel);
+        return null;
+    }
 
-        if (candidate == null)
-            return null;
-
+    /// <summary>
+    /// The body an articulation hangs from, given any one of its bodies: the topmost one, the body that has
+    /// no other above it.
+    /// </summary>
+    private static ArticulationBody TopOf(ArticulationBody body)
+    {
+        ArticulationBody candidate = body;
         while (candidate != null)
         {
             ArticulationBody above = candidate.transform.parent != null
@@ -471,6 +520,65 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Reads the mass and the moment of inertia about the vertical of the whole chassis, from the chain of
+    /// bodies the base carries.
+    ///
+    /// Reading them off the base link alone - which is what this drive did before - sizes the effort on the
+    /// one body the joint sits on instead of on the robot that has to be stopped by it. Stepped by hand
+    /// through the physics, a Kuri turning under five newton-metres answers with the acceleration of a
+    /// 1.27 kg.m2 chassis while its base link declares 0.037, and a Jackal's 11.5 against the 0.39 of its
+    /// chassis_link; the same measurement on the Freight gives 5.96 against 2.81 and on the Bibus 2.24
+    /// against 1.31. The two robots whose base link carries most of the robot are exactly the two that come
+    /// to rest the moment their command is let go, and the two that coast for a second and more are the two
+    /// whose base link carries a fifth of the robot. The same reading sizes the linear drive and the
+    /// traction budget, and it is what the wiring tool already assumed when it wrote that a robot pushes
+    /// what it weighs: a Kuri does not weigh the seven kilograms of its base link, it weighs twenty-two and
+    /// a half.
+    ///
+    /// The figure is a floor rather than an exact value: the inertia of a body whose shape PhysX derives for
+    /// itself is read from the body, which reports a stand-in, and only the distance to the axis is added on
+    /// top of it. A floor is the safe direction - the drive asks for less than the chassis needs and never
+    /// more, so nothing overshoots, and the traction budget stays the ceiling on all of it.
+    /// </summary>
+    public void MeasureChassis()
+    {
+        ArticulationBody root = _articulationRoot != null ? _articulationRoot : ArticulationRoot();
+        _chassisMass = 0f;
+        _chassisYawInertia = 0f;
+        _measuredRootMass = root != null ? root.mass : -1f;
+
+        if (root == null)
+            return;
+
+        float mass = 0f;
+        float inertia = 0f;
+
+        foreach (ArticulationBody body in root.GetComponentsInChildren<ArticulationBody>(true))
+        {
+            // Only the chain that hangs from this base. A prefab can carry a second articulation of its own -
+            // the Kuri ships a gyro_link that sits at the origin of the model rather than under its base -
+            // and a body standing five hundred metres away would otherwise be counted for the square of that
+            // distance, which is the whole of the figure rather than a rounding of it.
+            if (TopOf(body) != root)
+                continue;
+
+            mass += body.mass;
+
+            Vector3 offset = body.transform.position - root.transform.position;
+            float radius = new Vector2(offset.x, offset.z).magnitude;
+            inertia += body.mass * radius * radius;
+
+            Vector3 own = body.inertiaTensor;
+            inertia += own.x * Mathf.Pow(Vector3.Dot(body.transform.right, Vector3.up), 2f)
+                     + own.y * Mathf.Pow(Vector3.Dot(body.transform.up, Vector3.up), 2f)
+                     + own.z * Mathf.Pow(Vector3.Dot(body.transform.forward, Vector3.up), 2f);
+        }
+
+        _chassisMass = mass;
+        _chassisYawInertia = inertia;
     }
 
     /// <summary>
@@ -542,14 +650,18 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     /// </summary>
     public void SetRobotVelocity(float targetLinearSpeed, float targetAngularSpeed)
     {
-        // A command that reverses drops the effort the drive had built up against the resistance of the other
-        // direction. Keeping it is what made a robot asked to turn the other way answer at 46 percent of its
-        // command for the first half second while the old effort was unwound: the turn itself is symmetric -
-        // measured on the Kuri, whichever direction went first was at 99 percent within six tenths of a
-        // second, and whichever went second was at 46 - and only the memory of the previous one was not.
-        if (Mathf.Sign(targetLinearSpeed) != Mathf.Sign(_currentLinearSpeed))
+        // A command that stops or reverses drops the effort the drive had built up against the resistance.
+        // Keeping it is what made a robot keep turning after its key was let go - measured on the Kuri, two
+        // and a half seconds to come to rest, against nine tenths of a second for the same robot turning
+        // the other way - and what made a robot asked to turn the other way answer at 46 percent of its
+        // command for the first half second.
+        //
+        // The comparison is made on the magnitudes and not on Unity's sign, because Mathf.Sign answers 1 for
+        // zero: "turn" and "stop" came out as the same sign, so the effort of the turn was kept for a stop
+        // and dropped for a reversal, which is the exact opposite of what the robot needed in both cases.
+        if (Stops(targetLinearSpeed) || Opposite(targetLinearSpeed, _currentLinearSpeed))
             _forceIntegral = Vector3.zero;
-        if (Mathf.Sign(targetAngularSpeed) != Mathf.Sign(_currentAngularSpeed))
+        if (Stops(targetAngularSpeed) || Opposite(targetAngularSpeed, _currentAngularSpeed))
             _torqueIntegral = 0f;
 
         _currentLinearSpeed = targetLinearSpeed;

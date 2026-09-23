@@ -69,11 +69,15 @@ public static class RobotPrefabs
     /// Torque every driven wheel of a base-driven chassis is left with, in N.m.
     ///
     /// It is written on the prefab rather than left to the default of the component so that what a robot
-    /// was wired with is readable from the robot. The figure is a fifth of a newton-metre: enough for the
-    /// wheel to spin itself up and be seen turning, far too little for four of them to hold the chassis
-    /// back, which is what they did at the two newton-metres they were first given.
+    /// was wired with is readable from the robot. The figure is three newton-metres, and it is the figure
+    /// that lets the wheel be seen turning on every robot: measured on this project, a Jackal and a Bibus
+    /// left at the fifth of a newton-metre this used to be never turned their wheels at all - they were
+    /// dragged along the floor at zero revolutions - and the four roll at the speed their motion implies at
+    /// three. None of it reaches the chassis: a driven wheel meets the world through the skid contact this
+    /// tool gives it, which passes a hundredth of what the floor does, and the commanded turn answers at 99
+    /// percent whether the wheels are left at three newton-metres or at a thousand.
     /// </summary>
-    private const float RollingWheelForceLimit = 0.2f;
+    private const float RollingWheelForceLimit = 3f;
 
     /// <summary>
     /// How much the tyres are allowed to decide, written on every robot. One is the honest figure - the

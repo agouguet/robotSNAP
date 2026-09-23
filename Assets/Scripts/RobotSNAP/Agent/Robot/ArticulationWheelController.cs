@@ -69,13 +69,17 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     public float driveForceLimit = 1000f;
 
     [Tooltip(
-        "Torque the wheel drive is left with when the base carries the motion. The wheels of that model " +
-        "roll to be seen and to keep the odometry honest; they must not have the strength to decide the " +
-        "chassis. Measured on the Jackal, a wheel drive left at two newton-metres held the commanded turn " +
-        "to 90 percent - four wheels pushing twenty newtons each against the ground - and the same turn " +
-        "reaches 98 percent once the wheels are left with a fifth of that. Nothing here moves the robot: " +
-        "the base does, and the wheels only have to turn fast enough to look right.")]
-    public float rollingWheelForceLimit = 0.2f;
+        "Torque the wheel drive is left with when the base carries the motion, in N.m. The wheels of that " +
+        "model roll to be seen and to keep the odometry honest; they must not have the strength to decide " +
+        "the chassis, and they cannot: a driven wheel meets the world through the skid contact the wiring " +
+        "tool gives it, which passes almost nothing. What the figure does have to clear is the effort of " +
+        "spinning the wheel up. Measured on this project, a Jackal and a Bibus left at the two tenths of a " +
+        "newton-metre they used to carry never turned their wheels at all - zero revolutions over four " +
+        "seconds while the robot slid a metre per second across the floor - and at three newton-metres the " +
+        "four robots roll at the speed their motion implies, a Jackal's 573 degrees per second against the " +
+        "574 asked for. The commanded turn answers at 99 percent either way, so nothing here moves the " +
+        "robot: the base does, and the wheels only have to turn fast enough to look right.")]
+    public float rollingWheelForceLimit = 3f;
 
     [Tooltip("Internal friction of the wheel joint. A wheel that is commanded must not be braked by it.")]
     public float jointFriction = 0f;

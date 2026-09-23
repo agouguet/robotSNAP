@@ -2547,7 +2547,7 @@ MonoBehaviour:
   wheelRadius: 0.09983081
   driveDamping: 0.5
   driveForceLimit: 1000
-  rollingWheelForceLimit: 0.2
+  rollingWheelForceLimit: 3
   jointFriction: 0
   angularDamping: 0.05
   solverIterations: 6

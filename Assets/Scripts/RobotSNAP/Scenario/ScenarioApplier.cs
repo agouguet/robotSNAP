@@ -40,6 +40,21 @@ namespace RobotSNAP.Core.Scenario
         private ScenarioData _currentScenario;
         private RobotRoster _roster;
         private readonly List<Coroutine> _activeCoroutines = new();
+
+        /// <summary>
+        /// Entries the loaded scenario still owes, one routine per departure that has not happened yet. Kept
+        /// apart from <see cref="_activeCoroutines"/>, which holds the behaviours of the scenario: stopping an
+        /// entry must not stop a wander or a follow.
+        /// </summary>
+        private readonly List<Coroutine> _pendingEntries = new();
+
+        /// <summary>
+        /// Identity of the scenario the pending entries belong to, bumped whenever they are dropped. A routine
+        /// that outlives the stop of its coroutine would otherwise switch on an agent of a scenario that has
+        /// been replaced, and hand the pool back an instance it does not own any more.
+        /// </summary>
+        private int _entryGeneration;
+
         private readonly Dictionary<string, HumanAgent> _spawnedHumans = new();
         private int _humanCounter;
         private readonly List<Robot> _liveRobots = new();
@@ -158,6 +173,9 @@ namespace RobotSNAP.Core.Scenario
             foreach (var coroutine in _activeCoroutines)
                 if (coroutine != null) StopCoroutine(coroutine);
             _activeCoroutines.Clear();
+            // The scenario is over: an entry it still owed would appear on a map that is no longer the one the
+            // agents were authored for.
+            CancelPendingEntries();
             // The scenario is over: its walkable grid must not outlive it, or the next scenario would plan on
             // the previous map until its own grid is built.
             ScenarioNavigation.Clear();
@@ -168,6 +186,9 @@ namespace RobotSNAP.Core.Scenario
         /// </summary>
         public void ClearTrackedHumans()
         {
+            // The entries still owed are part of what was tracked: forgetting the record without dropping them
+            // would leave a routine switching on a pooled instance on its own.
+            CancelPendingEntries();
             _spawnedHumans.Clear();
             _humanCounter = 0;
         }
@@ -347,6 +368,27 @@ namespace RobotSNAP.Core.Scenario
         //          HUMAN SETUP
         // ==========================================
 
+        /// <summary>
+        /// One departure of a scenario: the agents that enter the simulation together, and the delay drawn for
+        /// them. A route that walks as a formation is one departure, so its members keep their shape as they
+        /// appear; a route that scatters is one departure per agent, so the crowd feeds in as a flow instead of
+        /// arriving as a wave.
+        /// </summary>
+        private sealed class Departure
+        {
+            public HumanScenarioConfig Config { get; set; }
+            public string GroupId { get; set; }
+            /// <summary>Position of the first member inside its route, which its slot and spacing depend on.</summary>
+            public int FirstIndex { get; set; }
+            /// <summary>Agents of the route this departure carries.</summary>
+            public int Count { get; set; }
+            /// <summary>Seconds before it enters the simulation; zero means now.</summary>
+            public float Delay { get; set; }
+            /// <summary>The scenario whose entry it is, so a routine of a replaced scenario does nothing.</summary>
+            public int Generation { get; set; }
+            public List<HumanAgent> Members { get; } = new();
+        }
+
         private IEnumerator SetupHumans()
         {
             Debug.Log($"[ScenarioApplier] Setting up humans for scenario: {_currentScenario.Name}");
@@ -370,17 +412,29 @@ namespace RobotSNAP.Core.Scenario
 
             if (totalHumans == 0) yield break;
 
-            // Get instances from the pool
-            List<HumanAgent> allHumans = new List<HumanAgent>();
-            for (int i = 0; i < totalHumans; i++)
+            // Whatever the scenario before this one still owed is dropped here, before this one reserves an
+            // instance: an entry of a scenario that is being replaced belongs to a map that is going away.
+            CancelPendingEntries();
+
+            // The departures are decided before anything is activated, so the delays are drawn in scenario order
+            // and a seeded run stays reproducible.
+            List<Departure> departures = BuildDepartures(totalHumans);
+
+            // Get instances from the pool. A unit that leaves later is switched off here, where the pool left it:
+            // an agent that is not due yet must be neither visible nor simulated, and waiting for its delay in an
+            // active instance would only hide it from the eye, not from the simulation.
+            foreach (Departure departure in departures)
             {
-                GameObject humanGO = poolManager.GetHuman();
-                if (humanGO != null)
+                for (int i = 0; i < departure.Count; i++)
                 {
-                    humanGO.SetActive(true);
+                    GameObject humanGO = poolManager.GetHuman();
+                    if (humanGO == null)
+                        continue;
+
+                    humanGO.SetActive(departure.Delay <= 0f);
                     var human = humanGO.GetComponent<HumanAgent>();
                     if (human != null)
-                        allHumans.Add(human);
+                        departure.Members.Add(human);
                 }
             }
 
@@ -393,7 +447,6 @@ namespace RobotSNAP.Core.Scenario
             // A route in scatter formation is the opposite case — every agent draws its own start inside the
             // spawn area and its own arrival inside every goal area, and walks there on its own. That is what
             // turns one entry into a crowd crossing the map instead of one block moving down the middle.
-            int humanIndex = 0;
             var groups = new Dictionary<string, HumanGroup>();
             var groupsWithRoute = new HashSet<string>();
             // One draw per spawn unit: a whole formation appears around a single random point, so the anchors
@@ -401,54 +454,33 @@ namespace RobotSNAP.Core.Scenario
             _randomAnchors.Clear();
             _independentAnchors.Clear();
             _independentGoals.Clear();
-            foreach (var config in _currentScenario.Humans)
+            // The agents that are already in the scenario, so their spawn is checked as the one batch it used to
+            // be; an agent that enters later is checked the moment it does.
+            var presentHumans = new List<HumanAgent>();
+            int heldAgents = 0;
+            int heldDepartures = 0;
+            foreach (Departure departure in departures)
             {
-                // The route id keys the implicit group of this route, so a formation is never shared with
-                // another route by accident. A scatter route has no group at all.
-                string groupId = WalksAsAFormation(config) ? config.Id.Trim() : null;
-                for (int i = 0; i < config.Count && humanIndex < allHumans.Count; i++)
+                // A departure that is not due yet is configured by the routine that releases it: a route written
+                // into an agent whose prefab is still asleep would be dropped by the controllers that wake up
+                // afterwards, and the agent would stand there instead of walking.
+                if (departure.Delay > 0f)
                 {
-                    var human = allHumans[humanIndex];
-                    if (human != null)
-                    {
-                        ConfigureHuman(human, config, i, config.Count, poolManager);
-                        if (groupId != null)
-                        {
-                            if (!groups.TryGetValue(groupId, out HumanGroup group))
-                            {
-                                SpawnPlanner.GroupLayout layout = SpawnPlanner.ResolveLayout(config);
-                                group = new HumanGroup(
-                                    groupId,
-                                    layout.Spacing,
-                                    layout.HasFormation ? layout.Formation : null,
-                                    layout.Parameter);
-                                groups[groupId] = group;
-                            }
-
-                            // The group walks one shared route: the first agent of the route defines it, and
-                            // every member holds a slot around its reference point instead of walking alone.
-                            if (groupsWithRoute.Add(groupId))
-                            {
-                                group.SetRoute(
-                                    PlanFormationRoute(human, groupId),
-                                    config.Speed,
-                                    HumanEndBehaviorParser.Parse(config.EndBehavior));
-                            }
-
-                            group.Add(human);
-                        }
-                        _spawnedHumans[$"{config.Id}_{_humanCounter++}"] = human;
-                    }
-                    humanIndex++;
+                    departure.Generation = _entryGeneration;
+                    heldAgents += departure.Members.Count;
+                    heldDepartures++;
+                    _pendingEntries.Add(StartCoroutine(
+                        ReleaseDeparture(departure, poolManager, groups, groupsWithRoute)));
+                    continue;
                 }
+
+                ConfigureDeparture(departure, poolManager, groups, groupsWithRoute);
+                presentHumans.AddRange(departure.Members);
             }
 
-            // Lay every group out around its leader, facing the direction it is about to walk.
-            foreach (HumanGroup group in groups.Values)
-                group.PlaceMembersAtSpawn();
-
             // The anchor being on walkable ground does not mean the formation is: check every member.
-            VerifySpawnedFormation(allHumans);
+            if (presentHumans.Count > 0)
+                VerifySpawnedFormation(presentHumans);
 
             // Every robot watches the same crowd: the detector of a robot is what its own stream publishes,
             // so a second robot has its own view of the pedestrians, not a copy of the first one's.
@@ -465,8 +497,228 @@ namespace RobotSNAP.Core.Scenario
             }
 
             if (_logEvents)
-                Debug.Log($"[ScenarioApplier] Configured {humanIndex} humans across " +
-                          $"{groups.Count} formation route(s)");
+            {
+                string held = heldDepartures > 0
+                    ? $"; {heldAgents} agent(s) in {heldDepartures} departure(s) still to enter over their window"
+                    : string.Empty;
+                Debug.Log($"[ScenarioApplier] Configured {presentHumans.Count} humans across " +
+                          $"{groups.Count} formation route(s){held}");
+            }
+        }
+
+        /// <summary>
+        /// Splits the routes of the scenario into departures, in spawn order, and draws the delay of each one.
+        ///
+        /// A spawn unit is the route itself when it walks as a formation: one draw, and the members leave
+        /// together with their shape intact. A route that scatters is a unit per agent, and each one draws its
+        /// own delay, which is what turns the crowd into a flow. The draws happen here, before anything is
+        /// activated, so the sequence the seeded simulation produces does not depend on when a departure fires;
+        /// a window of zero draws nothing at all and leaves every delay at zero, which keeps the draws and the
+        /// activation order of a scenario written before the feature exactly as they were.
+        /// </summary>
+        private List<Departure> BuildDepartures(int totalHumans)
+        {
+            var departures = new List<Departure>();
+            int humanIndex = 0;
+            foreach (var config in _currentScenario.Humans)
+            {
+                int count = Mathf.Min(config.Count, totalHumans - humanIndex);
+                if (count <= 0)
+                    continue;
+
+                if (WalksAsAFormation(config))
+                {
+                    // The route id keys the implicit group of this route, so a formation is never shared with
+                    // another route by accident. A scatter route has no group at all.
+                    departures.Add(new Departure
+                    {
+                        Config = config,
+                        GroupId = config.Id.Trim(),
+                        FirstIndex = 0,
+                        Count = count,
+                        Delay = DrawDepartureDelay(config.SpawnWindow)
+                    });
+                }
+                else
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        departures.Add(new Departure
+                        {
+                            Config = config,
+                            GroupId = null,
+                            FirstIndex = i,
+                            Count = 1,
+                            Delay = DrawDepartureDelay(config.SpawnWindow)
+                        });
+                    }
+                }
+
+                humanIndex += count;
+            }
+
+            return departures;
+        }
+
+        /// <summary>
+        /// Delay of one spawn unit, drawn from <c>UnityEngine.Random</c> so the simulation seed makes a run
+        /// reproducible, like every other draw of the spawn does. A window of zero — the default — draws
+        /// nothing: the delay stays zero without consuming the sequence the other draws read.
+        /// </summary>
+        private static float DrawDepartureDelay(float spawnWindow) =>
+            spawnWindow > 0f ? UnityEngine.Random.Range(0f, spawnWindow) : 0f;
+
+        /// <summary>
+        /// Releases one departure at the end of its window, then configures it.
+        ///
+        /// The agents come back together — a formation appears in shape instead of one member at a time — and
+        /// are configured one frame later, the way the agents that leave straight away are, because a route
+        /// written before the prefab has woken up is dropped by the controllers that initialise in Awake.
+        ///
+        /// The generation is checked before anything is touched: a routine that outlives the replacement of its
+        /// scenario must not switch on an instance the pool has since handed to somebody else.
+        /// </summary>
+        private IEnumerator ReleaseDeparture(
+            Departure departure,
+            HumanPoolManager poolManager,
+            Dictionary<string, HumanGroup> groups,
+            HashSet<string> groupsWithRoute)
+        {
+            yield return WaitSimulationSeconds(departure.Delay);
+
+            if (!StillOurs(departure, poolManager))
+                yield break;
+
+            foreach (HumanAgent human in departure.Members)
+            {
+                if (human != null)
+                    human.gameObject.SetActive(true);
+            }
+
+            yield return null; // let Unity stabilize, like the agents that leave at once
+
+            if (!StillOurs(departure, poolManager))
+                yield break;
+
+            ConfigureDeparture(departure, poolManager, groups, groupsWithRoute);
+
+            // The anchor being on walkable ground does not mean the formation is: check every member.
+            VerifySpawnedFormation(departure.Members);
+
+            if (_logEvents)
+                Debug.Log($"[ScenarioApplier] Route '{departure.Config.Id}' entered after " +
+                          $"{departure.Delay:0.##}s with {departure.Members.Count} agent(s)");
+        }
+
+        /// <summary>
+        /// True while the instances of a departure are still the ones it reserved: the scenario it was decided
+        /// for is still the loaded one, and the pool still counts its agents as active. The pool owns an
+        /// instance, so one it has taken back — a reset, or the scenario being cleared — must not be switched
+        /// on, nor configured, by an entry that outlived it.
+        /// </summary>
+        private bool StillOurs(Departure departure, HumanPoolManager poolManager)
+        {
+            if (departure.Generation != _entryGeneration || poolManager == null || departure.Members.Count == 0)
+                return false;
+
+            IReadOnlyList<GameObject> active = poolManager.ActiveHumans;
+            foreach (HumanAgent human in departure.Members)
+            {
+                if (human == null || !active.Contains(human.gameObject))
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Waits a delay of simulation time rather than of wall-clock time. Scaled time keeps the entries in
+        /// step with the run, and standing still while the clock is paused keeps a crowd from slipping into a
+        /// scenario that is standing still: the window measures how long the agents take to enter the
+        /// simulation, not how long the operator waits.
+        /// </summary>
+        private static IEnumerator WaitSimulationSeconds(float delay)
+        {
+            float elapsed = 0f;
+            while (elapsed < delay)
+            {
+                if (Supervisor.Instance == null || !Supervisor.Instance.IsPaused)
+                    elapsed += Time.deltaTime;
+
+                yield return null;
+            }
+        }
+
+        /// <summary>
+        /// Configures the agents of one departure and lays their formation out, which is where the per-agent
+        /// draws of a route happen: speed, start, arrival and entry hold all belong to the agent, while the
+        /// shape of a formation is only placed once its members exist.
+        /// </summary>
+        private void ConfigureDeparture(
+            Departure departure,
+            HumanPoolManager poolManager,
+            Dictionary<string, HumanGroup> groups,
+            HashSet<string> groupsWithRoute)
+        {
+            HumanGroup group = null;
+            for (int i = 0; i < departure.Members.Count; i++)
+            {
+                var human = departure.Members[i];
+                if (human == null)
+                    continue;
+
+                ConfigureHuman(human, departure.Config, departure.FirstIndex + i, departure.Config.Count, poolManager);
+                if (departure.GroupId != null)
+                {
+                    if (group == null)
+                    {
+                        if (!groups.TryGetValue(departure.GroupId, out group))
+                        {
+                            SpawnPlanner.GroupLayout layout = SpawnPlanner.ResolveLayout(departure.Config);
+                            group = new HumanGroup(
+                                departure.GroupId,
+                                layout.Spacing,
+                                layout.HasFormation ? layout.Formation : null,
+                                layout.Parameter);
+                            groups[departure.GroupId] = group;
+                        }
+                    }
+
+                    // The group walks one shared route: the first agent of the route defines it, and every
+                    // member holds a slot around its reference point instead of walking alone.
+                    if (groupsWithRoute.Add(departure.GroupId))
+                    {
+                        group.SetRoute(
+                            PlanFormationRoute(human, departure.GroupId),
+                            departure.Config.Speed,
+                            HumanEndBehaviorParser.Parse(departure.Config.EndBehavior));
+                    }
+
+                    group.Add(human);
+                }
+                _spawnedHumans[$"{departure.Config.Id}_{_humanCounter++}"] = human;
+            }
+
+            // Lay the group out around its leader, facing the direction it is about to walk.
+            if (group != null)
+                group.PlaceMembersAtSpawn();
+        }
+
+        /// <summary>
+        /// Drops the departures a scenario still owed and orphans their routines, so an entry decided by a
+        /// scenario that is being replaced or stopped can neither show an agent of a map that is no longer
+        /// loaded nor wake an instance that has gone back to the pool.
+        /// </summary>
+        private void CancelPendingEntries()
+        {
+            _entryGeneration++;
+            foreach (Coroutine routine in _pendingEntries)
+            {
+                if (routine != null)
+                    StopCoroutine(routine);
+            }
+
+            _pendingEntries.Clear();
         }
 
         /// <summary>
@@ -568,7 +820,9 @@ namespace RobotSNAP.Core.Scenario
             // walk in formation keep exactly the speed the scenario authored, or they would pull the shape
             // apart.
             float speedFactor = independent ? CrowdSpeedVariation() : 1f;
-            float entryHold = independent ? CrowdEntryHold(total) : 0f;
+            // An authored departure window replaces the short hold a crowd uses by default. The two would add
+            // up, and the crowd would then still be entering after the window the scenario asked for.
+            float entryHold = independent && config.SpawnWindow <= 0f ? CrowdEntryHold(total) : 0f;
 
             // The hold has to be set before the route, or the agent would start walking on the frame it is
             // configured and only stop later.

@@ -56,6 +56,8 @@ public sealed class ScenarioRouteEditor
         public string Formation = "pair";
         public float GroupSpacing = 1.5f;
         public float FormationParameter;
+        /// <summary>Seconds the agents of this route take to enter the run; 0 starts them all together.</summary>
+        public float SpawnWindow;
         public readonly List<Vector2> Points = new();
         /// <summary>True when the whole route is scattered at spawn instead of starting on its first point.</summary>
         public bool SpawnRandom;
@@ -88,6 +90,7 @@ public sealed class ScenarioRouteEditor
         public string Formation;
         public float GroupSpacing;
         public float FormationParameter;
+        public float SpawnWindow;
         public List<Vector2> Points;
         public bool SpawnRandom;
         public Rect SpawnZone;
@@ -217,9 +220,12 @@ public sealed class ScenarioRouteEditor
     private readonly Button _sectionGlobalHeader;
     private readonly Button _sectionGroupHeader;
     private readonly Button _sectionBehaviourHeader;
+    private readonly Button _sectionDepartureHeader;
+    private readonly FloatField _spawnWindowField;
     private readonly VisualElement _sectionGlobalContent;
     private readonly VisualElement _sectionGroupContent;
     private readonly VisualElement _sectionBehaviourContent;
+    private readonly VisualElement _sectionDepartureContent;
     private readonly VisualElement _routePointsContainer;
     private readonly VisualElement _canvas;
     private readonly Image _mapImage;
@@ -249,6 +255,7 @@ public sealed class ScenarioRouteEditor
     private bool _globalExpanded = true;
     private bool _groupExpanded = true;
     private bool _behaviourExpanded;
+    private bool _departureExpanded;
 
     /// <summary>Index of the point whose area the next two map clicks are drawing, or -1 when none is.</summary>
     private int _zonePickIndex = -1;
@@ -307,9 +314,12 @@ public sealed class ScenarioRouteEditor
         _sectionGlobalHeader = root.Q<Button>("SectionGlobalHeader");
         _sectionGroupHeader = root.Q<Button>("SectionGroupHeader");
         _sectionBehaviourHeader = root.Q<Button>("SectionBehaviourHeader");
+        _sectionDepartureHeader = root.Q<Button>("SectionDepartureHeader");
         _sectionGlobalContent = root.Q<VisualElement>("SectionGlobalContent");
         _sectionGroupContent = root.Q<VisualElement>("SectionGroupContent");
         _sectionBehaviourContent = root.Q<VisualElement>("SectionBehaviourContent");
+        _sectionDepartureContent = root.Q<VisualElement>("SectionDepartureContent");
+        _spawnWindowField = root.Q<FloatField>("SpawnWindowField");
         _routePointsContainer = root.Q<VisualElement>("RoutePointsContainer");
         _canvas = root.Q<VisualElement>("AgentsEnvironmentCanvas");
         _mapImage = root.Q<Image>("AgentsEnvironmentImage");
@@ -332,6 +342,7 @@ public sealed class ScenarioRouteEditor
                 _movementControllerDropdown,
                 _formationParameterField, _formationParameterLabel,
                 _formationPreviewLabel,
+                _spawnWindowField, _sectionDepartureHeader, _sectionDepartureContent,
                 _sectionGlobalHeader, _sectionGroupHeader, _sectionBehaviourHeader,
                 _sectionGlobalContent, _sectionGroupContent, _sectionBehaviourContent,
                 _routePointsContainer, _canvas, _mapImage, _mapPlaceholder, _instructionLabel,
@@ -470,6 +481,16 @@ public sealed class ScenarioRouteEditor
             UpdateHumanDraft(draft => draft.GroupSpacing = value);
             RefreshFormationPreview();
         });
+        _spawnWindowField.RegisterValueChangedCallback(evt =>
+        {
+            // A negative window is not a window: the field floors at zero and says so, rather than carrying a
+            // value the runtime would have to interpret.
+            float value = Mathf.Max(0f, evt.newValue);
+            if (!Mathf.Approximately(value, evt.newValue)) _spawnWindowField.SetValueWithoutNotify(value);
+            if (_updatingFields) return;
+            PushUndo($"human-spawn-window:{_activeRouteIndex}");
+            UpdateHumanDraft(draft => draft.SpawnWindow = value);
+        });
         _formationParameterField.RegisterValueChangedCallback(evt =>
         {
             if (_updatingFields) return;
@@ -482,9 +503,11 @@ public sealed class ScenarioRouteEditor
         _sectionGlobalHeader.userData = _sectionGlobalHeader.text;
         _sectionGroupHeader.userData = _sectionGroupHeader.text;
         _sectionBehaviourHeader.userData = _sectionBehaviourHeader.text;
+        _sectionDepartureHeader.userData = _sectionDepartureHeader.text;
         _sectionGlobalHeader.clicked += () => { _globalExpanded = !_globalExpanded; ApplySectionState(); };
         _sectionGroupHeader.clicked += () => { _groupExpanded = !_groupExpanded; ApplySectionState(); };
         _sectionBehaviourHeader.clicked += () => { _behaviourExpanded = !_behaviourExpanded; ApplySectionState(); };
+        _sectionDepartureHeader.clicked += () => { _departureExpanded = !_departureExpanded; ApplySectionState(); };
         ApplySectionState();
     }
 
@@ -1334,6 +1357,9 @@ public sealed class ScenarioRouteEditor
                 GroupFormation.MinSpacing(config.Spawn.Formation),
                 3f);
             config.Spawn.FormationParameter = Mathf.Max(0f, draft.FormationParameter);
+            // A route that enters over time says so; one that starts together writes the zero the runtime reads
+            // as "everybody at once", so a scenario never has to guess what an absent key meant.
+            config.SpawnWindow = Mathf.Max(0f, draft.SpawnWindow);
             // An inherited controller is written as an absent block, so the HumanConfig asset keeps deciding.
             config.MovementController = string.IsNullOrWhiteSpace(draft.MovementController)
                 ? null
@@ -1595,6 +1621,7 @@ public sealed class ScenarioRouteEditor
             SetFormationChoices();
             _formationDropdown.SetValueWithoutNotify(FormationToDisplay(active.Formation));
             _groupSpacingField.SetValueWithoutNotify(active.GroupSpacing);
+            _spawnWindowField.SetValueWithoutNotify(active.SpawnWindow);
             UpdateFormationParameterField(active);
         }
         _updatingFields = false;
@@ -1618,6 +1645,7 @@ public sealed class ScenarioRouteEditor
         ApplySection(_sectionGlobalHeader, _sectionGlobalContent, _globalExpanded);
         ApplySection(_sectionGroupHeader, _sectionGroupContent, _groupExpanded);
         ApplySection(_sectionBehaviourHeader, _sectionBehaviourContent, _behaviourExpanded);
+        ApplySection(_sectionDepartureHeader, _sectionDepartureContent, _departureExpanded);
     }
 
     private static void ApplySection(Button header, VisualElement content, bool expanded)
@@ -3144,6 +3172,7 @@ public sealed class ScenarioRouteEditor
             Formation = route.Formation,
             GroupSpacing = route.GroupSpacing,
             FormationParameter = route.FormationParameter,
+            SpawnWindow = route.SpawnWindow,
             Points = new List<Vector2>(route.Points),
             SpawnRandom = route.SpawnRandom,
             SpawnZone = route.SpawnZone,
@@ -3171,6 +3200,7 @@ public sealed class ScenarioRouteEditor
             Formation = route.Formation,
             GroupSpacing = route.GroupSpacing,
             FormationParameter = route.FormationParameter,
+            SpawnWindow = route.SpawnWindow,
             SpawnRandom = route.SpawnRandom,
             SpawnZone = route.SpawnZone,
             Source = route.Source,
@@ -3247,6 +3277,7 @@ public sealed class ScenarioRouteEditor
             Formation = string.IsNullOrWhiteSpace(human.Spawn?.Formation) ? "pair" : human.Spawn.Formation.Trim().ToLowerInvariant(),
             GroupSpacing = human.Spawn != null ? Mathf.Max(0.4f, human.Spawn.Spacing) : 1.5f,
             FormationParameter = human.Spawn != null ? Mathf.Max(0f, human.Spawn.FormationParameter) : 0f,
+            SpawnWindow = Mathf.Max(0f, human.SpawnWindow),
             SpawnRandom = IsRandomSpawn(human.Spawn),
             SpawnZone = ReadZone(human.Spawn?.Zone) ?? default,
             Source = human,

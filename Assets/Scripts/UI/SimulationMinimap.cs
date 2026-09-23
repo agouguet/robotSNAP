@@ -91,6 +91,10 @@ public sealed class SimulationMinimap
     private Robot _scannerOwner;
     private RaycastLaserScanner _robotScanner;
 
+    /// <summary>Same for the detector, which is the sensor whose whole purpose is the other agents.</summary>
+    private Robot _detectorOwner;
+    private AgentDetector _robotDetector;
+
     private Bounds _worldBounds;
     private Transform _focus;
 
@@ -183,6 +187,13 @@ public sealed class SimulationMinimap
         _focus = target;
     }
 
+    /// <summary>
+    /// Whether the footprints of the agents - what each of them detects, cut back at the walls - are drawn
+    /// under their dots. The debug panel of the overlay is the only thing that turns them off: a crowd of
+    /// eighty contours is a legible map only while somebody asked for them.
+    /// </summary>
+    public bool ShowDetectionFootprints { get; set; } = true;
+
     /// <summary>Refreshes the background source and the dot positions; called every frame from Update.</summary>
     public void Tick()
     {
@@ -270,8 +281,15 @@ public sealed class SimulationMinimap
     /// </summary>
     private void PlaceCone(int index, BaseAgent agent, Vector2 position, Rect imageRect)
     {
-        if (!_useOccupancy)
+        // A switched-off footprint hides the slot without building one: the pool is created on demand, and a
+        // crowd that never asked for footprints should not pay for eighty idle elements.
+        if (!_useOccupancy || !ShowDetectionFootprints)
+        {
+            if (index < _conePool.Count)
+                _conePool[index].style.display = DisplayStyle.None;
+
             return;
+        }
 
         MinimapVisionCone cone = GetCone(index);
 
@@ -284,12 +302,23 @@ public sealed class SimulationMinimap
         // becomes 90 + yaw in the painter's clockwise-from-+x frame.
         float heading = 90f + yaw;
 
-        RaycastLaserScanner scanner = GetScanner(agent);
+        // A robot reads its detector first: that sensor exists for the other agents and nothing else, so it
+        // is what "the zone this robot detects" means - a Jackal watches 270 degrees of world with its lidar
+        // but a pedestrian only exists for it inside a 90 degree window five metres out. A robot without a
+        // detector falls back to the lidar, which at least says what it can see.
+        AgentDetector detector = GetDetector(agent);
+        RaycastLaserScanner scanner = detector == null ? GetScanner(agent) : null;
         float rangeMetres;
         float fovDegrees;
         Vector3 origin;
 
-        if (scanner != null)
+        if (detector != null)
+        {
+            rangeMetres = detector.Radius;
+            fovDegrees = Mathf.Clamp(detector.Angle, 1f, 360f);
+            origin = agent.Position;
+        }
+        else if (scanner != null)
         {
             rangeMetres = scanner.range_max;
             fovDegrees = Mathf.Max(1f, Mathf.Abs(scanner.angle_max - scanner.angle_min) * Mathf.Rad2Deg);
@@ -318,9 +347,10 @@ public sealed class SimulationMinimap
         cone.style.left = position.x - radius;
         cone.style.top = position.y - radius;
 
+        bool isRobot = detector != null || scanner != null;
         ConeTrace trace = GetTrace(agent);
         if (NeedsTrace(trace, origin, heading, rangeMetres, fovDegrees))
-            TraceFootprint(trace, origin, yaw, rangeMetres, fovDegrees, isRobot: scanner != null);
+            TraceFootprint(trace, origin, yaw, rangeMetres, fovDegrees, isRobot);
 
         if (trace.Spans.Count > 1)
         {
@@ -329,10 +359,10 @@ public sealed class SimulationMinimap
                 heading,
                 fovDegrees,
                 trace.Spans,
-                scanner != null ? RobotConeFill : HumanConeFill,
-                scanner != null ? RobotConeStroke : HumanConeStroke);
+                isRobot ? RobotConeFill : HumanConeFill,
+                isRobot ? RobotConeStroke : HumanConeStroke);
         }
-        else if (scanner != null)
+        else if (isRobot)
         {
             if (fovDegrees >= 350f)
                 cone.SetRing(radius, heading, RobotConeFill, RobotConeStroke);
@@ -458,6 +488,24 @@ public sealed class SimulationMinimap
         }
 
         return _robotScanner;
+    }
+
+    /// <summary>
+    /// The detector of the robot, cached like its scanner. Only a running detector counts: one that is
+    /// switched off detects nothing, and the map would then draw a zone the robot does not have.
+    /// </summary>
+    private AgentDetector GetDetector(BaseAgent agent)
+    {
+        if (agent is not Robot robot)
+            return null;
+
+        if (robot != _detectorOwner)
+        {
+            _detectorOwner = robot;
+            _robotDetector = robot.GetAgentDetector();
+        }
+
+        return _robotDetector != null && _robotDetector.enabled ? _robotDetector : null;
     }
 
     /// <summary>Map scale, from the world bounds the occupancy grid was built with.</summary>

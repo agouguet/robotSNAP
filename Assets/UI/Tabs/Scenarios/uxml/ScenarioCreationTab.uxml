@@ -205,6 +205,16 @@
                                 </ui:VisualElement>
                             </ui:VisualElement>
                         </ui:VisualElement>
+                        <ui:VisualElement class="editor-section">
+                            <ui:Button name="SectionDepartureHeader" text="Departure" class="editor-section-header"/>
+                            <ui:VisualElement name="SectionDepartureContent" class="editor-section-content">
+                                <ui:VisualElement class="creation-field">
+                                    <ui:Label text="Departure window (s)" class="creation-field-label"/>
+                                    <ui:FloatField name="SpawnWindowField" class="creation-text-field"/>
+                                    <ui:Label text="Seconds the agents of this route take to enter the run. 0 starts them all together; a formation leaves as one, scattered agents each draw their own moment." class="field-help"/>
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+                        </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:ScrollView>
             </ui:VisualElement>

@@ -1662,13 +1662,12 @@ MonoBehaviour:
   showGrid: 0
   showAxes: 0
   showFloor: 1
-  showWalls: 1
   wireframeMode: 0
-  showRobotTrajectory: 1
-  showRobotPath: 1
-  showRobotGoal: 1
+  showRobotTrajectory: 0
+  showRobotPath: 0
+  showRobotGoal: 0
   showRobotVelocityVector: 0
-  showRobotSensorRays: 1
+  showRobotSensorRays: 0
   trajectoryLength: 100
   robotTrajectoryColor: {r: 0, g: 1, b: 1, a: 1}
   robotPathColor: {r: 0, g: 1, b: 0, a: 1}
@@ -1676,19 +1675,14 @@ MonoBehaviour:
   robotVelocityColor: {r: 1, g: 0, b: 0, a: 1}
   robotSensorRayColor: {r: 1, g: 0, b: 1, a: 1}
   showHumanTrajectories: 0
-  showHumanGoals: 1
+  showHumanGoals: 0
   showHumanVelocityVectors: 0
   showHumanInteractionRadius: 0
-  colorHumansByState: 1
+  colorHumansByState: 0
   humanOpacity: 1
   humanDefaultColor: {r: 0, g: 0, b: 1, a: 1}
   humanAlertColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   humanDangerColor: {r: 1, g: 0, b: 0, a: 1}
-  showColliders: 0
-  showNavMesh: 1
-  showOccupancyGrid: 0
-  showCostmap: 0
-  showLaserScans: 1
   showBoundingBoxes: 0
   showAgentIDs: 0
   showDistanceLabels: 0
@@ -1920,7 +1914,7 @@ MonoBehaviour:
   simulationStartHour: 12
   _timeZoneId: Europe/Paris
   logTimeChanges: 0
-  editorTimeDisplay: 11:11:45
+  editorTimeDisplay: 16:14:31
 --- !u!4 &2049586426
 Transform:
   m_ObjectHideFlags: 0

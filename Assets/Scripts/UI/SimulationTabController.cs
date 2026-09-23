@@ -140,7 +140,7 @@ public class SimulationTabController : MonoBehaviour
 
         // The debug switches need no camera: they are built whenever the overlay is, so an environment whose
         // view has no controller yet still gets them.
-        _visualizationPanel = new SimulationVisualizationPanel(_root);
+        _visualizationPanel = new SimulationVisualizationPanel(_root, _minimap);
 
         if (minimapCamera != null && minimapRenderTexture != null)
         {

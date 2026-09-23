@@ -78,6 +78,36 @@ namespace RobotSNAP.Tests.Editor
         }
 
         [Test]
+        public void TheFootprintSwitchDrivesTheMinimap_AndDoesNotWakeTheManager()
+        {
+            VisualElement root = BuildOverlay();
+            var minimap = new SimulationMinimap(root, null);
+            var panel = new SimulationVisualizationPanel(root, minimap);
+            VisualizationManager manager = Object.FindAnyObjectByType<VisualizationManager>();
+
+            try
+            {
+                Assert.That(minimap.ShowDetectionFootprints, Is.True,
+                    "The footprints are drawn until somebody asks for the map without them.");
+
+                Assert.That(panel.ApplySwitch("VizDetectionFootprints", false), Is.True,
+                    "The overlay carries the switch, so the panel has to know it.");
+                Assert.That(minimap.ShowDetectionFootprints, Is.False,
+                    "The switch of the minimap writes the minimap, not the manager.");
+                Assert.That(manager.enabled, Is.False,
+                    "The minimap draws its own footprints, so asking for them is no reason to wake the manager.");
+
+                panel.ApplySwitch("VizDetectionFootprints", true);
+                Assert.That(minimap.ShowDetectionFootprints, Is.True);
+            }
+            finally
+            {
+                if (manager != null)
+                    Object.DestroyImmediate(manager.gameObject);
+            }
+        }
+
+        [Test]
         public void TheOverlayCarriesASwitchForEverySettingThePanelDrives()
         {
             VisualElement root = BuildOverlay();

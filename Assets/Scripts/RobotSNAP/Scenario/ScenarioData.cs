@@ -236,6 +236,17 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("count")]
         public int Count { get; set; } = 1;
+
+        /// <summary>
+        /// Seconds over which the agents of this route enter the simulation, measured from the moment the
+        /// scenario is applied. Zero, the default, releases them all at once.
+        ///
+        /// The window belongs to a spawn unit rather than to an agent: a route that walks as a formation is
+        /// one unit, so its members share a single delay and leave together with their shape intact, while a
+        /// route that scatters draws one delay per agent and feeds in as a flow instead of a wave.
+        /// </summary>
+        [YamlMember("spawn_window")]
+        public float SpawnWindow { get; set; } = 0f;
         
         [YamlMember("spawn")]
         public SpawnConfig Spawn { get; set; }

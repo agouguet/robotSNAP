@@ -6,7 +6,8 @@ using UnityEngine.UIElements;
 
 /// <summary>
 /// The visualization switches of the shot: a translucent panel folded into the top right corner of the
-/// camera view, which drives one setting of <see cref="VisualizationManager"/> per switch.
+/// camera view, which drives one setting per switch - a field of <see cref="VisualizationManager"/>, or the
+/// footprints of the minimap, which the minimap draws itself.
 ///
 /// The manager is the one that draws, and this panel is the only thing that asks it to: it is created on
 /// first use and enabled only while at least one switch is on, so a run nobody is debugging pays nothing
@@ -24,37 +25,48 @@ public sealed class SimulationVisualizationPanel
     private const string ExpandedGlyph = "▾";
     private const string FoldedGlyph = "▸";
 
-    /// <summary>One switch: the toggle in the overlay, and the manager field it writes.</summary>
+    /// <summary>
+    /// One switch: the toggle in the overlay, and the setting behind it. Most settings belong to the manager,
+    /// and the footprints of the minimap belong to the minimap itself, which is why the switch holds the two
+    /// closures rather than a manager field.
+    /// </summary>
     private readonly struct Switch
     {
-        public Switch(Toggle toggle, Func<VisualizationManager, bool> read, Action<VisualizationManager, bool> write)
+        public Switch(Toggle toggle, SwitchDefinition definition)
         {
             Toggle = toggle;
-            Read = read;
-            Write = write;
+            Read = definition.Read;
+            Write = definition.Write;
+            DrivesManager = definition.DrivesManager;
         }
 
         public Toggle Toggle { get; }
-        public Func<VisualizationManager, bool> Read { get; }
-        public Action<VisualizationManager, bool> Write { get; }
+        public Func<bool> Read { get; }
+        public Action<bool> Write { get; }
+
+        /// <summary>
+        /// True when this switch is a reason for the manager to be awake. A footprint of the minimap is drawn
+        /// by the minimap, so asking for one must not wake a component that would then walk the whole crowd
+        /// every quarter second to fill a history nobody reads.
+        /// </summary>
+        public bool DrivesManager { get; }
     }
 
     /// <summary>One line of the table the panel is built from: the name of a toggle, and its setting.</summary>
     private readonly struct SwitchDefinition
     {
-        public SwitchDefinition(
-            string toggleName,
-            Func<VisualizationManager, bool> read,
-            Action<VisualizationManager, bool> write)
+        public SwitchDefinition(string toggleName, Func<bool> read, Action<bool> write, bool drivesManager = true)
         {
             ToggleName = toggleName;
             Read = read;
             Write = write;
+            DrivesManager = drivesManager;
         }
 
         public string ToggleName { get; }
-        public Func<VisualizationManager, bool> Read { get; }
-        public Action<VisualizationManager, bool> Write { get; }
+        public Func<bool> Read { get; }
+        public Action<bool> Write { get; }
+        public bool DrivesManager { get; }
     }
 
     /// <summary>
@@ -62,37 +74,40 @@ public sealed class SimulationVisualizationPanel
     /// and the tests cannot drift apart: a switch nobody drives is a line that does nothing, and a setting
     /// with no switch is one nobody can reach.
     /// </summary>
-    private static readonly SwitchDefinition[] Definitions =
+    private static readonly string[] DefinitionNames =
     {
         // Robot
-        new SwitchDefinition("VizRobotTrajectory", manager => manager.showRobotTrajectory, (manager, on) => manager.showRobotTrajectory = on),
-        new SwitchDefinition("VizRobotPath", manager => manager.showRobotPath, (manager, on) => manager.showRobotPath = on),
-        new SwitchDefinition("VizRobotGoal", manager => manager.showRobotGoal, (manager, on) => manager.showRobotGoal = on),
-        new SwitchDefinition("VizRobotVelocity", manager => manager.showRobotVelocityVector, (manager, on) => manager.showRobotVelocityVector = on),
-        new SwitchDefinition("VizRobotLidar", manager => manager.showRobotSensorRays, (manager, on) => manager.showRobotSensorRays = on),
+        "VizRobotTrajectory",
+        "VizRobotPath",
+        "VizRobotGoal",
+        "VizRobotVelocity",
+        "VizRobotLidar",
 
         // Crowd
-        new SwitchDefinition("VizHumanTrajectories", manager => manager.showHumanTrajectories, (manager, on) => manager.showHumanTrajectories = on),
-        new SwitchDefinition("VizHumanGoals", manager => manager.showHumanGoals, (manager, on) => manager.showHumanGoals = on),
-        new SwitchDefinition("VizHumanVelocity", manager => manager.showHumanVelocityVectors, (manager, on) => manager.showHumanVelocityVectors = on),
-        new SwitchDefinition("VizHumanInteraction", manager => manager.showHumanInteractionRadius, (manager, on) => manager.showHumanInteractionRadius = on),
-        new SwitchDefinition("VizHumanColors", manager => manager.colorHumansByState, (manager, on) => manager.colorHumansByState = on),
+        "VizHumanTrajectories",
+        "VizHumanGoals",
+        "VizHumanVelocity",
+        "VizHumanInteraction",
+        "VizHumanColors",
 
         // Scene
-        new SwitchDefinition("VizGrid", manager => manager.showGrid, (manager, on) => manager.showGrid = on),
-        new SwitchDefinition("VizAxes", manager => manager.showAxes, (manager, on) => manager.showAxes = on),
-        new SwitchDefinition("VizWireframe", manager => manager.wireframeMode, (manager, on) => manager.wireframeMode = on),
-        new SwitchDefinition("VizAgentLabels", manager => manager.showAgentIDs, (manager, on) => manager.showAgentIDs = on),
-        new SwitchDefinition("VizDistances", manager => manager.showDistanceLabels, (manager, on) => manager.showDistanceLabels = on)
+        "VizGrid",
+        "VizAxes",
+        "VizWireframe",
+        "VizAgentLabels",
+        "VizDistances",
+
+        // Minimap
+        "VizDetectionFootprints"
     };
 
     /// <summary>Names of the switches, for whoever holds the overlay and this panel together.</summary>
-    public static IReadOnlyList<string> SwitchNames { get; } =
-        Array.ConvertAll(Definitions, definition => definition.ToggleName);
+    public static IReadOnlyList<string> SwitchNames { get; } = DefinitionNames;
 
     private readonly List<Switch> _switches = new();
     private readonly VisualElement _panel;
     private readonly Button _collapseButton;
+    private readonly SimulationMinimap _minimap;
     private VisualizationManager _manager;
     private bool _collapsed;
     private bool _updating;
@@ -101,8 +116,11 @@ public sealed class SimulationVisualizationPanel
     /// <summary>
     /// Binds the switches of the overlay to a manager, creating one when the scene carries none. A missing
     /// overlay element turns the panel inert rather than throwing, because the overlay is rebuilt on its own.
+    ///
+    /// The minimap is optional for the same reason: an environment whose view has no camera has no minimap
+    /// either, and its footprint switch is then the one switch the panel leaves inert.
     /// </summary>
-    public SimulationVisualizationPanel(VisualElement root)
+    public SimulationVisualizationPanel(VisualElement root, SimulationMinimap minimap = null)
     {
         if (root == null)
         {
@@ -110,6 +128,7 @@ public sealed class SimulationVisualizationPanel
             return;
         }
 
+        _minimap = minimap;
         _panel = Query<VisualElement>(root, "VisualizationPanel");
         _collapseButton = Query<Button>(root, "VisualizationPanelCollapseButton");
 
@@ -130,7 +149,7 @@ public sealed class SimulationVisualizationPanel
         }
 
         BuildSwitches(root);
-        SyncFromManager();
+        SyncFromSettings();
     }
 
     /// <summary>Re-reads the settings on a slow tick, so the panel shows what the scene is doing.</summary>
@@ -150,13 +169,13 @@ public sealed class SimulationVisualizationPanel
     /// Re-reads every setting into its switch, for whoever knows the scene changed without waiting for the
     /// next tick - and for a test, which does not get the ticks of a running editor.
     /// </summary>
-    public void Refresh() => SyncFromManager();
+    public void Refresh() => SyncFromSettings();
 
     /// <summary>The switches, in the order the panel shows them.</summary>
     private void BuildSwitches(VisualElement root)
     {
-        for (int index = 0; index < Definitions.Length; index++)
-            Register(root, Definitions[index]);
+        for (int index = 0; index < DefinitionNames.Length; index++)
+            Register(root, DefinitionFor(DefinitionNames[index], _manager, _minimap));
     }
 
     private void Register(VisualElement root, SwitchDefinition definition)
@@ -165,7 +184,7 @@ public sealed class SimulationVisualizationPanel
         if (toggle == null)
             return;
 
-        _switches.Add(new Switch(toggle, definition.Read, definition.Write));
+        _switches.Add(new Switch(toggle, definition));
 
         toggle.RegisterValueChangedCallback(evt =>
         {
@@ -186,12 +205,12 @@ public sealed class SimulationVisualizationPanel
         if (_manager == null || string.IsNullOrEmpty(toggleName))
             return false;
 
-        for (int index = 0; index < Definitions.Length; index++)
+        for (int index = 0; index < _switches.Count; index++)
         {
-            if (Definitions[index].ToggleName != toggleName)
+            if (_switches[index].Toggle.name != toggleName)
                 continue;
 
-            Definitions[index].Write(_manager, value);
+            _switches[index].Write(value);
             // A manager nobody asks anything of should not be walking the crowd: it runs while a switch is on.
             _manager.enabled = AnySwitchOn();
             return true;
@@ -209,19 +228,73 @@ public sealed class SimulationVisualizationPanel
             _collapseButton.text = _collapsed ? FoldedGlyph : ExpandedGlyph;
     }
 
-    /// <summary>Writes every setting into its switch, without waking the handlers that write them back.</summary>
-    private void SyncFromManager()
+    /// <summary>
+    /// The setting behind one switch. Spelled out rather than reflected over, so renaming a field of the
+    /// manager breaks the build instead of quietly leaving a switch that does nothing.
+    /// </summary>
+    private static SwitchDefinition DefinitionFor(string toggleName, VisualizationManager manager, SimulationMinimap minimap)
     {
-        if (_manager == null)
-            return;
+        switch (toggleName)
+        {
+            // Robot
+            case "VizRobotTrajectory":
+                return new SwitchDefinition(toggleName, () => manager.showRobotTrajectory, on => manager.showRobotTrajectory = on);
+            case "VizRobotPath":
+                return new SwitchDefinition(toggleName, () => manager.showRobotPath, on => manager.showRobotPath = on);
+            case "VizRobotGoal":
+                return new SwitchDefinition(toggleName, () => manager.showRobotGoal, on => manager.showRobotGoal = on);
+            case "VizRobotVelocity":
+                return new SwitchDefinition(toggleName, () => manager.showRobotVelocityVector, on => manager.showRobotVelocityVector = on);
+            case "VizRobotLidar":
+                return new SwitchDefinition(toggleName, () => manager.showRobotSensorRays, on => manager.showRobotSensorRays = on);
 
+            // Crowd
+            case "VizHumanTrajectories":
+                return new SwitchDefinition(toggleName, () => manager.showHumanTrajectories, on => manager.showHumanTrajectories = on);
+            case "VizHumanGoals":
+                return new SwitchDefinition(toggleName, () => manager.showHumanGoals, on => manager.showHumanGoals = on);
+            case "VizHumanVelocity":
+                return new SwitchDefinition(toggleName, () => manager.showHumanVelocityVectors, on => manager.showHumanVelocityVectors = on);
+            case "VizHumanInteraction":
+                return new SwitchDefinition(toggleName, () => manager.showHumanInteractionRadius, on => manager.showHumanInteractionRadius = on);
+            case "VizHumanColors":
+                return new SwitchDefinition(toggleName, () => manager.colorHumansByState, on => manager.colorHumansByState = on);
+
+            // Scene
+            case "VizGrid":
+                return new SwitchDefinition(toggleName, () => manager.showGrid, on => manager.showGrid = on);
+            case "VizAxes":
+                return new SwitchDefinition(toggleName, () => manager.showAxes, on => manager.showAxes = on);
+            case "VizWireframe":
+                return new SwitchDefinition(toggleName, () => manager.wireframeMode, on => manager.wireframeMode = on);
+            case "VizAgentLabels":
+                return new SwitchDefinition(toggleName, () => manager.showAgentIDs, on => manager.showAgentIDs = on);
+            case "VizDistances":
+                return new SwitchDefinition(toggleName, () => manager.showDistanceLabels, on => manager.showDistanceLabels = on);
+
+            // Minimap. Null only where the overlay has no view at all, and the switch is inert there.
+            case "VizDetectionFootprints":
+                return new SwitchDefinition(
+                    toggleName,
+                    () => minimap != null && minimap.ShowDetectionFootprints,
+                    on => { if (minimap != null) minimap.ShowDetectionFootprints = on; },
+                    drivesManager: false);
+
+            default:
+                return new SwitchDefinition(toggleName, () => false, _ => { }, drivesManager: false);
+        }
+    }
+
+    /// <summary>Writes every setting into its switch, without waking the handlers that write them back.</summary>
+    private void SyncFromSettings()
+    {
         _updating = true;
         try
         {
             for (int index = 0; index < _switches.Count; index++)
             {
                 Switch entry = _switches[index];
-                entry.Toggle.SetValueWithoutNotify(entry.Read(_manager));
+                entry.Toggle.SetValueWithoutNotify(entry.Read());
             }
         }
         finally
@@ -229,14 +302,16 @@ public sealed class SimulationVisualizationPanel
             _updating = false;
         }
 
-        _manager.enabled = AnySwitchOn();
+        if (_manager != null)
+            _manager.enabled = AnySwitchOn();
     }
 
+    /// <summary>True while any switch that only the manager can honour is asking for something.</summary>
     private bool AnySwitchOn()
     {
         for (int index = 0; index < _switches.Count; index++)
         {
-            if (_switches[index].Read(_manager))
+            if (_switches[index].DrivesManager && _switches[index].Read())
                 return true;
         }
 

@@ -149,24 +149,17 @@ namespace RobotSNAP.Agents
 
             // Small and fast, on four wheels: the footprint of the default base, twice its speed, and able
             // to turn on the spot. It is the robot that forces the crowd to react.
+            //
+            // It is also the one robot of this fleet that is driven through its own tyres rather than by a
+            // base told where to go, and the only one whose mass is the one its own model declares: 16.523
+            // kg of chassis, four 0.477 kg wheels, and the accessory links the importer gave a kilogram
+            // each put back to nothing. It brakes and accelerates at the rate a motor-limited platform can
+            // command - 1.5 m/s^2 and 2.5 rad/s^2 - instead of at the rate its tyres would allow, which
+            // are the only figures here the URDF does not carry: the model publishes no effort limit for
+            // its wheel joints.
             new RobotProfile(
-                "jackal", "Jackal", "Small fast 4-wheel skid-steer (24 kg), 2.0 m/s, 270 degrees lidar",
-                radius: 0.26f, mass: 24.4f,
-                maxLinearSpeed: 2.0f, maxAngularSpeed: 4.0f,
-                lidarSpanDegrees: 270f, lidarRange: 10f, lidarRays: 270,
-                lidarHeight: 0.30f, lidarFrequencyHz: 20f),
-
-            // The same robot, driven the way its own model describes it rather than the way the rest of the
-            // fleet is tuned. The Jackal it duplicates carries 32.3 kg of physics for a model whose links add
-            // up to 18.4, and answers a step command in a fifth of a second where no 18 kg platform does.
-            // This variant carries the masses the URDF declares - 16.523 kg of chassis, four 0.477 kg wheels,
-            // and the accessory links the importer gave a kilogram each put back to nothing - and it brakes
-            // and accelerates at the rate a motor-limited platform can command instead of at the rate its
-            // tyres would allow. Its two ramps, 1.5 m/s^2 and 2.5 rad/s^2, are the only figures here the
-            // URDF does not carry: the model publishes no effort limit for its wheel joints.
-            new RobotProfile(
-                "jackal_real", "Jackal (realistic)",
-                "The Jackal as its own model weighs it (18.4 kg), motor-limited at 1.5 m/s^2 and 2.5 rad/s^2",
+                "jackal", "Jackal",
+                "Small fast 4-wheel robot on its own tyres (18.4 kg), 2.0 m/s, 270 degrees lidar",
                 radius: 0.26f, mass: 16.523f,
                 maxLinearSpeed: 2.0f, maxAngularSpeed: 4.0f,
                 lidarSpanDegrees: 270f, lidarRange: 10f, lidarRays: 270,

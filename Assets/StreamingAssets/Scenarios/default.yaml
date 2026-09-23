@@ -14,7 +14,7 @@ scenario_info:
   location: null
   dataset: null
   preview: corner.png
-  robot_type: Kuri
+  robot_type: Jackal
   duration: 0
 points: 
   spawn_zone: 
@@ -73,12 +73,12 @@ points:
     size: null
 robots: 
 - id: robot_1
-  type: kuri
+  type: jackal
   start: start_robot
   goal: end_robot
   waypoints: null
   behavior: normal
-  speed: 1
+  speed: 2
 robot: null
 humans: 
 - id: pedestrians

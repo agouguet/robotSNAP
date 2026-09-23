@@ -126,6 +126,73 @@ namespace RobotSNAP.Tests.Editor
         }
 
         /// <summary>
+        /// The catalogue binds a type to one body, and one body belongs to one type.
+        ///
+        /// The project carried two Jackals for a while - the model it imported, and a copy driven through its
+        /// own tyres - and the duplicate showed up everywhere a type is listed: twice in the type list of the
+        /// scenario editor, twice in the robot catalogue, and twice in the course scene. This is that
+        /// regression, held for every type rather than for the one that happened to be duplicated.
+        /// </summary>
+        [Test]
+        public void RobotCatalog_OffersEachTypeOnce_AndClaimsNoBodyTwice()
+        {
+            RobotCatalog catalog = RobotCatalog.Load();
+            Assert.That(catalog, Is.Not.Null,
+                $"No {nameof(RobotCatalog)} under Resources, so a scenario naming a type would find no body.");
+
+            var types = new HashSet<string>();
+            var bodies = new HashSet<GameObject>();
+
+            foreach (RobotCatalog.Entry entry in catalog.Entries)
+            {
+                Assert.That(entry.Prefab, Is.Not.Null,
+                    $"The catalogue entry '{entry.TypeId}' names no prefab.");
+
+                Assert.That(types.Add(entry.TypeId), Is.True,
+                    $"The catalogue lists the type '{entry.TypeId}' twice.");
+
+                Assert.That(bodies.Add(entry.Prefab), Is.True,
+                    $"The catalogue points two types at {AssetDatabase.GetAssetPath(entry.Prefab)}, so the " +
+                    "interface would offer one robot under two names.");
+            }
+        }
+
+        /// <summary>
+        /// The Jackal this build ships is the one its own model describes: the type resolves to the prefab of
+        /// that name, and that prefab drives through its tyres rather than through the skid contact the rest
+        /// of the fleet is given. The duplicate the project used to carry - a "jackal_real" next to it - is
+        /// gone, and this test is where that decision is written down.
+        /// </summary>
+        [Test]
+        public void TheJackal_IsTheOneThatDrivesThroughItsTyres()
+        {
+            Assert.That(RobotProfiles.TryFind("jackal", out RobotProfile profile), Is.True,
+                "The build no longer knows the robot type 'jackal'.");
+            Assert.That(profile.Id, Is.EqualTo("jackal"));
+            Assert.That(profile.Mass, Is.EqualTo(16.523f).Within(0.001f),
+                "The Jackal's profile has to carry the mass its own model adds up to, which is the mass its " +
+                "base link is driven with at run time.");
+
+            RobotCatalog catalog = RobotCatalog.Load();
+            Assert.That(catalog, Is.Not.Null, $"No {nameof(RobotCatalog)} under Resources.");
+
+            GameObject prefab = catalog.PrefabFor("jackal");
+            Assert.That(prefab, Is.Not.Null, "The catalogue resolves no body for the type 'jackal'.");
+            Assert.That(AssetDatabase.GetAssetPath(prefab), Is.EqualTo("Assets/Prefabs/Robots/Jackal.prefab"),
+                "The type 'jackal' has to be the prefab of that name: the wiring tool finds a type by the " +
+                "name of the body it drives.");
+
+            var drive = prefab.GetComponentInChildren<ArticulationWheelController>(true);
+            Assert.That(drive, Is.Not.Null, $"{prefab.name} carries no wheel chassis.");
+            Assert.That(drive.driveModel, Is.EqualTo(ArticulationWheelController.DriveModel.TyreForces),
+                $"{prefab.name} is not driven through its tyres any more, so it is not the robot this type " +
+                "was chosen to be.");
+
+            Assert.That(RobotProfiles.TryFind("jackal_real", out RobotProfile _), Is.False,
+                "The duplicated 'jackal_real' type is back; one robot is one type.");
+        }
+
+        /// <summary>
         /// A robot type drives through exactly one chassis, and that chassis sits on the "Plugins" child of
         /// the prefab - where the wiring tool puts it, and where the prefab is read from at run time.
         /// </summary>

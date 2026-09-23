@@ -6788,6 +6788,34 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 627526468}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &630853622
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0bc4f22db86faa366bcf7612a653c290, type: 3}
+  m_Name: DefaultConfig
+  m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.Core.SimulationConfig
+  _environmentCount: 1
+  _environmentSpacing: 20
+  _defaultScenario: default
+  _scenariosFolder: Scenarios
+  _startPaused: 1
+  _timeScale: 1
+  _fixedTimestep: 0.02
+  _randomSeed: -1
+  _enableROS: 0
+  _rosMasterURI: http://localhost:11311
+  _rosPrefix: 
+  _rosPublishFrequency: 10
+  _recordData: 0
+  _outputDirectory: SimulationData
+  _datasetPath: Dataset
+  _inferenceMode: 0
 --- !u!1 &649290456
 GameObject:
   m_ObjectHideFlags: 0
@@ -17821,7 +17849,6 @@ Transform:
   - {fileID: 1588303075}
   - {fileID: 1784441864}
   - {fileID: 2094236954}
-  - {fileID: 2035700896}
   - {fileID: 361943302}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -21187,7 +21214,6 @@ MonoBehaviour:
   - {fileID: 1588303076}
   - {fileID: 1784441865}
   - {fileID: 2094236955}
-  - {fileID: 2035700897}
   - {fileID: 361943301}
   view: {fileID: 2117240050}
   distance: 6
@@ -21323,87 +21349,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2015016542}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!1001 &2035700895
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 1602982790}
-    m_Modifications:
-    - target: {fileID: 797886123375878341, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 3
-      objectReference: {fileID: 0}
-    - target: {fileID: 797886123375878341, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0.3
-      objectReference: {fileID: 0}
-    - target: {fileID: 797886123375878341, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -9
-      objectReference: {fileID: 0}
-    - target: {fileID: 797886123375878341, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 797886123375878341, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 797886123375878341, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 797886123375878341, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 797886123375878341, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 797886123375878341, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 797886123375878341, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 3369585503369463198, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_Enabled
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 3369585503369463198, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: requireSelection
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8924766295571128112, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-      propertyPath: m_Name
-      value: JackalReal
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: ea84627fc289252c191dfdf566f56631, type: 3}
---- !u!4 &2035700896 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 797886123375878341, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-  m_PrefabInstance: {fileID: 2035700895}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &2035700897 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 3369585503369463198, guid: ea84627fc289252c191dfdf566f56631, type: 3}
-  m_PrefabInstance: {fileID: 2035700895}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 73d83e37eac28d8b49b865b267b5eec7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.RobotInputController
 --- !u!1 &2050102072
 GameObject:
   m_ObjectHideFlags: 0
@@ -22105,7 +22050,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1e32866a0665bfbde8c4648b27fdea3b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.Supervisor
-  _defaultConfig: {fileID: 0}
+  _defaultConfig: {fileID: 630853622}
   _clock: {fileID: 0}
   _autoSaveOnQuit: 0
   _logEvents: 1

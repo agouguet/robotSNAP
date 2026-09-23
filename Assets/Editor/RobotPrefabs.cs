@@ -428,6 +428,13 @@ public static class RobotPrefabs
         foreach (Transform roller in rollers)
             controller.freeRollers.Add(roller.GetComponent<ArticulationBody>());
 
+        // A chassis that drives through its own tyres was tuned on a bench, one figure at a time, and this
+        // table has nothing to say about it: writing the fleet's base-driven figures over it would turn the
+        // Jackal back into the robot it was copied from. Everything above still applies - the wheels are on
+        // the sides they belong to - so only the drive is left as it was found.
+        if (controller.driveModel == ArticulationWheelController.DriveModel.TyreForces)
+            return;
+
         // Every wheeled robot the tool wires is driven from its base rather than through its wheels, and
         // that is a measurement and not a preference: leaving the motion to the wheels was tried on a
         // two-wheel differential as well as on the Jackal's four-wheel skid steer, and both under-turn -
@@ -603,6 +610,11 @@ public static class RobotPrefabs
         List<Transform> right,
         List<Transform> rollers)
     {
+        // The tyres of a chassis that carries the tyre model are its own: see WireWheelController. Taking
+        // them off would leave the robot driving through a tyre model on a contact that slides.
+        if (CarriesTyreModel(root))
+            return 0;
+
         PhysicsMaterial wheelMaterial = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(WheelMaterialPath);
         if (wheelMaterial == null)
         {
@@ -631,6 +643,14 @@ public static class RobotPrefabs
         }
 
         return resurfaced;
+    }
+
+    /// <summary>True when this body drives through the tyre model rather than through the skid contact.</summary>
+    private static bool CarriesTyreModel(Transform root)
+    {
+        var controller = root.GetComponentInChildren<ArticulationWheelController>(true);
+        return controller != null &&
+               controller.driveModel == ArticulationWheelController.DriveModel.TyreForces;
     }
 
     /// <summary>Every link of the chassis that rolls on the floor: the driven wheels and the free casters.</summary>

@@ -192,13 +192,13 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         "How hard the drive may take speed off the robot, in m/s per second. Zero - the figure every robot of " +
         "this project carries - lets the tyres do it: a robot asked to stop brakes with the grip it has and " +
         "comes to rest in a tenth of a second from two radians per second. A figure here is what a platform " +
-        "whose motors are the limit does instead, and it is how the realistic variant of a robot is built: " +
+        "whose motors are the limit does instead, and it is how the Jackal is built: " +
         "see maxAngularBraking.")]
     public float maxLinearBraking = 0f;
 
     [Tooltip(
         "How hard the drive may take yaw off the robot, in rad/s per second. Zero lets the tyres decide, as " +
-        "above. The Jackal (realistic) carries 2.5: released from the top of its commanded turn it comes to " +
+        "above. The Jackal carries 2.5: released from the top of its commanded turn it comes to " +
         "rest in 1.6 seconds and in about a radian of rotation, where the tyre-braked one stops in 0.13 " +
         "seconds and a tenth of a radian - and only the second of those is a robot that could exist.")]
     public float maxAngularBraking = 0f;

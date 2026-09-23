@@ -21,7 +21,5 @@ MonoBehaviour:
     Prefab: {fileID: 7650586669298080969, guid: 7621a782848dc259da04347b4ba8d91a, type: 3}
   - TypeId: jackal
     Prefab: {fileID: 8924766295571128112, guid: 36adc55592be1d947b38694e69b7a6b6, type: 3}
-  - TypeId: jackal_real
-    Prefab: {fileID: 8924766295571128112, guid: ea84627fc289252c191dfdf566f56631, type: 3}
   - TypeId: kuri
     Prefab: {fileID: 3132521354117526330, guid: 9d0c96a9aab20a6aa8a2971d6ac51dc2, type: 3}

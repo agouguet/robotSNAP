@@ -39,6 +39,12 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         /// <summary>The base is driven to the commanded velocity; the wheels follow it.</summary>
         SkidSteerBase,
 
+        /// <summary>
+        /// The tyres carry the robot, through the slip model below rather than through the contact:
+        /// the shape of a tyre, which a single friction coefficient cannot express.
+        /// </summary>
+        TyreForces,
+
     }
 
     [Header("Wheel References")]
@@ -83,6 +89,37 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
 
     [Tooltip("Internal friction of the wheel joint. A wheel that is commanded must not be braked by it.")]
     public float jointFriction = 0f;
+
+    [Header("Tyre model (the TyreForces chassis)")]
+    [Tooltip(
+        "What a tyre can pass along its rolling direction, as a friction coefficient. This is the drive: it is " +
+        "the force that makes the robot move, stop and turn, and it is the one a real rubber wheel holds.")]
+    public float tyreLongitudinalGrip = 0.9f;
+
+    [Tooltip(
+        "What a tyre can pass sideways, as a friction coefficient. This is the number a wheeled robot's " +
+        "behaviour in a turn comes from: high enough that the robot is not on ice - a tyre that slides " +
+        "sideways that easily is a tyre that cannot push a pedestrian - and low enough that a four-wheel skid " +
+        "steer can still scrub the half of its contact patch a turn demands. It is the figure Gazebo's users " +
+        "tune by hand as a contact's second friction direction, for exactly this reason.")]
+    public float tyreLateralGrip = 0.55f;
+
+    [Tooltip(
+        "The slip ratio a tyre reaches half of its longitudinal grip at, as a fraction of the speed it rolls " +
+        "at. Below it the tyre holds, above it the tyre spins or locks.")]
+    public float tyreLongitudinalSlip = 0.12f;
+
+    [Tooltip("The slip angle a tyre reaches half of its lateral grip at, in radians.")]
+    public float tyreLateralSlip = 0.15f;
+
+    [Tooltip(
+        "The speed at which a slip is read, in metres per second: the relaxation length of a tyre in disguise, " +
+        "and what keeps the model from dividing by a velocity of nothing when the robot is standing still.")]
+    public float tyreRelaxationSpeed = 0.4f;
+
+    [Tooltip("What a wheel is commanded to roll at, in metres per second: half of what the tyres are given.")]
+    private float _leftSurfaceSpeed;
+    private float _rightSurfaceSpeed;
 
     [Tooltip("Passive angular drag of the wheel. Near zero: the drive, not the drag, decides its speed.")]
     public float angularDamping = 0.05f;
@@ -293,10 +330,121 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         if (_articulationRoot == null)
             return;
 
-        if (driveModel != DriveModel.SkidSteerBase)
-            return;
+        if (driveModel == DriveModel.SkidSteerBase)
+            DriveBase();
+        else if (driveModel == DriveModel.TyreForces)
+            DriveTyreForces();
+    }
 
-        DriveBase();
+    /// <summary>
+    /// Drives the robot the way a tyre does, with the two directions a contact cannot separate.
+    ///
+    /// A tyre passes a force along the direction it rolls and a force sideways, and the two are not the same
+    /// figure: a wheel grips its road when it rolls and slides when the road asks it to go sideways. PhysX
+    /// gives a contact a single friction coefficient for the pair, which is why this project's wheels carry a
+    /// contact of a hundredth of the floor's - so that a skid steer can turn at all - and why the robot then
+    /// reads as if the floor were ice: its yaw comes from a torque written on its chassis, and its wheels
+    /// could be lifted off the ground without anything changing.
+    ///
+    /// This chassis computes the two forces itself, from the slip a tyre actually runs at, and leaves the
+    /// contact nothing to decide. Each driven wheel reads the velocity of its own contact patch - the
+    /// chassis' velocity carried out to the contact by the rotation, which is what a wheel at the corner of
+    /// a turning chassis does - splits it into the part along its rolling direction and the part across it,
+    /// and asks the tyre for:
+    ///
+    ///   along: grip times the weight it carries, for a slip ratio of (wheel speed - ground speed) / speed,
+    ///   across: grip times the weight it carries, for a slip angle of atan(across / speed),
+    ///
+    /// each saturating the way a tyre does, over the slip it reaches its grip at. The two forces are applied
+    /// at the contact patch, so the moment they make about the chassis - which is how a turn happens, and
+    /// what a skid steer pays for it - is applied too.
+    ///
+    /// The normal load is the weight of the robot split evenly between its driven wheels, and the wheel is
+    /// turned by the same velocity drive as everywhere else: it is how the platform these models come from
+    /// is commanded, and what a real one does with its own wheel-speed loop. What is not modelled is load
+    /// transfer in a turn and the relaxation length of a tyre in time; what is, is the direction a contact
+    /// cannot know about.
+    /// </summary>
+    private void DriveTyreForces()
+    {
+        ArticulationBody body = _articulationRoot;
+        body.WakeUp();
+
+        if (!Mathf.Approximately(_measuredRootMass, body.mass))
+            MeasureChassis();
+
+        float step = Time.fixedDeltaTime;
+        Vector3 velocity = body.linearVelocity;
+        Vector3 spin = body.angularVelocity;
+
+        Vector3 forward = body.transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 1e-6f)
+            forward = Vector3.forward;
+        forward.Normalize();
+        Vector3 side = Vector3.Cross(Vector3.up, forward);
+
+        int wheels = 0;
+        foreach (ArticulationBody _ in WheelsOf(leftWheel, leftWheels)) wheels++;
+        foreach (ArticulationBody _ in WheelsOf(rightWheel, rightWheels)) wheels++;
+
+        float load = Mathf.Max(1f, _chassisMass) * Mathf.Abs(Physics.gravity.y) / Mathf.Max(1, wheels);
+
+        ApplyTyres(body, WheelsOf(leftWheel, leftWheels), _leftSurfaceSpeed, load, forward, side, velocity, spin);
+        ApplyTyres(body, WheelsOf(rightWheel, rightWheels), _rightSurfaceSpeed, load, forward, side, velocity, spin);
+
+        // The lean comes back the way it does on the driven base, and for the same reason: a four-wheel
+        // chassis has no suspension, so without it a contact with a kerb leaves the robot tilted.
+        float inertia = InertiaAboutUp(body);
+        float tiltLimit = Mathf.Max(0f, tiltRecovery) * step;
+        body.AddTorque(new Vector3(
+            Mathf.Clamp(-spin.x, -tiltLimit, tiltLimit) / step * inertia,
+            0f,
+            Mathf.Clamp(-spin.z, -tiltLimit, tiltLimit) / step * inertia));
+    }
+
+    /// <summary>The two forces of the tyres of one side, applied where they meet the ground.</summary>
+    private void ApplyTyres(
+        ArticulationBody body,
+        IEnumerable<ArticulationBody> wheels,
+        float surfaceSpeed,
+        float load,
+        Vector3 forward,
+        Vector3 side,
+        Vector3 velocity,
+        Vector3 spin)
+    {
+        foreach (ArticulationBody wheel in wheels)
+        {
+            if (wheel == null)
+                continue;
+
+            Vector3 contact = wheel.transform.position - Vector3.up * Mathf.Max(0.01f, wheelRadius);
+            Vector3 lever = contact - body.transform.position;
+            Vector3 atContact = velocity + Vector3.Cross(spin, lever);
+
+            float along = Vector3.Dot(atContact, forward);
+            float across = Vector3.Dot(atContact, side);
+            float reference = Mathf.Max(tyreRelaxationSpeed, Mathf.Abs(along));
+
+            float slipRatio = (surfaceSpeed - along) / reference;
+            // The slip angle is read against the speed the tyre is travelling at and not against the
+            // relaxation speed: a tyre leaning five centimetres sideways per second while it rolls at one
+            // metre per second is at a slip angle of three degrees and holds with a third of its grip, where
+            // the same five centimetres read against the relaxation speed would ask for three quarters of it.
+            // That reading is what a cornering stiffness is, and getting it wrong is what made the first
+            // version of this model turn a metre-per-second arc at three percent of its command.
+            float slipAngle = Mathf.Atan2(-across, reference);
+
+            float longitudinal = load * tyreLongitudinalGrip
+                * (float)System.Math.Tanh(slipRatio / Mathf.Max(1e-3f, tyreLongitudinalSlip));
+            float lateral = load * tyreLateralGrip
+                * (float)System.Math.Tanh(slipAngle / Mathf.Max(1e-3f, tyreLateralSlip));
+
+            Vector3 force = forward * longitudinal + side * lateral;
+            body.AddForce(force);
+            body.AddTorque(Vector3.Cross(lever, force));
+        }
     }
 
     private void DriveBase()
@@ -489,7 +637,7 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         // it was authored with. Written from Start - which is called after the scenario has placed the
         // robot - a needless write teleports the robot back to the origin of the scene, wheels included,
         // which is exactly what it did before this comment existed.
-        if (driveModel == DriveModel.SkidSteerBase)
+        if (driveModel != DriveModel.WheelVelocity)
         {
             if (root.immovable)
                 root.immovable = false;
@@ -633,7 +781,7 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         // A wheel that drives the robot has to be strong. A wheel that only rolls while the base is driven
         // must not be: at full strength its contact pins the chassis to the speed of the contact, and the
         // base then turns as little as the contact allows rather than as much as it was told.
-        if (driveModel == DriveModel.SkidSteerBase && rollingWheelForceLimit > 0f)
+        if (driveModel != DriveModel.WheelVelocity && rollingWheelForceLimit > 0f)
             drive.forceLimit = rollingWheelForceLimit;
 
         wheel.xDrive = drive;
@@ -712,6 +860,11 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
             SetWheelVelocity(wheel, leftRad);
         foreach (ArticulationBody wheel in WheelsOf(rightWheel, rightWheels))
             SetWheelVelocity(wheel, rightRad);
+
+        // What the tyres of each side are rolling at, in metres per second: the figure the tyre model reads
+        // its slip against, and the one a wheel's own contact would have carried had it been left to decide.
+        _leftSurfaceSpeed = leftRad * radius;
+        _rightSurfaceSpeed = rightRad * radius;
     }
 
     private void SetWheelVelocity(ArticulationBody wheel, float angularVelocityRadPerSec)

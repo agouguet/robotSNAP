@@ -2637,6 +2637,11 @@ MonoBehaviour:
   driveForceLimit: 1000
   rollingWheelForceLimit: 3
   jointFriction: 0
+  tyreLongitudinalGrip: 0.9
+  tyreLateralGrip: 0.55
+  tyreLongitudinalSlip: 0.12
+  tyreLateralSlip: 0.15
+  tyreRelaxationSpeed: 0.4
   angularDamping: 0.05
   solverIterations: 6
   solverVelocityIterations: 16

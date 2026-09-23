@@ -3,6 +3,9 @@
     --bg-secondary: rgb(255, 255, 255);
     --sidebar-bg: rgb(255, 255, 255);
     --panel-bg: rgba(255, 255, 255, 0.92);
+    /* It floats over the shot of the simulation, so it keeps some of it; opaque enough that its labels stay
+       readable over a bright floor. */
+    --viz-panel-bg: rgba(255, 255, 255, 0.90);
     --card-bg: rgb(255, 255, 255);
     --text-primary: rgb(15, 23, 42);
     --text-secondary: rgb(71, 85, 105);
@@ -28,6 +31,9 @@
     --bg-secondary: rgb(30, 41, 59);
     --sidebar-bg: rgb(15, 23, 42);
     --panel-bg: rgba(30, 41, 59, 0.85);
+    /* It floats over the shot of the simulation, so it keeps some of it; opaque enough that its labels stay
+       readable over a bright floor. */
+    --viz-panel-bg: rgba(15, 23, 42, 0.86);
     --card-bg: rgb(30, 41, 59);
     --text-primary: rgb(241, 245, 249);
     --text-secondary: rgb(148, 163, 184);

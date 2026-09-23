@@ -7,19 +7,21 @@ namespace RobotSNAP.UI
 {
     public class VisualizationManager : MonoBehaviour
     {
+        // Every switch below is off until somebody asks for it. The panel of the simulation overlay is what
+        // asks, and it keeps this component disabled while all of them are off, so a run nobody debugs does
+        // not walk the crowd every frame to fill a history nobody reads.
         [Header("Visualization Settings")]
-        public bool showGrid = true;
+        public bool showGrid = false;
         public bool showAxes = false;
         public bool showFloor = true;
-        public bool showWalls = true;
         public bool wireframeMode = false;
         
         [Header("Robot Visualization")]
-        public bool showRobotTrajectory = true;
-        public bool showRobotPath = true;
-        public bool showRobotGoal = true;
+        public bool showRobotTrajectory = false;
+        public bool showRobotPath = false;
+        public bool showRobotGoal = false;
         public bool showRobotVelocityVector = false;
-        public bool showRobotSensorRays = true;
+        public bool showRobotSensorRays = false;
         public int trajectoryLength = 100;
         public Color robotTrajectoryColor = Color.cyan;
         public Color robotPathColor = Color.green;
@@ -28,24 +30,23 @@ namespace RobotSNAP.UI
         public Color robotSensorRayColor = Color.magenta;
         
         [Header("Human Visualization")]
-        public bool showHumanTrajectories = true;
-        public bool showHumanGoals = true;
+        public bool showHumanTrajectories = false;
+        public bool showHumanGoals = false;
         public bool showHumanVelocityVectors = false;
-        public bool showHumanInteractionRadius = true;
-        public bool colorHumansByState = true;
+        public bool showHumanInteractionRadius = false;
+        public bool colorHumansByState = false;
         public float humanOpacity = 1f;
         public Color humanDefaultColor = Color.blue;
         public Color humanAlertColor = Color.yellow;
         public Color humanDangerColor = Color.red;
         
         [Header("Debug Visualization")]
-        public bool showColliders = false;
-        public bool showNavMesh = false;
-        public bool showOccupancyGrid = false;
-        public bool showCostmap = false;
-        public bool showLaserScans = true;
+        /// <summary>
+        /// Outlines of the agents, drawn with <c>Debug.DrawLine</c>: they show in the Scene view of the editor
+        /// and nowhere else, which is why the overlay panel does not offer them.
+        /// </summary>
         public bool showBoundingBoxes = false;
-        public bool showAgentIDs = true;
+        public bool showAgentIDs = false;
         public bool showDistanceLabels = false;
         
         [Header("Grid Settings")]
@@ -71,7 +72,10 @@ namespace RobotSNAP.UI
         
         private Material _wireframeMaterial;
         private Dictionary<Renderer, Material[]> _originalMaterials = new Dictionary<Renderer, Material[]>();
-        
+
+        /// <summary>Shader every line of this manager is drawn with, looked up once for the whole run.</summary>
+        private static Shader _lineShader;
+
         private Supervisor _supervisor;
         private List<Vector3> _laserScanPoints = new List<Vector3>();
         private LineRenderer _laserScanRenderer;
@@ -120,10 +124,36 @@ namespace RobotSNAP.UI
             CreateGrid();
             CreateAxes();
             
-            _wireframeMaterial = new Material(Shader.Find("Standard"));
+            _wireframeMaterial = new Material(LitShader());
             _wireframeMaterial.color = Color.green;
             
             CreateLaserScanRenderer();
+        }
+
+        /// <summary>
+        /// A lit shader of the pipeline this project renders through. The project is built on HDRP, where the
+        /// built-in "Standard" shader does not exist: a material made from a shader that is not there draws
+        /// nothing and logs a missing shader every time it is used, which is what this manager used to do.
+        /// </summary>
+        private static Shader LitShader()
+        {
+            Shader shader = Shader.Find("HDRP/Lit");
+            if (shader == null) shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null) shader = Shader.Find("Standard");
+            return shader;
+        }
+
+        /// <summary>
+        /// The unlit transparent shader every line of this manager is drawn with. It ships with the built-in
+        /// resources, so it is found whichever pipeline the project renders through, and it is looked up once
+        /// rather than once per line.
+        /// </summary>
+        private static Shader LineShader()
+        {
+            if (_lineShader == null)
+                _lineShader = Shader.Find("Sprites/Default");
+
+            return _lineShader;
         }
         
         private void CreateGrid()
@@ -138,7 +168,7 @@ namespace RobotSNAP.UI
                 gridRenderer.positionCount = (gridDivisions * 4) + 4;
                 gridRenderer.startWidth = 0.02f;
                 gridRenderer.endWidth = 0.02f;
-                gridRenderer.material = gridMaterial ?? new Material(Shader.Find("Sprites/Default"));
+                gridRenderer.material = gridMaterial ?? new Material(LineShader());
                 gridRenderer.startColor = gridColor;
                 gridRenderer.endColor = gridColor;
                 
@@ -185,7 +215,7 @@ namespace RobotSNAP.UI
                 axesRenderer.positionCount = 6;
                 axesRenderer.startWidth = 0.05f;
                 axesRenderer.endWidth = 0.05f;
-                axesRenderer.material = axisMaterial ?? new Material(Shader.Find("Sprites/Default"));
+                axesRenderer.material = axisMaterial ?? new Material(LineShader());
                 
                 axesRenderer.SetPosition(0, Vector3.zero);
                 axesRenderer.SetPosition(1, Vector3.right * 5f);
@@ -207,7 +237,7 @@ namespace RobotSNAP.UI
             _laserScanRenderer = laserObj.AddComponent<LineRenderer>();
             _laserScanRenderer.startWidth = 0.03f;
             _laserScanRenderer.endWidth = 0.03f;
-            _laserScanRenderer.material = new Material(Shader.Find("Sprites/Default"));
+            _laserScanRenderer.material = new Material(LineShader());
             Gradient gradient = new Gradient();
             gradient.SetKeys(
                 new GradientColorKey[]
@@ -461,7 +491,6 @@ namespace RobotSNAP.UI
         
         private void UpdateDebugVisualizations()
         {
-            if (showColliders) { /* optional: implement helper toggles */ }
             if (showBoundingBoxes) DrawBoundingBoxes();
             if (showDistanceLabels) UpdateDistanceLabels();
         }
@@ -503,7 +532,7 @@ namespace RobotSNAP.UI
                 LineRenderer lr = go.AddComponent<LineRenderer>();
                 lr.startWidth = width;
                 lr.endWidth = width;
-                lr.material = new Material(Shader.Find("Sprites/Default"));
+                lr.material = new Material(LineShader());
                 lr.startColor = color;
                 lr.endColor = color;
                 dict[id] = lr;
@@ -557,8 +586,7 @@ namespace RobotSNAP.UI
                 marker.transform.SetParent(transform);
                 marker.transform.localScale = Vector3.one * 0.3f;
                 var rend = marker.GetComponent<Renderer>();
-                // rend.material = new Material(Shader.Find("Standard"));
-                rend.material = new Material(Shader.Find("HDRP/Lit"));
+                rend.material = new Material(LitShader());
                 rend.material.color = color;
                 Destroy(marker.GetComponent<Collider>());
                 _goalMarkers[id] = marker;
@@ -581,7 +609,7 @@ namespace RobotSNAP.UI
                 lr.endWidth = 0.03f;
                 lr.loop = true;
                 lr.useWorldSpace = false;
-                lr.material = new Material(Shader.Find("Sprites/Default"));
+                lr.material = new Material(LineShader());
                 lr.startColor = new Color(1, 1, 0, 0.5f);
                 lr.endColor = new Color(1, 1, 0, 0.5f);
                 int segments = 32;

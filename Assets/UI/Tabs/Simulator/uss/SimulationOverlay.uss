@@ -475,3 +475,101 @@
     background-color: var(--accent-glow);
     color: var(--accent);
 }
+
+
+/* ================================================================
+   VISUALIZATION PANEL
+   The debug switches of the shot: a floating panel of the top right
+   corner, translucent so the scene stays readable through it, and
+   folded to a single tab when the author wants the view back.
+   ================================================================ */
+
+.viz-panel {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 232px;
+    padding: 10px 6px 10px 12px;
+    background-color: var(--viz-panel-bg);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* Collapsed, the panel keeps its tab so it can be opened again. */
+.viz-panel.is-collapsed {
+    width: auto;
+    padding-right: 12px;
+}
+
+.viz-panel.is-collapsed .viz-panel-content {
+    display: none;
+}
+
+.viz-panel-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.viz-panel-title {
+    color: var(--text-secondary);
+    font-size: 12px;
+    -unity-font-style: bold;
+    letter-spacing: 0.6px;
+    margin-left: 2px;
+}
+
+.viz-panel-collapse {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-width: 0;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--text-secondary);
+    font-size: 14px;
+    -unity-text-align: middle-center;
+}
+
+.viz-panel-collapse:hover {
+    background-color: var(--accent-glow);
+    color: var(--accent);
+}
+
+.viz-panel-content {
+    max-height: 340px;
+    margin-top: 6px;
+    padding-right: 4px;
+}
+
+.viz-panel.is-collapsed .viz-panel-header {
+    /* The title of a folded panel is the tab: it reads at a glance and takes no room. */
+    justify-content: flex-start;
+}
+
+.viz-group-title {
+    color: var(--text-secondary-muted);
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 0.5px;
+    margin-top: 8px;
+    margin-bottom: 2px;
+}
+
+.viz-group-title:first-child {
+    margin-top: 0;
+}
+
+.viz-toggle {
+    margin-top: 2px;
+    margin-bottom: 2px;
+    font-size: 12px;
+}
+
+.viz-toggle .unity-toggle__label {
+    color: var(--text-primary);
+    font-size: 12px;
+    padding-left: 6px;
+}

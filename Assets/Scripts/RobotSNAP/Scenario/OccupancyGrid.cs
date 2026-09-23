@@ -231,6 +231,55 @@ namespace RobotSNAP.Core.Scenario
             other.CellPixels == CellPixels &&
             other.WorldBounds == WorldBounds;
 
+        /// <summary>
+        /// Samples of one ray. A ray is walked in half-cell steps, so no cell can be crossed between two of
+        /// them; the count bounds what a single query can cost, whatever range it is asked for.
+        /// </summary>
+        private const int MaxRaySamples = 512;
+
+        /// <summary>
+        /// Distance from a world point to the first wall along <paramref name="direction"/>, in metres, and
+        /// capped at <paramref name="maxDistance"/>.
+        ///
+        /// The point itself is never judged: an agent whose centre clips a wall - a robot placed against a
+        /// face, a pedestrian pushed into a corner by a crowd - keeps whatever it can see ahead instead of
+        /// being reported as seeing nothing. The walk reports the last sample that was clear, so a wall
+        /// exactly at <paramref name="maxDistance"/> still answers that full distance.
+        ///
+        /// This is the query a vision cone is drawn with: a wall between an agent and what it looks at has to
+        /// cut the cone at the wall, where the sensor's own range would have carried it right through.
+        /// </summary>
+        public float DistanceToWall(Vector2 from, Vector2 direction, float maxDistance)
+        {
+            if (!IsValid || maxDistance <= 0f)
+                return Mathf.Max(0f, maxDistance);
+
+            if (direction.sqrMagnitude <= 0.000001f)
+                return maxDistance;
+
+            float step = Mathf.Min(CellSizeX, CellSizeZ) * 0.5f;
+            if (step <= 0f)
+                return maxDistance;
+
+            Vector2 heading = direction.normalized;
+            int samples = Mathf.Min(Mathf.CeilToInt(maxDistance / step), MaxRaySamples);
+
+            for (int sample = 1; sample <= samples; sample++)
+            {
+                float distance = sample * step;
+                if (distance > maxDistance)
+                    distance = maxDistance;
+
+                if (!IsWorldWalkable(from + heading * distance))
+                    return Mathf.Max(0f, distance - step);
+
+                if (distance >= maxDistance)
+                    break;
+            }
+
+            return maxDistance;
+        }
+
         /// <summary>Grows every wall by the agent radius, so a path keeps a body width of clearance.</summary>
         private void InflateWalls(float agentRadius)
         {

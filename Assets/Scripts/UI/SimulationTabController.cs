@@ -37,6 +37,7 @@ public class SimulationTabController : MonoBehaviour
     private SimulationMinimap _minimap;
     private SimulationAgentPanel _agentPanel;
     private SimulationViewToolbar _viewToolbar;
+    private SimulationVisualizationPanel _visualizationPanel;
 
     private readonly Dictionary<CameraController.CameraMode, Button> _viewModeButtons = new();
 
@@ -136,6 +137,10 @@ public class SimulationTabController : MonoBehaviour
             _agentPanel = new SimulationAgentPanel(_root, cameraController);
             _viewToolbar = new SimulationViewToolbar(_root, cameraController);
         }
+
+        // The debug switches need no camera: they are built whenever the overlay is, so an environment whose
+        // view has no controller yet still gets them.
+        _visualizationPanel = new SimulationVisualizationPanel(_root);
 
         if (minimapCamera != null && minimapRenderTexture != null)
         {
@@ -250,6 +255,7 @@ public class SimulationTabController : MonoBehaviour
 
         _minimap?.Tick();
         _agentPanel?.Tick();
+        _visualizationPanel?.Tick();
     }
 
     // ==========================================

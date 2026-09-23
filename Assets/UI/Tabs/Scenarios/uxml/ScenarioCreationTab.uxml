@@ -35,55 +35,59 @@
         <ui:VisualElement name="Step1Content" class="creation-body creation-step-content">
             <ui:VisualElement name="GeneralInformationPanel" class="creation-panel general-information-panel">
                 <ui:Label text="General information" class="creation-panel-title"/>
-                <ui:VisualElement class="creation-field">
-                    <ui:Label text="Scenario name *" class="creation-field-label"/>
-                    <ui:TextField name="NameField" placeholder="E.g. Lobby - Rush hour" max-length="60" class="creation-text-field"/>
-                    <ui:Label name="NameCounter" text="0/60" class="field-counter"/>
-                </ui:VisualElement>
-                <ui:VisualElement class="creation-field map-image-field">
-                    <ui:Label text="Scenario environment *" class="creation-field-label"/>
-                    <ui:VisualElement name="MapImageDropZone" class="map-image-drop-zone">
-                        <ui:Label text="OCCUPANCY GRID" class="upload-title"/>
-                        <ui:DropdownField name="MapDropdown" class="creation-step-hidden"/>
-                        <ui:Label name="SelectedMapLabel" text="No environment selected" class="selected-map-label"/>
-                        <ui:VisualElement class="environment-choice-actions">
-                            <ui:Button name="OpenMapBrowserButton" text="Browse library" class="environment-choice-button primary-choice"/>
-                            <ui:Button name="OpenEnvironmentImportButton" text="Import image" class="environment-choice-button"/>
+                <!-- The fields scroll under the title: tags and the cover image used to sit below the fold of
+                     this 300 px column on any window shorter than the whole form, with no way to reach them. -->
+                <ui:ScrollView name="GeneralInformationScroll" class="creation-panel-scroll">
+                    <ui:VisualElement class="creation-field">
+                        <ui:Label text="Scenario name *" class="creation-field-label"/>
+                        <ui:TextField name="NameField" placeholder="E.g. Lobby - Rush hour" max-length="60" class="creation-text-field"/>
+                        <ui:Label name="NameCounter" text="0/60" class="field-counter"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="creation-field map-image-field">
+                        <ui:Label text="Scenario environment *" class="creation-field-label"/>
+                        <ui:VisualElement name="MapImageDropZone" class="map-image-drop-zone">
+                            <ui:Label text="OCCUPANCY GRID" class="upload-title"/>
+                            <ui:DropdownField name="MapDropdown" class="creation-step-hidden"/>
+                            <ui:Label name="SelectedMapLabel" text="No environment selected" class="selected-map-label"/>
+                            <ui:VisualElement class="environment-choice-actions">
+                                <ui:Button name="OpenMapBrowserButton" text="Browse library" class="environment-choice-button primary-choice"/>
+                                <ui:Button name="OpenEnvironmentImportButton" text="Import image" class="environment-choice-button"/>
+                            </ui:VisualElement>
+                            <ui:Label text="Organized by dataset and map name" class="upload-hint"/>
                         </ui:VisualElement>
-                        <ui:Label text="Organized by dataset and map name" class="upload-hint"/>
                     </ui:VisualElement>
-                </ui:VisualElement>
-                <ui:VisualElement class="creation-field">
-                    <ui:Label text="Description" class="creation-field-label"/>
-                    <ui:TextField name="DescriptionField" multiline="true" placeholder="Describe the context, purpose and special features of this scenario..." max-length="300" class="creation-textarea"/>
-                    <ui:Label name="DescriptionCounter" text="0/300" class="field-counter"/>
-                </ui:VisualElement>
-                <ui:VisualElement class="creation-field">
-                    <ui:Label text="Robot mission time limit (s)" class="creation-field-label"/>
-                    <ui:FloatField name="DurationField" class="creation-text-field"/>
-                    <ui:Label text="Maximum time allowed for the robot mission. Use 0 for no limit." class="field-help"/>
-                </ui:VisualElement>
-                <ui:VisualElement class="creation-field">
-                    <ui:Label text="Tags" class="creation-field-label"/>
-                    <ui:DropdownField name="TagsDropdown" class="creation-dropdown"/>
-                    <ui:VisualElement class="tag-entry-row">
-                        <ui:TextField name="TagInputField" placeholder="New tag" class="creation-text-field tag-input"/>
-                        <ui:Button name="AddTagButton" text="+" class="tag-add-button"/>
+                    <ui:VisualElement class="creation-field">
+                        <ui:Label text="Description" class="creation-field-label"/>
+                        <ui:TextField name="DescriptionField" multiline="true" placeholder="Describe the context, purpose and special features of this scenario..." max-length="300" class="creation-textarea"/>
+                        <ui:Label name="DescriptionCounter" text="0/300" class="field-counter"/>
                     </ui:VisualElement>
-                    <ui:VisualElement name="SelectedTags" class="selected-tags"/>
-                </ui:VisualElement>
-                <ui:VisualElement class="creation-field cover-image-field">
-                    <ui:Label text="Cover image" class="creation-field-label"/>
-                    <ui:VisualElement name="CoverImageDropZone" class="cover-image-drop-zone">
-                        <ui:Image name="CoverPreviewImage" class="cover-preview-image"/>
-                        <ui:VisualElement class="cover-preview-controls">
-                            <ui:Button name="UseDefaultCoverButton" text="Use default" class="cover-choice-button active"/>
-                            <ui:Button name="BrowseCoverImageButton" text="Import image" class="cover-choice-button"/>
+                    <ui:VisualElement class="creation-field">
+                        <ui:Label text="Robot mission time limit (s)" class="creation-field-label"/>
+                        <ui:FloatField name="DurationField" class="creation-text-field"/>
+                        <ui:Label text="Maximum time allowed for the robot mission. Use 0 for no limit." class="field-help"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="creation-field">
+                        <ui:Label text="Tags" class="creation-field-label"/>
+                        <ui:DropdownField name="TagsDropdown" class="creation-dropdown"/>
+                        <ui:VisualElement class="tag-entry-row">
+                            <ui:TextField name="TagInputField" placeholder="New tag" class="creation-text-field tag-input"/>
+                            <ui:Button name="AddTagButton" text="+" class="tag-add-button"/>
                         </ui:VisualElement>
-                        <ui:DropdownField name="PreviewDropdown" class="creation-step-hidden"/>
-                        <ui:Label name="CoverImageStatusLabel" text="Default 16:9 cover" class="upload-hint"/>
+                        <ui:VisualElement name="SelectedTags" class="selected-tags"/>
                     </ui:VisualElement>
-                </ui:VisualElement>
+                    <ui:VisualElement class="creation-field cover-image-field">
+                        <ui:Label text="Cover image" class="creation-field-label"/>
+                        <ui:VisualElement name="CoverImageDropZone" class="cover-image-drop-zone">
+                            <ui:Image name="CoverPreviewImage" class="cover-preview-image"/>
+                            <ui:VisualElement class="cover-preview-controls">
+                                <ui:Button name="UseDefaultCoverButton" text="Use default" class="cover-choice-button active"/>
+                                <ui:Button name="BrowseCoverImageButton" text="Import image" class="cover-choice-button"/>
+                            </ui:VisualElement>
+                            <ui:DropdownField name="PreviewDropdown" class="creation-step-hidden"/>
+                            <ui:Label name="CoverImageStatusLabel" text="Default 16:9 cover" class="upload-hint"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:ScrollView>
             </ui:VisualElement>
             <ui:VisualElement name="EnvironmentColumn" class="creation-center-column">
                 <ui:VisualElement name="EnvironmentPreviewPanel" class="creation-panel environment-preview-panel">

@@ -41,6 +41,39 @@
                             <ui:VisualElement name="MinimapDots" class="minimap-dots" picking-mode="Ignore"/>
                         </ui:VisualElement>
                     </ui:VisualElement>
+
+                    <!-- Debug switches for the shot, folded away by default: they are translucent and float
+                         over the top right corner of the view, out of the way of the toolbar on the left and
+                         of the minimap under it. -->
+                    <ui:VisualElement name="VisualizationPanel" class="viz-panel">
+                        <ui:VisualElement class="viz-panel-header">
+                            <ui:Label text="Visualization" class="viz-panel-title"/>
+                            <ui:Button name="VisualizationPanelCollapseButton" text="‹"
+                                       class="viz-panel-collapse" tooltip="Collapse or expand this panel"/>
+                        </ui:VisualElement>
+                        <ui:ScrollView name="VisualizationPanelContent" class="viz-panel-content">
+                            <ui:Label text="Robot" class="viz-group-title"/>
+                            <ui:Toggle name="VizRobotTrajectory" label="Trajectory" class="viz-toggle"/>
+                            <ui:Toggle name="VizRobotPath" label="Planned path" class="viz-toggle"/>
+                            <ui:Toggle name="VizRobotGoal" label="Goal" class="viz-toggle"/>
+                            <ui:Toggle name="VizRobotVelocity" label="Velocity" class="viz-toggle"/>
+                            <ui:Toggle name="VizRobotLidar" label="Lidar rays" class="viz-toggle"/>
+
+                            <ui:Label text="Crowd" class="viz-group-title"/>
+                            <ui:Toggle name="VizHumanTrajectories" label="Trajectories" class="viz-toggle"/>
+                            <ui:Toggle name="VizHumanGoals" label="Goals" class="viz-toggle"/>
+                            <ui:Toggle name="VizHumanVelocity" label="Velocity" class="viz-toggle"/>
+                            <ui:Toggle name="VizHumanInteraction" label="Interaction radius" class="viz-toggle"/>
+                            <ui:Toggle name="VizHumanColors" label="Colour by state" class="viz-toggle"/>
+
+                            <ui:Label text="Scene" class="viz-group-title"/>
+                            <ui:Toggle name="VizGrid" label="Ground grid" class="viz-toggle"/>
+                            <ui:Toggle name="VizAxes" label="World axes" class="viz-toggle"/>
+                            <ui:Toggle name="VizWireframe" label="Wireframe" class="viz-toggle"/>
+                            <ui:Toggle name="VizAgentLabels" label="Agent labels" class="viz-toggle"/>
+                            <ui:Toggle name="VizDistances" label="Distances to robot" class="viz-toggle"/>
+                        </ui:ScrollView>
+                    </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
 

@@ -6,6 +6,10 @@ using UnityEngine.UIElements;
 /// outline for a directional sensor (<see cref="SetCone"/>), or a full disc with a short heading
 /// needle for an omnidirectional one (<see cref="SetRing"/>).
 ///
+/// Both shapes have a third form, <see cref="SetOccluded"/>, which draws the same footprint cut
+/// back to what the walls let through: the caller hands in how far each ray of the sector actually
+/// reaches, and the sector becomes the silhouette of that.
+///
 /// Ownership: the creator owns positioning and sizing. This element only paints, and it sizes itself
 /// to twice the radius it is given, so the owner can centre it on a map point with
 /// <c>left = x - radius</c> and <c>top = y - radius</c>.
@@ -22,6 +26,9 @@ public sealed class MinimapVisionCone : VisualElement
     /// <summary>A full turn or more means the sensor sees all around, so the sector becomes a ring.</summary>
     private const float FullTurnDegrees = 360f;
 
+    /// <summary>Half a turn, the sweep a full-circle footprint starts at, so its rays straddle the heading.</summary>
+    private const float HalfTurnDegrees = 180f;
+
     /// <summary>Where the heading needle starts, as a fraction of the radius; it ends on the ring.</summary>
     private const float NeedleInnerRatio = 0.35f;
 
@@ -30,6 +37,10 @@ public sealed class MinimapVisionCone : VisualElement
     private float _fovDegrees;
     private Color _fill = Color.clear;
     private Color _stroke = Color.clear;
+
+    /// <summary>Visible length of each ray of an occluded footprint, as a fraction of the radius.</summary>
+    private float[] _spans = System.Array.Empty<float>();
+    private int _spanCount;
 
     /// <summary>True once a drawing state has been written, so a repeat of it can be skipped.</summary>
     private bool _painted;
@@ -65,6 +76,44 @@ public sealed class MinimapVisionCone : VisualElement
     }
 
     /// <summary>
+    /// Shows the footprint of a sensor whose view is cut by the walls: <paramref name="spans"/> carries, for
+    /// each ray of the sector from its first edge to its last, the length that ray reaches as a fraction of
+    /// <paramref name="radius"/>. A full turn draws the closed silhouette around the agent, a narrower field
+    /// of view the sector between its two edges, with its apex on the agent either way.
+    /// </summary>
+    public void SetOccluded(
+        float radius,
+        float headingDegrees,
+        float fovDegrees,
+        System.Collections.Generic.IReadOnlyList<float> spans,
+        Color fill,
+        Color stroke)
+    {
+        float clampedRadius = Mathf.Max(0f, radius);
+        int count = spans?.Count ?? 0;
+
+        // Same economy as SetState: the owner recomputes a silhouette only when its agent moved, and a
+        // silhouette that came out identical costs nothing here.
+        if (_painted &&
+            _spanCount == count &&
+            Mathf.Approximately(clampedRadius, _radius) &&
+            Mathf.Approximately(headingDegrees, _headingDegrees) &&
+            Mathf.Approximately(fovDegrees, _fovDegrees) &&
+            SameColours(fill, stroke) &&
+            SameSpans(spans, count))
+            return;
+
+        _painted = true;
+        _radius = clampedRadius;
+        _headingDegrees = headingDegrees;
+        _fovDegrees = fovDegrees;
+        _fill = fill;
+        _stroke = stroke;
+        StoreSpans(spans, count);
+        Resize(clampedRadius);
+    }
+
+    /// <summary>
     /// Stores the drawing state, resizes the element to the bounding box it needs and asks for a
     /// repaint. Nothing but the styles is touched here, so the owner keeps control of the position.
     /// </summary>
@@ -80,8 +129,8 @@ public sealed class MinimapVisionCone : VisualElement
             Mathf.Approximately(clampedRadius, _radius) &&
             Mathf.Approximately(headingDegrees, _headingDegrees) &&
             Mathf.Approximately(fovDegrees, _fovDegrees) &&
-            fill.r == _fill.r && fill.g == _fill.g && fill.b == _fill.b && fill.a == _fill.a &&
-            stroke.r == _stroke.r && stroke.g == _stroke.g && stroke.b == _stroke.b && stroke.a == _stroke.a)
+            SameColours(fill, stroke) &&
+            _spanCount == 0)
             return;
 
         _painted = true;
@@ -91,8 +140,41 @@ public sealed class MinimapVisionCone : VisualElement
         _fill = fill;
         _stroke = stroke;
 
-        // A float turns into a length in pixels; a zero radius collapses the element harmlessly.
-        float size = 2f * _radius;
+        // A plain sector has no silhouette: leaving the spans behind would keep drawing the old one.
+        _spanCount = 0;
+        Resize(clampedRadius);
+    }
+
+    private bool SameColours(Color fill, Color stroke) =>
+        fill.r == _fill.r && fill.g == _fill.g && fill.b == _fill.b && fill.a == _fill.a &&
+        stroke.r == _stroke.r && stroke.g == _stroke.g && stroke.b == _stroke.b && stroke.a == _stroke.a;
+
+    private bool SameSpans(System.Collections.Generic.IReadOnlyList<float> spans, int count)
+    {
+        for (int index = 0; index < count; index++)
+        {
+            if (!Mathf.Approximately(Mathf.Clamp01(spans[index]), _spans[index]))
+                return false;
+        }
+
+        return true;
+    }
+
+    private void StoreSpans(System.Collections.Generic.IReadOnlyList<float> spans, int count)
+    {
+        if (_spans.Length < count)
+            _spans = new float[count];
+
+        for (int index = 0; index < count; index++)
+            _spans[index] = Mathf.Clamp01(spans[index]);
+
+        _spanCount = count;
+    }
+
+    /// <summary>A float turns into a length in pixels; a zero radius collapses the element harmlessly.</summary>
+    private void Resize(float radius)
+    {
+        float size = 2f * radius;
         style.width = size;
         style.height = size;
 
@@ -121,10 +203,63 @@ public sealed class MinimapVisionCone : VisualElement
         painter.lineCap = LineCap.Butt;
         painter.lineJoin = LineJoin.Round;
 
-        if (_fovDegrees >= FullTurnDegrees)
+        if (_spanCount > 1)
+            DrawOccluded(painter, center);
+        else if (_fovDegrees >= FullTurnDegrees)
             DrawRing(painter, center);
         else
             DrawSector(painter, center);
+    }
+
+    /// <summary>
+    /// Fills the silhouette of the rays the caller measured, then outlines it. The apex is the agent for a
+    /// field of view narrower than a turn, and there is no apex at all for a full one: a sensor that looks
+    /// everywhere sees a shape that closes around the agent instead of a wedge radiating from it.
+    /// </summary>
+    private void DrawOccluded(Painter2D painter, Vector2 center)
+    {
+        bool fullTurn = _fovDegrees >= FullTurnDegrees;
+        float span = fullTurn ? FullTurnDegrees : _fovDegrees;
+        float first = fullTurn ? _headingDegrees - HalfTurnDegrees : _headingDegrees - span * 0.5f;
+        float step = _spanCount > 1 ? span / (_spanCount - 1) : 0f;
+
+        painter.BeginPath();
+
+        if (!fullTurn)
+            painter.MoveTo(center);
+
+        for (int index = 0; index < _spanCount; index++)
+        {
+            Vector2 point = PointOnCircle(center, _radius * _spans[index], first + step * index);
+            if (fullTurn && index == 0)
+                painter.MoveTo(point);
+            else
+                painter.LineTo(point);
+        }
+
+        painter.ClosePath();
+
+        // A footprint drawn as an outline - a pedestrian's, whose range covers the whole map - skips the fill
+        // rather than laying down a transparent one: with eighty of them the map has to stay readable.
+        if (_fill.a > 0f)
+        {
+            painter.fillColor = _fill;
+            painter.Fill();
+        }
+
+        if (_stroke.a > 0f)
+        {
+            painter.strokeColor = _stroke;
+            painter.Stroke();
+        }
+
+        if (fullTurn)
+        {
+            painter.BeginPath();
+            painter.MoveTo(PointOnCircle(center, _radius * NeedleInnerRatio));
+            painter.LineTo(PointOnCircle(center, _radius));
+            painter.Stroke();
+        }
     }
 
     /// <summary>Fills the sector, then traces its outline: both straight sides and the arc.</summary>
@@ -171,9 +306,12 @@ public sealed class MinimapVisionCone : VisualElement
     }
 
     /// <summary>A point of the circle at the current heading, in the screen convention above.</summary>
-    private Vector2 PointOnCircle(Vector2 center, float radius)
+    private Vector2 PointOnCircle(Vector2 center, float radius) => PointOnCircle(center, radius, _headingDegrees);
+
+    /// <summary>A point of the circle at one angle of the sweep, in the screen convention above.</summary>
+    private Vector2 PointOnCircle(Vector2 center, float radius, float degrees)
     {
-        float radians = _headingDegrees * Mathf.Deg2Rad;
+        float radians = degrees * Mathf.Deg2Rad;
         return new Vector2(
             center.x + Mathf.Cos(radians) * radius,
             center.y + Mathf.Sin(radians) * radius);

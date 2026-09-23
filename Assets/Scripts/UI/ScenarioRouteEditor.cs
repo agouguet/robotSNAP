@@ -740,14 +740,31 @@ public sealed class ScenarioRouteEditor
         };
 
         if (TryResolveReference(scenario, config.StartRef, out Vector2 start))
+        {
             AppendPoint(draft, start);
+            Rect? startArea = ReadZone(PointAt(scenario, config.StartRef));
+            draft.SpawnRandom = startArea.HasValue;
+            if (startArea.HasValue)
+                draft.SpawnZone = startArea.Value;
+        }
         if (config.WaypointRefs != null)
         {
             foreach (string waypointRef in config.WaypointRefs)
-                if (TryResolveReference(scenario, waypointRef, out Vector2 waypoint)) AppendPoint(draft, waypoint);
+            {
+                if (!TryResolveReference(scenario, waypointRef, out Vector2 waypoint))
+                    continue;
+
+                AppendPoint(draft, waypoint);
+                NormalizeZones(draft);
+                draft.PointZones[draft.Points.Count - 1] = ReadZone(PointAt(scenario, waypointRef));
+            }
         }
         if (TryResolveReference(scenario, config.GoalRef, out Vector2 goal))
+        {
             AppendPoint(draft, goal);
+            NormalizeZones(draft);
+            draft.PointZones[draft.Points.Count - 1] = ReadZone(PointAt(scenario, config.GoalRef));
+        }
 
         draft.StartYaw = TryReadYaw(scenario, config.StartRef);
         EnsureMinimumPoints(draft);
@@ -1043,7 +1060,8 @@ public sealed class ScenarioRouteEditor
 
         foreach (RouteDraft route in _routes)
         {
-            if (route.IsRobot || route.Count <= 0)
+            // A robot route has no agent count to speak of, and it draws inside its areas exactly like a crowd.
+            if (!route.IsRobot && route.Count <= 0)
                 continue;
 
             if (route.SpawnRandom && IsUsableZone(route.SpawnZone) &&
@@ -1261,6 +1279,7 @@ public sealed class ScenarioRouteEditor
         {
             RouteDraft robot = robotRoutes[index];
             EnsureMinimumPoints(robot);
+            NormalizeZones(robot);
 
             RobotScenarioConfig config = robot.RobotSource ?? new RobotScenarioConfig();
             config.Id = string.IsNullOrWhiteSpace(robot.Id) ? ScenarioData.DefaultRobotId(index) : robot.Id;
@@ -1271,8 +1290,11 @@ public sealed class ScenarioRouteEditor
             string prefix = $"robot_{index + 1}";
             string startRef = string.IsNullOrWhiteSpace(config.StartRef) ? $"{prefix}_start" : config.StartRef;
             string goalRef = string.IsNullOrWhiteSpace(config.GoalRef) ? $"{prefix}_goal" : config.GoalRef;
-            WritePoint(scenario, startRef, robot.Points[0], robot.StartYaw);
-            WritePoint(scenario, goalRef, robot.Points[^1]);
+
+            // A robot's start and objectives are areas when the author turned them into ones, exactly like a
+            // crowd's: the route holds the shape, and this writes it into the point table the scenario reads.
+            WriteReference(scenario, startRef, robot.Points[0], PointArea(robot, 0), robot.StartYaw);
+            WriteReference(scenario, goalRef, robot.Points[^1], PointArea(robot, robot.Points.Count - 1));
             config.StartRef = startRef;
             config.GoalRef = goalRef;
 
@@ -1283,7 +1305,7 @@ public sealed class ScenarioRouteEditor
                     ? config.WaypointRefs[pointIndex - 1]
                     : $"{prefix}_waypoint_{pointIndex}";
                 waypointRefs.Add(reference);
-                WritePoint(scenario, reference, robot.Points[pointIndex]);
+                WriteReference(scenario, reference, robot.Points[pointIndex], PointArea(robot, pointIndex));
             }
             config.WaypointRefs = waypointRefs.Count > 0 ? waypointRefs : null;
             robotConfigs.Add(config);
@@ -1684,7 +1706,7 @@ public sealed class ScenarioRouteEditor
     private void ApplyZoneFields(int index)
     {
         RouteDraft active = ActiveRoute;
-        if (active == null || active.IsRobot)
+        if (active == null)
             return;
 
         if (!_pointZoneFields.TryGetValue(index, out ZoneFields fields))
@@ -1719,7 +1741,7 @@ public sealed class ScenarioRouteEditor
     private void BeginZonePick(int index)
     {
         RouteDraft active = ActiveRoute;
-        if (active == null || active.IsRobot || index < 0 || index >= active.Points.Count)
+        if (active == null || index < 0 || index >= active.Points.Count)
             return;
 
         _pendingPointIndex = index;
@@ -1779,7 +1801,7 @@ public sealed class ScenarioRouteEditor
         area = default;
 
         RouteDraft active = ActiveRoute;
-        if (active == null || active.IsRobot)
+        if (active == null)
             return false;
 
         int candidate = _zonePickIndex >= 0 ? _zonePickIndex : _pendingPointIndex;
@@ -2049,7 +2071,7 @@ public sealed class ScenarioRouteEditor
     private void TogglePointArea(int index)
     {
         RouteDraft active = ActiveRoute;
-        if (active == null || active.IsRobot || index < 0 || index >= active.Points.Count)
+        if (active == null || index < 0 || index >= active.Points.Count)
             return;
 
         PushUndo($"point-area:{_activeRouteIndex}:{index}");
@@ -2768,7 +2790,7 @@ public sealed class ScenarioRouteEditor
     {
         _zoneVisuals.Clear();
         RouteDraft active = ActiveRoute;
-        if (active == null || active.IsRobot || _mapTexture == null)
+        if (active == null || _mapTexture == null)
             return _zoneVisuals;
 
         Color color = RouteColor(_activeRouteIndex);
@@ -3480,10 +3502,44 @@ public sealed class ScenarioRouteEditor
     private static void WritePoint(ScenarioData scenario, string reference, Vector2 point, float yaw)
     {
         WritePoint(scenario, reference, point);
-        scenario.Points[reference].Yaw = Mathf.Round(yaw * 10f) / 10f;
+        scenario.Points[reference].Yaw = RoundYaw(yaw);
+    }
+
+    /// <summary>
+    /// Writes one reference of a route as the point or the area the author drew. A reference names one or the
+    /// other, never both, and both live in the same point table - which is what lets a robot carry areas too,
+    /// even though its scenario block is only a list of references.
+    /// </summary>
+    private static void WriteReference(ScenarioData scenario, string reference, Vector2 point, Rect? area, float? yaw = null)
+    {
+        if (area.HasValue)
+        {
+            RefPoint zone = WriteZone(area.Value);
+            if (yaw.HasValue)
+                zone.Yaw = RoundYaw(yaw.Value);
+
+            scenario.Points[reference] = zone;
+            return;
+        }
+
+        if (yaw.HasValue)
+            WritePoint(scenario, reference, point, yaw.Value);
+        else
+            WritePoint(scenario, reference, point);
+    }
+
+    /// <summary>The entry of the point table a reference names, or null when the scenario has none.</summary>
+    private static RefPoint PointAt(ScenarioData scenario, string reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference) || scenario?.Points == null)
+            return null;
+
+        return scenario.Points.TryGetValue(reference, out RefPoint point) ? point : null;
     }
 
     private static float RoundCoordinate(float value) => Mathf.Round(value * 100f) / 100f;
+
+    private static float RoundYaw(float value) => Mathf.Round(value * 10f) / 10f;
 
     /// <summary>
     /// Writes one objective. A fixed point keeps its named reference in the scenario's point table; an area

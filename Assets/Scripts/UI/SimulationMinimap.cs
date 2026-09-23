@@ -26,13 +26,22 @@ public sealed class SimulationMinimap
     /// <summary>Pixel drift tolerated before the map height is recomputed after a panel resize.</summary>
     private const float MapWidthTolerance = 0.5f;
 
-    /// <summary>Humans have no sensor to read, so their cone uses a plain field of view.</summary>
-    private const float HumanConeFov = 70f;
-    private const float HumanConeRadius = 15f;
+    /// <summary>
+    /// Rays traced for one occluded footprint. Enough for a wall corner to show as a cut rather than a
+    /// straight edge, few enough that a crowd can be traced without the minimap costing the frame.
+    /// </summary>
+    private const int RobotConeRays = 33;
+    private const int HumanConeRays = 25;
 
-    /// <summary>Bounds on a drawn cone: small enough not to hide the map, large enough to read.</summary>
-    private const float MinConeRadius = 11f;
-    private const float MaxConeRadius = 34f;
+    /// <summary>
+    /// A footprint smaller than this is drawn anyway: an agent standing a metre from a wall has almost
+    /// nothing to see, and a cone that vanished would read as a missing agent.
+    /// </summary>
+    private const float MinConeRadius = 3f;
+
+    /// <summary>Metres an agent may move, and degrees it may turn, before its footprint is traced again.</summary>
+    private const float ConeMoveTolerance = 0.15f;
+    private const float ConeTurnTolerance = 4f;
 
     /// <summary>Metres-to-pixels used while the scene has no occupancy bounds to scale from.</summary>
     private const float FallbackPixelsPerMetre = 4f;
@@ -43,10 +52,15 @@ public sealed class SimulationMinimap
     /// <summary>Pixel distance under which a dot is left where it already is.</summary>
     private const float DotMoveTolerance = 0.5f;
 
-    private static readonly Color RobotConeFill = new Color(0.23f, 0.51f, 0.96f, 0.30f);
+    private static readonly Color RobotConeFill = new Color(0.23f, 0.51f, 0.96f, 0.18f);
     private static readonly Color RobotConeStroke = new Color(0.58f, 0.77f, 0.99f, 0.65f);
-    private static readonly Color HumanConeFill = new Color(0.96f, 0.62f, 0.04f, 0.24f);
-    private static readonly Color HumanConeStroke = new Color(0.99f, 0.83f, 0.30f, 0.60f);
+    /// <summary>
+    /// Outlines only. A pedestrian perceives at the range its social force model uses - ten metres in the
+    /// scenarios of this project, which is the whole of the map - so a crowd of filled discs would hide the
+    /// map it is drawn on. The contour still carries the shape and the range, and stays legible at eighty.
+    /// </summary>
+    private static readonly Color HumanConeFill = new Color(0.96f, 0.62f, 0.04f, 0f);
+    private static readonly Color HumanConeStroke = new Color(0.99f, 0.83f, 0.30f, 0.40f);
 
     private readonly VisualElement _panel;
     private readonly VisualElement _map;
@@ -60,6 +74,13 @@ public sealed class SimulationMinimap
 
     /// <summary>Position last written into each pooled dot, so a dot that did not move costs no style write.</summary>
     private readonly List<Vector2> _dotPositions = new();
+
+    /// <summary>
+    /// Silhouette of each agent's footprint as the walls of the map leave it, kept between frames: a
+    /// footprint is traced when its agent moved or turned, not once per frame per agent.
+    /// </summary>
+    private readonly Dictionary<BaseAgent, ConeTrace> _coneTraces = new();
+    private readonly List<BaseAgent> _staleTraces = new();
 
     /// <summary>Agents of the scene, re-enumerated at <see cref="AgentEnumerationInterval"/>.</summary>
     private Robot[] _robots = System.Array.Empty<Robot>();
@@ -239,8 +260,13 @@ public sealed class SimulationMinimap
     }
 
     /// <summary>
-    /// Draws the field of view of one agent under its dot. The robot reads its lidar, so an
-    /// omnidirectional scanner comes out as a detection ring with a needle instead of a cone.
+    /// Draws the detection footprint of one agent under its dot, at the range that agent really has and cut
+    /// back to what the walls of the map let through.
+    ///
+    /// A robot reads its lidar, so its cone is the sensor's own range and field of view and an
+    /// omnidirectional scanner comes out as a ring with a heading needle. A pedestrian reads the perception
+    /// radius its social force model uses - and that model looks all around, so a pedestrian's footprint is a
+    /// disc, not the narrow cone it used to be drawn as.
     /// </summary>
     private void PlaceCone(int index, BaseAgent agent, Vector2 position, Rect imageRect)
     {
@@ -259,31 +285,164 @@ public sealed class SimulationMinimap
         float heading = 90f + yaw;
 
         RaycastLaserScanner scanner = GetScanner(agent);
-        float radius;
+        float rangeMetres;
+        float fovDegrees;
+        Vector3 origin;
 
         if (scanner != null)
         {
-            float span = Mathf.Abs(scanner.angle_max - scanner.angle_min) * Mathf.Rad2Deg;
-            radius = Mathf.Clamp(scanner.range_max * PixelsPerMetre(imageRect), MinConeRadius, MaxConeRadius);
-
-            cone.style.left = position.x - radius;
-            cone.style.top = position.y - radius;
-
-            if (span >= 350f)
-                cone.SetRing(radius, heading, RobotConeFill, RobotConeStroke);
-            else
-                cone.SetCone(radius, heading, Mathf.Max(1f, span), RobotConeFill, RobotConeStroke);
+            rangeMetres = scanner.range_max;
+            fovDegrees = Mathf.Max(1f, Mathf.Abs(scanner.angle_max - scanner.angle_min) * Mathf.Rad2Deg);
+            origin = scanner.LaserOrigin;
         }
         else
         {
-            radius = HumanConeRadius;
+            rangeMetres = HumanPerceptionRange(agent);
+            // The social force model has no field of view: a pedestrian perceives whoever is close enough,
+            // whoever it is facing. Drawing a wedge here would claim a blind spot the model does not have.
+            fovDegrees = 360f;
+            origin = agent.Position;
+        }
 
-            cone.style.left = position.x - radius;
-            cone.style.top = position.y - radius;
-            cone.SetCone(radius, heading, HumanConeFov, HumanConeFill, HumanConeStroke);
+        if (rangeMetres <= 0.0001f)
+        {
+            cone.style.display = DisplayStyle.None;
+            return;
+        }
+
+        // True scale: the drawn footprint is the sensor's own range on this map, with no window dressing in
+        // between. The floor only keeps a footprint visible, it never inflates one.
+        float pixelsPerMetre = PixelsPerMetre(imageRect);
+        float radius = Mathf.Max(MinConeRadius, rangeMetres * pixelsPerMetre);
+
+        cone.style.left = position.x - radius;
+        cone.style.top = position.y - radius;
+
+        ConeTrace trace = GetTrace(agent);
+        if (NeedsTrace(trace, origin, heading, rangeMetres, fovDegrees))
+            TraceFootprint(trace, origin, yaw, rangeMetres, fovDegrees, isRobot: scanner != null);
+
+        if (trace.Spans.Count > 1)
+        {
+            cone.SetOccluded(
+                radius,
+                heading,
+                fovDegrees,
+                trace.Spans,
+                scanner != null ? RobotConeFill : HumanConeFill,
+                scanner != null ? RobotConeStroke : HumanConeStroke);
+        }
+        else if (scanner != null)
+        {
+            if (fovDegrees >= 350f)
+                cone.SetRing(radius, heading, RobotConeFill, RobotConeStroke);
+            else
+                cone.SetCone(radius, heading, fovDegrees, RobotConeFill, RobotConeStroke);
+        }
+        else
+        {
+            cone.SetRing(radius, heading, HumanConeFill, HumanConeStroke);
         }
 
         cone.style.display = DisplayStyle.Flex;
+    }
+
+    /// <summary>
+    /// Silhouette of one agent's footprint as the walls of the map leave it: for every ray of the field of
+    /// view, from the first edge to the last, how far that ray reaches as a fraction of the full range.
+    ///
+    /// The rays are cast in world space against the obstacle grid the scenario built, the same grid the
+    /// agents plan on and the swath of walls the map is drawn from. A scenario whose environment is a prefab
+    /// or a Unity scene has no such grid: its footprint is then left empty, and the caller draws the plain
+    /// shape, which is all the map can honestly show.
+    /// </summary>
+    private void TraceFootprint(
+        ConeTrace trace,
+        Vector3 origin,
+        float yaw,
+        float rangeMetres,
+        float fovDegrees,
+        bool isRobot)
+    {
+        trace.Spans.Clear();
+        trace.Origin = origin;
+        trace.Heading = 90f + yaw;
+        trace.RangeMetres = rangeMetres;
+        trace.FovDegrees = fovDegrees;
+
+        OccupancyGrid grid = ScenarioNavigation.Obstacles;
+        if (grid == null || !grid.IsValid)
+            return;
+
+        int rays = isRobot && fovDegrees < 350f ? RobotConeRays : HumanConeRays;
+        bool fullTurn = fovDegrees >= 350f;
+        float sweep = fullTurn ? 360f : fovDegrees;
+        float firstScreenAngle = trace.Heading - sweep * 0.5f;
+        float step = sweep / (rays - 1);
+        var from = new Vector2(origin.x, origin.z);
+
+        for (int ray = 0; ray < rays; ray++)
+        {
+            // Screen angles are the painter's; the ray is cast in the world, whose x/z plane the picture
+            // mirrors, so the world direction of a screen angle is that angle turned back by the quarter turn
+            // the occupancy convention introduces.
+            float worldAngle = (firstScreenAngle + step * ray - 90f) * Mathf.Deg2Rad;
+            var direction = new Vector2(Mathf.Sin(worldAngle), Mathf.Cos(worldAngle));
+            float distance = grid.DistanceToWall(from, direction, rangeMetres);
+            trace.Spans.Add(Mathf.Clamp01(distance / rangeMetres));
+        }
+    }
+
+    /// <summary>The radius, in metres, at which a pedestrian perceives the other agents around it.</summary>
+    private static float HumanPerceptionRange(BaseAgent agent)
+    {
+        var movement = agent != null ? agent.GetComponent<HumanMovement>() : null;
+        return movement != null ? movement.PerceptionRadius : 0f;
+    }
+
+    /// <summary>The trace of one agent, created on first use and reused for the whole run.</summary>
+    private ConeTrace GetTrace(BaseAgent agent)
+    {
+        if (_coneTraces.TryGetValue(agent, out ConeTrace trace))
+            return trace;
+
+        trace = new ConeTrace();
+        _coneTraces[agent] = trace;
+        return trace;
+    }
+
+    /// <summary>
+    /// True when a footprint has to be traced again: it has never been traced, its agent moved far enough or
+    /// turned far enough for the walls to fall differently, or its sensor changed - a robot rebuilt with
+    /// another profile keeps its agent object.
+    /// </summary>
+    private static bool NeedsTrace(ConeTrace trace, Vector3 origin, float heading, float rangeMetres, float fovDegrees)
+    {
+        // Empty means "no silhouette", either because this agent has never been traced or because the map has
+        // no obstacle grid to trace against: both have to be looked at again, and the attempt is cheap.
+        if (trace.Spans.Count == 0)
+            return true;
+
+        if (!Mathf.Approximately(trace.RangeMetres, rangeMetres) || !Mathf.Approximately(trace.FovDegrees, fovDegrees))
+            return true;
+
+        if ((trace.Origin - origin).sqrMagnitude > ConeMoveTolerance * ConeMoveTolerance)
+            return true;
+
+        return Mathf.Abs(Mathf.DeltaAngle(trace.Heading, heading)) > ConeTurnTolerance;
+    }
+
+    /// <summary>
+    /// Silhouette of one agent's footprint: where it stood when it was traced, where it looked, what its
+    /// sensor reaches, and one visible length per ray.
+    /// </summary>
+    private sealed class ConeTrace
+    {
+        public Vector3 Origin = new Vector3(float.NaN, float.NaN, float.NaN);
+        public float Heading = float.NaN;
+        public float RangeMetres;
+        public float FovDegrees;
+        public readonly List<float> Spans = new();
     }
 
     /// <summary>The lidar of the robot, cached: it is the only sensor the cone reads.</summary>
@@ -481,6 +640,28 @@ public sealed class SimulationMinimap
         _nextAgentEnumeration = Time.unscaledTime + AgentEnumerationInterval;
         _robots = UnityEngine.Object.FindObjectsByType<Robot>();
         _humans = UnityEngine.Object.FindObjectsByType<HumanAgent>();
+
+        PruneConeTraces();
+    }
+
+    /// <summary>
+    /// Drops the footprint kept for an agent the scenario has removed. A new scenario rebuilds the whole cast,
+    /// so without this a long session would keep one silhouette per agent that ever lived.
+    /// </summary>
+    private void PruneConeTraces()
+    {
+        if (_coneTraces.Count == 0)
+            return;
+
+        _staleTraces.Clear();
+        foreach (KeyValuePair<BaseAgent, ConeTrace> entry in _coneTraces)
+        {
+            if (entry.Key == null)
+                _staleTraces.Add(entry.Key);
+        }
+
+        for (int index = 0; index < _staleTraces.Count; index++)
+            _coneTraces.Remove(_staleTraces[index]);
     }
 
     /// <summary>True when the dot of that pool slot has to be written: it is new, or it moved enough to show.</summary>

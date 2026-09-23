@@ -92,6 +92,59 @@ namespace RobotSNAP.Tests.Editor
             Assert.That(editor.RobotRouteSummary, Does.Contain(RobotProfiles.Find("kuri").DisplayName));
         }
 
+        /// <summary>
+        /// A robot's start and its objectives can be areas, like a crowd's: the wizard reads the shape out of
+        /// the point table and writes it back, so a scenario that scattered its robot keeps scattering it.
+        /// </summary>
+        [Test]
+        public void LoadThenWrite_KeepsTheAreasOfARobotRoute()
+        {
+            var scenario = new ScenarioData
+            {
+                Info = new ScenarioInfo { Name = "Robot in areas" },
+                Points = new Dictionary<string, RefPoint>(),
+                Robots = new List<RobotScenarioConfig>
+                {
+                    new RobotScenarioConfig
+                    {
+                        Id = "robot_1",
+                        Type = "jackal",
+                        StartRef = "robot_1_start",
+                        GoalRef = "robot_1_goal",
+                        Speed = 2f
+                    }
+                },
+                Humans = new List<HumanScenarioConfig>()
+            };
+
+            scenario.Points["robot_1_start"] = RefPoint.FromBounds(
+                new Vector3(1f, 0f, 2f), new Vector3(4f, 0f, 3f));
+            scenario.Points["robot_1_start"].Yaw = 90f;
+            scenario.Points["robot_1_goal"] = RefPoint.FromBounds(
+                new Vector3(9f, 0f, 2f), new Vector3(2f, 0f, 2f));
+
+            ScenarioRouteEditor editor = BuildEditor();
+            editor.Load(scenario);
+
+            var saved = new ScenarioData { Info = new ScenarioInfo { Name = "Saved" } };
+            editor.WriteToScenario(saved);
+
+            Assert.That(saved.Robots, Has.Count.EqualTo(1));
+            RefPoint start = saved.Points[saved.Robots[0].StartRef];
+            Assert.That(start.IsBounds, Is.True,
+                "The start of a robot the author turned into an area has to stay one.");
+            Assert.That(start.ToBounds().size.x, Is.EqualTo(4f).Within(0.01f));
+            Assert.That(start.ToBounds().size.z, Is.EqualTo(3f).Within(0.01f));
+            Assert.That(start.Yaw, Is.EqualTo(90f).Within(0.1f),
+                "The heading of a robot belongs to its start, area or not.");
+
+            RefPoint goal = saved.Points[saved.Robots[0].GoalRef];
+            Assert.That(goal.IsBounds, Is.True,
+                "The objective of a robot the author turned into an area has to stay one.");
+            Assert.That(goal.ToBounds().size.x, Is.EqualTo(2f).Within(0.01f));
+            Assert.That(goal.ToBounds().size.z, Is.EqualTo(2f).Within(0.01f));
+        }
+
         [Test]
         public void Load_OfALegacySingleRobotSection_StillOpensThatRobot()
         {

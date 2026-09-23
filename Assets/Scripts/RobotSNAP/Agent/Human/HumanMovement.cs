@@ -789,6 +789,13 @@ namespace RobotSNAP.Agents
         public bool HasGoal => _avatar != null && _avatar.hasDestination;
         public Vector2 GoalPosition2D => _avatar != null ? _avatar.currentDestination : Vector2.zero;
 
+        /// <summary>
+        /// Radius, in metres, at which this pedestrian perceives the other agents. It is the figure its
+        /// social force model works with, read out so the interface draws the detection area the simulation
+        /// actually uses instead of one of its own.
+        /// </summary>
+        public float PerceptionRadius => _config != null ? Mathf.Max(0f, _config.perceptionRadiusAgent) : 0f;
+
         #endregion
 
         #region Debug

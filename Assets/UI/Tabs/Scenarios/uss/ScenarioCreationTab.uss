@@ -296,12 +296,50 @@
 
     margin-right: 14px;
 
+    /* The padding lives on the scroll view inside, so the scrollbar reaches the edge of the panel. */
+    padding: 0;
+
     overflow: hidden;
 }
 
 
-.general-information-panel > .creation-field {
+/* The title stays where it is and the fields travel under it: the tags and the cover image were below the
+   fold of this column, and nothing could bring them into view. */
+.general-information-panel > .creation-panel-title {
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: 16px;
+
+    margin-bottom: 12px;
+}
+
+
+.creation-panel-scroll {
+    flex-grow: 1;
+
+    min-height: 0;
+
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-bottom: 16px;
+}
+
+
+.creation-panel-scroll .creation-field {
     flex-shrink: 0;
+}
+
+
+/* The fields are taller than this column whatever the window height, and a content container that is
+   allowed to shrink collapses onto the viewport instead of scrolling: the fields then overflow it and
+   the scroll view has nothing to scroll. Pinning it to its content is what makes the column scroll. */
+.creation-panel-scroll .unity-scroll-view__content-container {
+    flex-shrink: 0;
+}
+
+
+.creation-panel-scroll .unity-scroll-view__content-viewport {
+    padding-right: 0;
 }
 
 

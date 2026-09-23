@@ -379,7 +379,8 @@ namespace RobotSNAP.Agents
 
             if (resetPose && loader != null)
             {
-                (Vector3 position, Quaternion rotation) = loader.GetPositionAndRotation(scenario, config.StartRef);
+                (Vector3 authored, Quaternion rotation) = loader.GetPositionAndRotation(scenario, config.StartRef);
+                Vector3 position = DrawInsideReference(slot, loader, scenario, config.StartRef, authored, log);
                 position = FitToFootprint(slot, position, config.StartRef, log);
                 slot.StartPosition = position;
                 robot.Reset();
@@ -402,13 +403,72 @@ namespace RobotSNAP.Agents
                 foreach (string waypointRef in config.WaypointRefs)
                 {
                     if (!string.IsNullOrWhiteSpace(waypointRef))
-                        _route.Add(Resolve(loader, scenario, waypointRef));
+                        _route.Add(DrawInsideReference(
+                            slot, loader, scenario, waypointRef, Resolve(loader, scenario, waypointRef), log));
                 }
             }
 
-            _route.Add(Resolve(loader, scenario, config.GoalRef));
+            string goalRef = config.GoalRef;
+            _route.Add(DrawInsideReference(
+                slot, loader, scenario, goalRef, Resolve(loader, scenario, goalRef), log));
             robot.SetGoals(_route);
             robot.SetSpeed(config.Speed);
+        }
+
+        /// <summary>
+        /// Where a reference places this robot. A reference names a point or an area: a point is taken as
+        /// written, and an area is drawn in once, at the moment the scenario is applied, on ground this robot's
+        /// own footprint fits on.
+        ///
+        /// It is the same rule the crowd follows - see <see cref="RandomPlacement"/> - and it is drawn inside
+        /// the robot's own clearance rather than the pedestrian one: a Jackal half a metre wide has to be able
+        /// to stand where it appears, and a scenario that asks for a robot somewhere in an area means anywhere
+        /// in that area it could actually begin.
+        /// </summary>
+        private Vector3 DrawInsideReference(
+            Slot slot,
+            ScenarioLoader loader,
+            ScenarioData scenario,
+            string reference,
+            Vector3 authored,
+            bool log)
+        {
+            if (loader == null || string.IsNullOrWhiteSpace(reference))
+                return authored;
+
+            Bounds area = loader.GetBounds(scenario, reference);
+            if (area.size.x <= 0f || area.size.z <= 0f)
+                return authored;
+
+            OccupancyGrid grid = slot.Robot != null ? WalkableFor(slot.Robot.Radius) : null;
+            float height = area.center.y;
+            Vector2 drawn = RandomPlacement.SampleWalkable(
+                area,
+                DrawInsideArea,
+                point => grid == null || grid.IsWorldWalkable(point),
+                point => ProjectOnto(grid, point));
+
+            if (log)
+                Debug.Log($"[RobotRoster] {slot.Id}: '{reference}' is an area; this run it draws " +
+                          $"({drawn.x:0.##}, {drawn.y:0.##}).");
+
+            return new Vector3(drawn.x, height, drawn.y);
+        }
+
+        /// <summary>One uniform draw inside the footprint of an area, on the height that area declares.</summary>
+        private static Vector2 DrawInsideArea(Bounds area) => new Vector2(
+            UnityEngine.Random.Range(area.min.x, area.max.x),
+            UnityEngine.Random.Range(area.min.z, area.max.z));
+
+        /// <summary>Nearest ground a robot of this footprint fits on, or the draw itself without a map.</summary>
+        private static Vector2 ProjectOnto(OccupancyGrid grid, Vector2 point)
+        {
+            if (grid == null)
+                return point;
+
+            return ScenarioNavigation.TryProjectToWalkable(grid, point, 1.5f, out Vector2 walkable)
+                ? walkable
+                : point;
         }
 
         private static Vector3 Resolve(ScenarioLoader loader, ScenarioData scenario, string reference)

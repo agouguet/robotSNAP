@@ -326,10 +326,9 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
 
     private void Awake()
     {
-        _articulationRoot = ArticulationRoot();
+        ConfigureDrive();
         MeasureChassis();
         CacheOwnColliders();
-        ConfigureDrive();
     }
 
     private void Start()
@@ -337,16 +336,21 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         // Done again here, and not only in Awake, because another component of the prefab configures every
         // joint of the chain at its own start: whichever of the two runs last is the one that counts, and
         // the order Unity picks between two Start methods is not something a prefab should depend on.
-        _articulationRoot = ArticulationRoot();
+        ConfigureDrive();
         MeasureChassis();
         CacheOwnColliders();
-        ConfigureDrive();
     }
 
     /// <summary>
     /// Wires the wheels for the chassis model this robot carries. Done together, and not in pieces, because
     /// the model decides all of it: which body carries the robot, how strong a wheel drive may be, and
     /// whether a contact is allowed to pass a force across the direction a wheel rolls.
+    ///
+    /// The articulation is wired first and the body the chain hangs from is read after it, and that order is
+    /// not a detail: writing the <c>immovable</c> or the gravity flag of a base rebuilds the articulation,
+    /// which replaces the bodies of the chain, so a reference taken before that write is a reference to
+    /// nothing and a robot whose every drive then returns on its first line - which is exactly what happened
+    /// to the Bibus, the Jackal and the Freight when this method was called after the root had been read.
     /// </summary>
     private void ConfigureDrive()
     {
@@ -359,6 +363,9 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
             ConfigureRoller(roller);
 
         FreeWheelContacts();
+
+        // After the articulation, never before: see the remark above.
+        _articulationRoot = ArticulationRoot();
         _configuredModel = driveModel;
     }
 

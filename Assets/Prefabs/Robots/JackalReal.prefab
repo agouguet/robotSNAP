@@ -2639,13 +2639,15 @@ MonoBehaviour:
   jointFriction: 0
   tyreLongitudinalGrip: 0.9
   tyreLateralGrip: 0.55
-  tyreLongitudinalSlip: 0.12
-  tyreLateralSlip: 0.15
+  tyreLongitudinalSlip: 0.08
+  tyreLateralSlip: 0.25
   tyreRelaxationSpeed: 0.4
+  tyreRollingResistance: 0.015
+  freeWheelContact: 1
   angularDamping: 0.05
   solverIterations: 6
   solverVelocityIterations: 16
-  driveModel: 1
+  driveModel: 2
   maxLinearAcceleration: 1.5
   maxAngularAcceleration: 2.5
   maxLinearBraking: 1.5

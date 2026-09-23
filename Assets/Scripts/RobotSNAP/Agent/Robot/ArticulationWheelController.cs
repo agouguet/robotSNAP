@@ -27,6 +27,16 @@ using UnityEngine;
 /// pass, and the wheels are rolled at the speed that motion implies, so their contact never has to slide.
 /// The force is capped by the tyre's grip, which is what keeps the contacts - a wall, a kerb, a person -
 /// able to answer the drive instead of being walked over.
+///
+/// <b>TyreForces</b> takes the opposite road to the same place, and it is the one that keeps the wheels
+/// carrying the robot. The contact of a driven wheel is emptied of shear - what a contact cannot separate,
+/// this model separates itself - and the tyre of each wheel is computed from the slip it runs at, in the
+/// two directions at once, so that what a wheel spends scrubbing across a turn is taken out of what it has
+/// left to drive with. The robot is then moved by its tyres and by nothing else: the wheels still hold it
+/// up through their contacts, and a wall, a kerb or a person still answers the drive with the grip the
+/// tyres have. The wheel drive of that model is its motor, and the torque it is left with -
+/// <see cref="rollingWheelForceLimit"/> - is therefore also the pull one wheel can put into the floor, which
+/// is what a robot asked for more than its motors can give is held by.
 /// </summary>
 public class ArticulationWheelController : MonoBehaviour, IRobotDrive
 {
@@ -105,19 +115,48 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     public float tyreLateralGrip = 0.55f;
 
     [Tooltip(
-        "The slip ratio a tyre reaches half of its longitudinal grip at, as a fraction of the speed it rolls " +
-        "at. Below it the tyre holds, above it the tyre spins or locks.")]
-    public float tyreLongitudinalSlip = 0.12f;
+        "How much a tyre is allowed to slip before it answers with its grip, as a fraction of the speed it " +
+        "rolls at: the longitudinal stiffness of the tyre, written as the slip it reaches three quarters of " +
+        "what it can pass at. It is what decides how much of a commanded turn a skid steer gets, because the " +
+        "yaw of a four-wheel chassis is driven by the difference between two sides and a slip on each side " +
+        "eats the difference: measured on the Jackal at a metre per second and half a radian per second, five " +
+        "hundredths of a metre per second of slip per side - what this figure gives at eight hundredths - " +
+        "costs thirteen percent of the commanded turn. A rubber tyre reaches three quarters of its grip " +
+        "between five and twelve percent of slip, and this model reads it at eight.")]
+    public float tyreLongitudinalSlip = 0.08f;
 
-    [Tooltip("The slip angle a tyre reaches half of its lateral grip at, in radians.")]
-    public float tyreLateralSlip = 0.15f;
+    [Tooltip(
+        "How far a tyre is allowed to run sideways before it answers with its grip, written as the slip " +
+        "angle it reaches three quarters of what it can pass at, in radians. It is the cornering stiffness " +
+        "of the tyre, and it is the other half of what a skid steer pays for a turn: the scrub of a turning " +
+        "chassis is resisted by exactly this force, so a stiffer tyre here does not hold the robot better, " +
+        "it loses more of the turn it was given - measured on the Jackal, the same arc came out at " +
+        "seventy-one percent of its command at fifteen hundredths and eighty-seven percent at a quarter. A " +
+        "wheel of this size and load has a real cornering stiffness between these two, and the scrubbing " +
+        "contact of a skid steer is softer than the pure cornering one, which is why a quarter is kept.")]
+    public float tyreLateralSlip = 0.25f;
 
     [Tooltip(
         "The speed at which a slip is read, in metres per second: the relaxation length of a tyre in disguise, " +
         "and what keeps the model from dividing by a velocity of nothing when the robot is standing still.")]
     public float tyreRelaxationSpeed = 0.4f;
 
-    [Tooltip("What a wheel is commanded to roll at, in metres per second: half of what the tyres are given.")]
+    [Tooltip(
+        "What the rolling of a loaded tyre costs, as a fraction of the grip it has: the figure that takes the " +
+        "last of a robot's speed away instead of letting it coast for ever. A rubber tyre on a hard floor is " +
+        "between one and two hundredths.")]
+    public float tyreRollingResistance = 0.015f;
+
+    [Tooltip(
+        "Whether the driven wheels are taken off the shear of their contact in this model. They have to be: a " +
+        "PhysX contact passes one friction coefficient in every direction, so a wheel on one either grips or " +
+        "slides, and a four-wheel skid steer has to roll along its wheels while it scrubs across them. What " +
+        "the contact keeps is the normal force, so the wheels still hold the robot up, and everything the " +
+        "robot does with the floor is asked of the tyres, which know the difference between the two " +
+        "directions. Switch it off to see what a contact that answers both of them does instead.")]
+    public bool freeWheelContact = true;
+
+    /// <summary>What a wheel is commanded to roll at, in metres per second: the speed the tyres are read against.</summary>
     private float _leftSurfaceSpeed;
     private float _rightSurfaceSpeed;
 
@@ -237,6 +276,24 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     private ArticulationBody _articulationRoot;
 
     /// <summary>
+    /// Every collider of this robot. The ground a wheel looks for under itself must not be one of its own:
+    /// the chassis of a robot whose wheels sit inside its body is the first thing a ray from a wheel meets,
+    /// and a wheel that reads its own chassis as ground pushes the robot off a floor it never touched.
+    /// </summary>
+    private readonly HashSet<Collider> _ownColliders = new HashSet<Collider>();
+
+    /// <summary>The material each wheel collider carried before the tyre model took its shear away.</summary>
+    private readonly Dictionary<Collider, PhysicsMaterial> _wheelMaterials =
+        new Dictionary<Collider, PhysicsMaterial>();
+
+    /// <summary>
+    /// The model the wheels were last configured for. A model chosen after this component woke up - which is
+    /// how a scenario, a tool or a test picks one - leaves the wheels wired for the model before it, and a
+    /// robot whose wheels are wired for another chassis behaves like neither.
+    /// </summary>
+    private DriveModel _configuredModel = DriveModel.WheelVelocity;
+
+    /// <summary>
     /// Mass of the whole chassis, in kilograms, and its moment of inertia about the vertical, in kilogram
     /// square metres. Read from the articulated chain, and not from the base link; see
     /// <see cref="MeasureChassis"/> for why that distinction is the whole of whether a robot stops when its
@@ -269,15 +326,10 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
 
     private void Awake()
     {
-        ConfigureArticulation();
         _articulationRoot = ArticulationRoot();
         MeasureChassis();
-
-        foreach (ArticulationBody wheel in AllWheels())
-            ConfigureWheel(wheel);
-
-        foreach (ArticulationBody roller in AllRollers())
-            ConfigureRoller(roller);
+        CacheOwnColliders();
+        ConfigureDrive();
     }
 
     private void Start()
@@ -285,15 +337,47 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         // Done again here, and not only in Awake, because another component of the prefab configures every
         // joint of the chain at its own start: whichever of the two runs last is the one that counts, and
         // the order Unity picks between two Start methods is not something a prefab should depend on.
-        ConfigureArticulation();
         _articulationRoot = ArticulationRoot();
         MeasureChassis();
+        CacheOwnColliders();
+        ConfigureDrive();
+    }
+
+    /// <summary>
+    /// Wires the wheels for the chassis model this robot carries. Done together, and not in pieces, because
+    /// the model decides all of it: which body carries the robot, how strong a wheel drive may be, and
+    /// whether a contact is allowed to pass a force across the direction a wheel rolls.
+    /// </summary>
+    private void ConfigureDrive()
+    {
+        ConfigureArticulation();
 
         foreach (ArticulationBody wheel in AllWheels())
             ConfigureWheel(wheel);
 
         foreach (ArticulationBody roller in AllRollers())
             ConfigureRoller(roller);
+
+        FreeWheelContacts();
+        _configuredModel = driveModel;
+    }
+
+    /// <summary>
+    /// Reads every collider of this robot, so that a wheel looking for the ground underneath it can tell the
+    /// floor from its own chassis.
+    /// </summary>
+    private void CacheOwnColliders()
+    {
+        _ownColliders.Clear();
+
+        if (_articulationRoot != null)
+        {
+            foreach (Collider collider in _articulationRoot.GetComponentsInChildren<Collider>(true))
+                _ownColliders.Add(collider);
+        }
+
+        foreach (Collider collider in GetComponentsInChildren<Collider>(true))
+            _ownColliders.Add(collider);
     }
 
     /// <summary>
@@ -329,6 +413,10 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     {
         if (_articulationRoot == null)
             return;
+
+        // A model picked at runtime is a robot whose wheels are still wired for the model before it.
+        if (driveModel != _configuredModel)
+            ConfigureDrive();
 
         if (driveModel == DriveModel.SkidSteerBase)
             DriveBase();
@@ -377,18 +465,21 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
         Vector3 velocity = body.linearVelocity;
         Vector3 spin = body.angularVelocity;
 
-        Vector3 forward = body.transform.forward;
-        forward.y = 0f;
-        if (forward.sqrMagnitude < 1e-6f)
-            forward = Vector3.forward;
-        forward.Normalize();
+        Vector3 forward = Flattened(body.transform.forward);
         Vector3 side = Vector3.Cross(Vector3.up, forward);
 
-        int wheels = 0;
-        foreach (ArticulationBody _ in WheelsOf(leftWheel, leftWheels)) wheels++;
-        foreach (ArticulationBody _ in WheelsOf(rightWheel, rightWheels)) wheels++;
+        // The wheels on the ground carry the robot between them, and a wheel in the air carries nothing at
+        // all: that is the whole of what a kerb, a ramp, or a robot put down on one side asks of the model.
+        int grounded = 0;
+        foreach (ArticulationBody wheel in AllWheels())
+        {
+            if (ContactOf(wheel, out _, out _))
+                grounded++;
+        }
 
-        float load = Mathf.Max(1f, _chassisMass) * Mathf.Abs(Physics.gravity.y) / Mathf.Max(1, wheels);
+        float load = grounded > 0
+            ? Mathf.Max(1f, _chassisMass) * Mathf.Abs(Physics.gravity.y) / grounded
+            : 0f;
 
         ApplyTyres(body, WheelsOf(leftWheel, leftWheels), _leftSurfaceSpeed, load, forward, side, velocity, spin);
         ApplyTyres(body, WheelsOf(rightWheel, rightWheels), _rightSurfaceSpeed, load, forward, side, velocity, spin);
@@ -403,7 +494,22 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
             Mathf.Clamp(-spin.z, -tiltLimit, tiltLimit) / step * inertia));
     }
 
-    /// <summary>The two forces of the tyres of one side, applied where they meet the ground.</summary>
+    /// <summary>
+    /// The tyre of every wheel of one side, applied where that wheel meets the ground.
+    ///
+    /// A tyre passes a force along the direction it rolls and a force sideways, and it has one grip to spend
+    /// between the two: a wheel that is sliding across the floor has that much less left to drive with. That
+    /// is the whole of this model, and it is the whole of what a PhysX contact cannot say, because a contact
+    /// has a single coefficient and answers both directions with all of it. Its cost is exacted where a skid
+    /// steer pays it: on the four wheels of a robot in a turn, whose scrub is what a contact would either
+    /// refuse to give (and the robot goes straight) or give in full (and the robot slides).
+    ///
+    /// The two slips are put on one scale - the slip ratio the tyre reaches its grip at, and the slip angle
+    /// it reaches it at - so that they can be compared at all, and the tyre then answers along the direction
+    /// the pair points at, with the grip of an ellipse between the two extremes. The force is applied at the
+    /// contact patch, so the moment it makes about the chassis - which is how a turn happens and what a skid
+    /// steer pays for it - is applied with it.
+    /// </summary>
     private void ApplyTyres(
         ArticulationBody body,
         IEnumerable<ArticulationBody> wheels,
@@ -416,10 +522,15 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
     {
         foreach (ArticulationBody wheel in wheels)
         {
-            if (wheel == null)
+            if (wheel == null || !ContactOf(wheel, out Vector3 contact, out Vector3 normal))
                 continue;
 
-            Vector3 contact = wheel.transform.position - Vector3.up * Mathf.Max(0.01f, wheelRadius);
+            // The ground a wheel stands on decides both how much of the robot that wheel carries and which
+            // way its tyre may push: a force is passed along the floor, never into it.
+            float carried = load * Mathf.Clamp01(Vector3.Dot(normal, Vector3.up));
+            if (carried <= 0f)
+                continue;
+
             Vector3 lever = contact - body.transform.position;
             Vector3 atContact = velocity + Vector3.Cross(spin, lever);
 
@@ -427,24 +538,117 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
             float across = Vector3.Dot(atContact, side);
             float reference = Mathf.Max(tyreRelaxationSpeed, Mathf.Abs(along));
 
-            float slipRatio = (surfaceSpeed - along) / reference;
+            float slipRatio = (surfaceSpeed - along) / reference / Mathf.Max(1e-3f, tyreLongitudinalSlip);
             // The slip angle is read against the speed the tyre is travelling at and not against the
             // relaxation speed: a tyre leaning five centimetres sideways per second while it rolls at one
             // metre per second is at a slip angle of three degrees and holds with a third of its grip, where
             // the same five centimetres read against the relaxation speed would ask for three quarters of it.
             // That reading is what a cornering stiffness is, and getting it wrong is what made the first
             // version of this model turn a metre-per-second arc at three percent of its command.
-            float slipAngle = Mathf.Atan2(-across, reference);
+            float slipAngle = Mathf.Atan2(-across, reference) / Mathf.Max(1e-3f, tyreLateralSlip);
 
-            float longitudinal = load * tyreLongitudinalGrip
-                * (float)System.Math.Tanh(slipRatio / Mathf.Max(1e-3f, tyreLongitudinalSlip));
-            float lateral = load * tyreLateralGrip
-                * (float)System.Math.Tanh(slipAngle / Mathf.Max(1e-3f, tyreLateralSlip));
+            float combined = Mathf.Sqrt(slipRatio * slipRatio + slipAngle * slipAngle);
+            if (combined <= 1e-4f)
+                continue;
 
-            Vector3 force = forward * longitudinal + side * lateral;
+            // One budget, two directions: the grip of the direction the tyre is actually sliding in, read off
+            // the ellipse the two coefficients make between them, then spent along that same direction.
+            float grip = Mathf.Sqrt(
+                Mathf.Pow(slipRatio * tyreLongitudinalGrip, 2f) +
+                Mathf.Pow(slipAngle * tyreLateralGrip, 2f)) / combined;
+
+            float answer = carried * grip * (float)System.Math.Tanh(combined) / combined;
+            float drive = slipRatio * answer;
+            float scrub = slipAngle * answer;
+
+            // A tyre passes a force its motor can turn - the load it carries is the ceiling the floor puts on
+            // that force, and the motor is the ceiling the robot puts on it. Below the motor's figure nothing
+            // changes; at it, the wheel spins a little more and the robot is a little slower to answer,
+            // which is what a robot whose wheels are asked for more than they can pull does.
+            float motor = MotorForce(wheel);
+            if (motor > 0f)
+                drive = Mathf.Clamp(drive, -motor, motor);
+
+            Vector3 force = forward * drive + side * scrub;
+
+            // The last of a robot's speed goes the way a real one's does, into the rolling of its loaded
+            // tyres rather than into a coast that never ends.
+            if (tyreRollingResistance > 0f)
+            {
+                float rolling = carried * tyreRollingResistance
+                    * (float)System.Math.Tanh(along / 0.05f);
+                force -= forward * rolling;
+            }
+
+            force -= normal * Vector3.Dot(force, normal);
+
             body.AddForce(force);
             body.AddTorque(Vector3.Cross(lever, force));
         }
+    }
+
+    /// <summary>
+    /// The force one wheel's motor can turn into a push, in newtons: the torque its drive is allowed to
+    /// apply, over the radius it applies it at. Zero for a wheel whose drive is left unbounded, which is a
+    /// motor this model has no figure for and must therefore not invent one for.
+    /// </summary>
+    private float MotorForce(ArticulationBody wheel)
+    {
+        float torque = wheel.xDrive.forceLimit;
+        float radius = Mathf.Max(0.01f, wheelRadius);
+        return torque > 0f ? torque / radius : 0f;
+    }
+
+    /// <summary>
+    /// Where a wheel meets the ground, and the normal of that ground: the point a tyre's force acts at, and
+    /// what decides how much of the robot that wheel carries. False when the wheel is in the air, where it
+    /// passes nothing at all.
+    ///
+    /// The ground is looked for from the wheel's own centre, one radius down and no further, and the
+    /// robot's own colliders are skipped - see <see cref="_ownColliders"/> for why that is not a detail.
+    /// </summary>
+    private bool ContactOf(ArticulationBody wheel, out Vector3 point, out Vector3 normal)
+    {
+        float radius = Mathf.Max(0.01f, wheelRadius);
+        Vector3 origin = wheel.transform.position;
+        point = origin - Vector3.up * radius;
+        normal = Vector3.up;
+
+        int found = Physics.RaycastNonAlloc(
+            origin, Vector3.down, GroundHits, radius * 1.5f, ~0, QueryTriggerInteraction.Ignore);
+
+        float nearest = float.MaxValue;
+        bool onGround = false;
+
+        for (int i = 0; i < found; i++)
+        {
+            Collider collider = GroundHits[i].collider;
+            if (collider == null || _ownColliders.Contains(collider))
+                continue;
+
+            if (GroundHits[i].distance >= nearest)
+                continue;
+
+            nearest = GroundHits[i].distance;
+            point = GroundHits[i].point;
+            normal = GroundHits[i].normal;
+            onGround = true;
+        }
+
+        return onGround;
+    }
+
+    /// <summary>The hits of the ground under the wheels, reused every step so that driving a robot allocates nothing.</summary>
+    private static readonly RaycastHit[] GroundHits = new RaycastHit[8];
+
+    /// <summary>A direction with its climb taken out, since a chassis drives along the floor and not up it.</summary>
+    private static Vector3 Flattened(Vector3 direction)
+    {
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 1e-6f)
+            return Vector3.forward;
+
+        return direction.normalized;
     }
 
     private void DriveBase()
@@ -458,11 +662,7 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
             MeasureChassis();
 
         float step = Time.fixedDeltaTime;
-        Vector3 forward = body.transform.forward;
-        forward.y = 0f;
-        if (forward.sqrMagnitude < 1e-6f)
-            forward = Vector3.forward;
-        forward.Normalize();
+        Vector3 forward = Flattened(body.transform.forward);
         Vector3 side = Vector3.Cross(Vector3.up, forward);
 
         // Where the robot should be going: forward at the commanded speed, with the sideways part of its
@@ -815,6 +1015,72 @@ public class ArticulationWheelController : MonoBehaviour, IRobotDrive
 
         roller.jointFriction = 0f;
         roller.angularDamping = 0.05f;
+    }
+
+    /// <summary>
+    /// Takes the driven wheels off the shear of their contact, which is what makes the tyres the only thing
+    /// that can move this robot.
+    ///
+    /// The normal force of the contact is left alone: the wheels still carry the robot, a kerb is still
+    /// something to climb, and a robot whose wheels leave the ground still falls. What is removed is the
+    /// part of a contact that answers a force across the direction it rolls - which is a skid steer's turn.
+    /// </summary>
+    private void FreeWheelContacts()
+    {
+        if (driveModel != DriveModel.TyreForces || !freeWheelContact)
+            return;
+
+        foreach (ArticulationBody wheel in AllWheels())
+        {
+            foreach (Collider collider in wheel.GetComponents<Collider>())
+            {
+                if (!_wheelMaterials.ContainsKey(collider))
+                    _wheelMaterials.Add(collider, collider.sharedMaterial);
+
+                collider.sharedMaterial = Slipless;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The material of a contact that passes nothing along the ground: the normal force of the floor is all a
+    /// wheel with tyres of its own should ever read from it.
+    ///
+    /// It is made once and shared, and it is made here rather than written as an asset so that a project that
+    /// never drives a robot this way never carries the file.
+    /// </summary>
+    private static PhysicsMaterial Slipless
+    {
+        get
+        {
+            if (_slipless == null)
+            {
+                _slipless = new PhysicsMaterial("TyreModelNoShear")
+                {
+                    dynamicFriction = 0f,
+                    staticFriction = 0f,
+                    bounciness = 0f,
+                    frictionCombine = PhysicsMaterialCombine.Minimum,
+                    bounceCombine = PhysicsMaterialCombine.Minimum,
+                };
+            }
+
+            return _slipless;
+        }
+    }
+
+    private static PhysicsMaterial _slipless;
+
+    /// <summary>Gives the wheels back the material they were built with when this component is switched off.</summary>
+    private void OnDisable()
+    {
+        foreach (KeyValuePair<Collider, PhysicsMaterial> wheel in _wheelMaterials)
+        {
+            if (wheel.Key != null)
+                wheel.Key.sharedMaterial = wheel.Value;
+        }
+
+        _wheelMaterials.Clear();
     }
 
     /// <summary>

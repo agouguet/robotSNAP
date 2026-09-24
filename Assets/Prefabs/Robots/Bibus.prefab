@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1814363904319314486}
   - component: {fileID: 8116403216907673376}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: unnamed
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -59,7 +59,7 @@ GameObject:
   - component: {fileID: 6993418588291189806}
   - component: {fileID: 5671549830543514479}
   - component: {fileID: 184730058507301826}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: caster_back_right_link
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -206,7 +206,7 @@ GameObject:
   m_Component:
   - component: {fileID: 481294536070495155}
   - component: {fileID: 158137700358347720}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: unnamed
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -260,7 +260,7 @@ GameObject:
   - component: {fileID: 4299900752130989116}
   - component: {fileID: 4130294360609635474}
   - component: {fileID: 881973218234374560}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Plugins
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -467,7 +467,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3904316935726903935}
   - component: {fileID: 4446828272146061562}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Collisions
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -511,7 +511,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5689094404266702600}
   - component: {fileID: 956584988599891072}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Collisions
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -556,7 +556,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1453321446723864519}
   - component: {fileID: 2888103578925011260}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Sphere
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -609,7 +609,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1392414981263199881}
   - component: {fileID: 3097592423431877831}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: unnamed
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -655,7 +655,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8017449152064152967}
   - component: {fileID: 7700628068540274970}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: unnamed
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -701,7 +701,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8002967121767559720}
   - component: {fileID: 276852133917012305}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Collisions
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -746,7 +746,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7601867073931980238}
   - component: {fileID: 3515139630980954583}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Visuals
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -790,7 +790,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1736224518886695427}
   - component: {fileID: 5163375518186809563}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: base_footprint
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -841,7 +841,7 @@ GameObject:
   - component: {fileID: 6540350630022821931}
   - component: {fileID: 392107861041799522}
   - component: {fileID: 7998331587266439079}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: caster_back_left_link
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -988,7 +988,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2204088413784757318}
   - component: {fileID: 2682541058910935343}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Collisions
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1033,7 +1033,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5433568256213012349}
   - component: {fileID: 1725600225275976031}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Visuals
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1078,7 +1078,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2977378163426347644}
   - component: {fileID: 2905559862211149664}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: unnamed
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1128,7 +1128,7 @@ GameObject:
   - component: {fileID: 3034862081782245604}
   - component: {fileID: 3231081422795679141}
   - component: {fileID: 7635289089309651089}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: swd_left_link
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1296,7 +1296,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1381955947355830121}
   - component: {fileID: 4391253860805014327}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Collisions
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1341,7 +1341,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5212474677329834057}
   - component: {fileID: 1287431200182926490}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Visuals
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1385,7 +1385,7 @@ GameObject:
   m_Component:
   - component: {fileID: 37587411177952742}
   - component: {fileID: 2175740977628253325}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Visuals
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1430,7 +1430,7 @@ GameObject:
   m_Component:
   - component: {fileID: 890906546818190684}
   - component: {fileID: 8382297574471288864}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Cylinder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1487,7 +1487,7 @@ GameObject:
   - component: {fileID: 5686884813432283780}
   - component: {fileID: 6326512299176859918}
   - component: {fileID: 2563849873698942164}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: base_link
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1639,7 +1639,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1801215929881932862}
   - component: {fileID: 4309838853967851867}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Collisions
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1684,7 +1684,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5892120675932563845}
   - component: {fileID: 5473353934262247469}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: unnamed
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1730,7 +1730,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7468176029359105731}
   - component: {fileID: 6560593926992878539}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Visuals
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1775,7 +1775,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7523622191945750710}
   - component: {fileID: 6921119782942086434}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: unnamed
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1824,7 +1824,7 @@ GameObject:
   - component: {fileID: 3531837679510829577}
   - component: {fileID: 3519558255501746551}
   - component: {fileID: 3173529392946448081}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Bibus
   m_TagString: robot
   m_Icon: {fileID: 0}
@@ -1954,7 +1954,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7987127192063523183}
   - component: {fileID: 7324740001652194416}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: unnamed
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2000,7 +2000,7 @@ GameObject:
   m_Component:
   - component: {fileID: 9163032766469279606}
   - component: {fileID: 20153636029326168}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Cylinder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2054,7 +2054,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5686845358107548028}
   - component: {fileID: 8023425388923041034}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Collisions
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2099,7 +2099,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7095163601783450130}
   - component: {fileID: 8543155104441608115}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Visuals
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2147,7 +2147,7 @@ GameObject:
   - component: {fileID: 8359489059031156324}
   - component: {fileID: 922128970133911358}
   - component: {fileID: 2081004478913365060}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: swd_right_link
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2315,7 +2315,7 @@ GameObject:
   m_Component:
   - component: {fileID: 449745958828830808}
   - component: {fileID: 6674059521083035573}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: unnamed
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2368,7 +2368,7 @@ GameObject:
   - component: {fileID: 5643622956441089246}
   - component: {fileID: 8660199163589810223}
   - component: {fileID: 3603913223624537761}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: lidar_link
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2563,7 +2563,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.RaycastLaserScanner
   detectableLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 896
   samples: 180
   update_rate: 1800
   angle_min: 0
@@ -2606,7 +2606,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8057507842512338310}
   - component: {fileID: 2048953188009532362}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Visuals
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2650,7 +2650,7 @@ GameObject:
   m_Component:
   - component: {fileID: 812109216736271805}
   - component: {fileID: 3201622068836988812}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Cylinder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2704,7 +2704,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4963673126784780216}
   - component: {fileID: 6184366921522088400}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Sphere
   m_TagString: Untagged
   m_Icon: {fileID: 0}

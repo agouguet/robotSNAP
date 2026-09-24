@@ -47,6 +47,7 @@ namespace RobotSNAP
         // Private state
         private Dictionary<GameObject, bool> _agentsView = new Dictionary<GameObject, bool>();
         private GameObject _agentPool;
+        private int _poolChildCount;
         private bool _isRunning;
         private WaitForSeconds _waitInterval;
         
@@ -132,6 +133,10 @@ namespace RobotSNAP
                     _agentsView[child.gameObject] = false;
                 }
             }
+
+            // The pool grows while a scenario runs: a crowd larger than the warmed pool creates instances
+            // after the pool was handed over, and those have to be picked up.
+            _poolChildCount = _agentPool.transform.childCount;
             
             if (logDetections)
             {
@@ -188,6 +193,11 @@ namespace RobotSNAP
         
         private void PerformDetectionCheck()
         {
+            // A crowd larger than the warmed pool grows it after the pool was handed over, so the list of
+            // agents to watch is re-read whenever the pool gained a child.
+            if (_agentPool != null && _agentPool.transform.childCount != _poolChildCount)
+                RefreshAgentList();
+
             // Early exit if no agents
             if (_agentsView.Count == 0)
             {

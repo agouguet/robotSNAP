@@ -131,8 +131,8 @@ namespace RobotSNAP
             // Update header timestamp
             ROSTimeUtils.UpdateHeader(_message.header);
             
-            // Perform scan and update ranges
-            _message.ranges = _laserScanner.Scan();
+            // Perform scan and update ranges, in the ROS frame the message is published in.
+            _message.ranges = _laserScanner.ScanInRosFrame();
             
             // Publish, on every name this robot answers on.
             foreach (string topic in _fullTopicNames)

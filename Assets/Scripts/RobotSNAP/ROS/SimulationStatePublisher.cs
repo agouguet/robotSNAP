@@ -368,10 +368,10 @@ namespace RobotSNAP.ROS
 
         /// <summary>
         /// Occupancy grid of the applied scenario, as a standard <c>nav_msgs/OccupancyGrid</c> on
-        /// <c>/map</c>, in image order: index = row * width + column, where a column steps along the image
-        /// x axis and a row along its y axis. The origin published with it is the corner of cell (0, 0),
-        /// which the occupancy image places at the (max x, min z) corner of the map bounds, so rows advance
-        /// towards +z and columns towards -x.
+        /// <c>/map</c>: index = row * width + column, a column counting along the ROS +x axis and a row
+        /// along the ROS +y one, both growing away from <c>info.origin</c>, the pose of cell (0, 0). That
+        /// origin is the (min ROS x, min ROS y) corner of the map, which is the occupancy image's
+        /// (max Unity x, min Unity z) corner.
         ///
         /// Walls are 100 and free cells 0, the values the rest of the project uses for occupancy. The
         /// message reuses the cached array, which is only ever replaced when a scenario is applied, so a
@@ -425,19 +425,42 @@ namespace RobotSNAP.ROS
 
             if (grid == null || !grid.IsValid) return;
 
-            _mapWidth = grid.Width;
-            _mapHeight = grid.Height;
-            // The image is sampled with the same cell count on both axes, so one resolution describes the
-            // grid; the x cell is published when the two differ by rounding.
-            _mapResolution = grid.CellSizeX;
+            // Both axes are sampled with the same cell count, so one resolution describes the grid; the cell
+            // along the published x axis is named when rounding makes the two differ.
+            _mapResolution = grid.CellSizeZ;
             _mapOrigin = MapOrigin(grid);
 
-            _mapData = new sbyte[grid.CellCount];
-            for (int row = 0; row < grid.Height; row++)
+            // The cells, and the two dimensions the message counts along +x and +y.
+            _mapData = MapDataInRosOrder(grid, out _mapWidth, out _mapHeight);
+        }
+
+        /// <summary>
+        /// The cells of a walkability grid in the order the message carries them, with the two dimensions
+        /// it counts along +x and +y.
+        ///
+        /// ROS x is Unity z and ROS y is the negated Unity x, so the published column counts the grid's
+        /// second index - the one that walks the image towards +z - and the published row counts its first,
+        /// which walks it towards -x. A grid of <c>w</c> by <c>h</c> cells is therefore published as
+        /// <c>h</c> by <c>w</c>.
+        /// </summary>
+        public static sbyte[] MapDataInRosOrder(OccupancyGrid grid, out int width, out int height)
+        {
+            width = 0;
+            height = 0;
+            if (grid == null || !grid.IsValid)
+                return null;
+
+            width = grid.Height;
+            height = grid.Width;
+
+            var data = new sbyte[grid.CellCount];
+            for (int row = 0; row < height; row++)
             {
-                for (int column = 0; column < grid.Width; column++)
-                    _mapData[row * grid.Width + column] = grid.IsWalkable(column, row) ? (sbyte)0 : (sbyte)100;
+                for (int column = 0; column < width; column++)
+                    data[row * width + column] = grid.IsWalkable(row, column) ? (sbyte)0 : (sbyte)100;
             }
+
+            return data;
         }
 
         /// <summary>

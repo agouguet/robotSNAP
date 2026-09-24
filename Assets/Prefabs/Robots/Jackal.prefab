@@ -411,7 +411,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RobotSNAP.AgentDetector
   radius: 5
   angle: 90
-  targetTag: 
+  targetTag: Agent
   targetTags: []
   targetMask:
     serializedVersion: 2

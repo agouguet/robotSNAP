@@ -33,8 +33,12 @@ namespace RobotSNAP
 
         private float[] ranges;
         private float[] intensities;
+        // The two buffers the LaserScan message reads, filled in ROS order by ScanInRosFrame.
+        private float[] rosRanges;
+        private float[] rosIntensities;
 
         public float[] Ranges => ranges;
+        public float[] RosRanges => rosRanges;
         public Vector3[] Directions => directions;
         public Vector3 LaserOrigin => transform.position + Vector3.up * laserHeight;
 
@@ -56,6 +60,8 @@ namespace RobotSNAP
             directions = new Vector3[samples];
             ranges = new float[samples];
             intensities = new float[samples];
+            rosRanges = new float[samples];
+            rosIntensities = new float[samples];
 
             if (visualizerEnabled)
             {
@@ -65,17 +71,21 @@ namespace RobotSNAP
 
         public override RosMessageTypes.Sensor.LaserScanMsg InitializeMessage(string FrameId)
         {
+            // ROS measures a bearing counter-clockwise from +x, Unity clockwise from +z, so the published
+            // span is mirrored: its lowest angle is the negation of the scanner's highest. The beams are
+            // mirrored with it and come out in reverse - ScanInRosFrame does that - which leaves the
+            // increment walking up from angle_min exactly as it walks up from angle_min of the scanner.
             return new RosMessageTypes.Sensor.LaserScanMsg
             {
                 header = new RosMessageTypes.Std.HeaderMsg { frame_id = FrameId.TrimStart('/') },
-                angle_min = angle_min,
-                angle_max = angle_max,
+                angle_min = -angle_max,
+                angle_max = -angle_min,
                 angle_increment = angle_increment,
                 time_increment = time_increment,
                 range_min = range_min,
                 range_max = range_max,
-                ranges = ranges,
-                intensities = intensities
+                ranges = rosRanges,
+                intensities = rosIntensities
             };
         }
 
@@ -97,6 +107,30 @@ namespace RobotSNAP
             }
 
             return ranges;
+        }
+
+        /// <summary>
+        /// The last scan in the ROS frame: mirror the bearings and reverse the beam order with them, so
+        /// beam <c>i</c> of the published message still sits at <c>angle_min + i * angle_increment</c>.
+        /// </summary>
+        public override float[] ScanInRosFrame()
+        {
+            float[] measured = Scan();
+
+            if (rosRanges == null || rosRanges.Length != measured.Length)
+            {
+                rosRanges = new float[measured.Length];
+                rosIntensities = new float[measured.Length];
+            }
+
+            int last = measured.Length - 1;
+            for (int i = 0; i <= last; i++)
+            {
+                rosRanges[i] = measured[last - i];
+                rosIntensities[i] = intensities != null ? intensities[last - i] : 0f;
+            }
+
+            return rosRanges;
         }
 
         private void MeasureDistance()

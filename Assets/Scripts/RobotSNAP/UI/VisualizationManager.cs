@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using RobotSNAP.Core;
+using RobotSNAP.Core.Scenario;
 using RobotSNAP.Agents;
 
 namespace RobotSNAP.UI
@@ -90,14 +91,29 @@ namespace RobotSNAP.UI
         private Robot _robot;
         private float _nextAgentEnumeration;
 
+        /// <summary>The session the state is read from, looked up once and re-looked-up if it is replaced.</summary>
+        private ScenarioManager _scenarioManager;
+
         private SimulationState _currentState = SimulationState.Idle;
         
         #region Unity Lifecycle
         
+        /// <summary>
+        /// Reads the state of the session as it is now.
+        ///
+        /// The manager is built with every switch off and wakes on the first one, which is always after the
+        /// session has started: it is created disabled, so its Start - the one place that subscribes to the
+        /// state events - does not run until a switch wakes it, and the events of the run are already past.
+        /// Reading the state here is what keeps a manager that wakes up late from believing the session is
+        /// idle and drawing nothing at all.
+        /// </summary>
+        private void OnEnable() => SyncStateFromScene();
+
         private void Start()
         {
             Initialize();
             EventBus.Instance.Subscribe<SimulationStateChangedEvent>(OnSimulationStateChanged);
+            SyncStateFromScene();
         }
         
         private void Update()
@@ -262,19 +278,42 @@ namespace RobotSNAP.UI
         #region Event Handling
         
         private void OnSimulationStateChanged(SimulationStateChangedEvent evt)
+            => ApplyState(evt.NewState);
+
+        /// <summary>
+        /// Adopts one state, clearing the agent visualizations when the session leaves a run.
+        /// Shared by the event and by the polled reading of the state, so both take the same path.
+        /// </summary>
+        private void ApplyState(SimulationState state)
         {
             // Si on passe à Ready (après un Stop) ou Idle, on nettoie les visualisations des agents
-            if ((evt.NewState == SimulationState.Ready || evt.NewState == SimulationState.Idle) 
-                && _currentState != evt.NewState)
+            if ((state == SimulationState.Ready || state == SimulationState.Idle)
+                && _currentState != state)
             {
                 ClearEntityVisualizations();
-                _currentState = evt.NewState;
-                Debug.Log("[VisualizationManager] Entity visualizations cleared due to state change to " + evt.NewState);
+                _currentState = state;
+                Debug.Log("[VisualizationManager] Entity visualizations cleared due to state change to " + state);
             }
             else
             {
-                _currentState = evt.NewState;
+                _currentState = state;
             }
+        }
+
+        /// <summary>
+        /// The state the session is in, read from the scenario manager rather than waited for.
+        ///
+        /// The event is what keeps the manager current once it is listening; this read is what covers the
+        /// events it was not there for, and it stays as the slow tick of the agent enumeration so a state
+        /// that reached the scene without an event is still picked up.
+        /// </summary>
+        private void SyncStateFromScene()
+        {
+            if (_scenarioManager == null)
+                _scenarioManager = FindAnyObjectByType<ScenarioManager>();
+
+            if (_scenarioManager != null)
+                ApplyState(_scenarioManager.CurrentState);
         }
         
         #endregion
@@ -314,6 +353,7 @@ namespace RobotSNAP.UI
             _nextAgentEnumeration = Time.unscaledTime + AgentEnumerationInterval;
             _robot = FindAnyObjectByType<Robot>();
             _humans = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
+            SyncStateFromScene();
         }
         
         private void AddPositionToHistory(EntityId id, Vector3 pos)

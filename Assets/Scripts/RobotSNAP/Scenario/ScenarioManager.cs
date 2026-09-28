@@ -220,25 +220,45 @@ namespace RobotSNAP.Core.Scenario
 
         // === Notification d'état (calcul du bon état) ===
 
+        /// <summary>
+        /// L'état de la session à cet instant, tel que <see cref="PublishState"/> l'annonce.
+        ///
+        /// Il est lisible parce qu'un composant peut naître après le changement d'état et ne jamais
+        /// recevoir l'événement : l'écran de visualisation est créé éteint et se réveille au premier
+        /// interrupteur, donc toujours après le démarrage de la session. Sans cette lecture, il attend un
+        /// événement déjà passé et reste sur l'état dans lequel il a été construit.
+        /// </summary>
+        public SimulationState CurrentState => ComputeState();
+
         private void PublishState()
         {
-            SimulationState state;
-
-            if (!HasScenarioLoaded)
-                state = SimulationState.Idle;
-            else if (Supervisor.Instance == null)
-                state = SimulationState.Idle;
-            else if (!_scenarioApplied)
-                state = SimulationState.Ready;
-            else if (_isClockStarted && Supervisor.Instance.IsPaused)
-                state = SimulationState.Paused;
-            else if (_isClockStarted && !Supervisor.Instance.IsPaused)
-                state = SimulationState.Running;
-            else
-                state = SimulationState.Ready; // fallback
+            SimulationState state = ComputeState();
 
             EventBus.Instance.Publish(new SimulationStateChangedEvent { NewState = state });
             if (_logEvents) Debug.Log($"[ScenarioManager] State published: {state}");
+        }
+
+        /// <summary>L'état de la session, déduit du scénario chargé, de son application et de l'horloge.</summary>
+        private SimulationState ComputeState()
+        {
+            if (!HasScenarioLoaded)
+                return SimulationState.Idle;
+
+            Supervisor supervisor = Supervisor.Instance;
+            if (supervisor == null)
+                return SimulationState.Idle;
+
+            if (!_scenarioApplied)
+                return SimulationState.Ready;
+
+            // L'horloge décide, quel que soit celui qui l'a lancée : les boutons de l'application passent par
+            // ce gestionnaire, un client sur le pont reprend le superviseur directement. Ne lire que le
+            // drapeau que ce gestionnaire pose pour lui-même annonçait "Ready" pendant qu'un scénario lancé
+            // de l'extérieur faisait marcher la foule, et l'écran de visualisation s'y fiait.
+            if (!supervisor.IsPaused)
+                return SimulationState.Running;
+
+            return _isClockStarted ? SimulationState.Paused : SimulationState.Ready;
         }
 
         // === Méthodes privées existantes (non modifiées) ===
@@ -407,6 +427,11 @@ namespace RobotSNAP.Core.Scenario
             }
 
             OnScenarioApplied?.Invoke(_currentScenarioData);
+
+            // Ce qui vient d'être appliqué est appliqué, quel que soit l'appelant : cette coroutine est aussi
+            // celle d'un réarmement à chaud, et laisser le drapeau à faux faisait annoncer "Ready" alors que
+            // les agents étaient en place - ce dont l'écran de visualisation se sert pour dessiner.
+            _scenarioApplied = true;
             if (_logEvents) Debug.Log($"[ScenarioManager] Scenario applied to {_gameManagers.Count} environments: {_currentScenarioData.Name}");
         }
 

@@ -16,11 +16,80 @@ namespace RobotSNAP.Tests.Editor
     {
         private const string OverlayPath = "Assets/UI/Tabs/Simulator/uxml/SimulationOverlay.uxml";
 
+        /// <summary>
+        /// The switches are remembered between two runs, so a test starts from a scene that was never
+        /// touched and leaves nothing behind: without this the first case to run would decide the next one.
+        /// </summary>
+        [SetUp]
+        public void ForgetTheSwitchesOfTheLastRun() =>
+            VisualizationSwitchMemory.ForgetAll(SimulationVisualizationPanel.SwitchNames);
+
+        [TearDown]
+        public void LeaveNoSwitchesBehind() =>
+            VisualizationSwitchMemory.ForgetAll(SimulationVisualizationPanel.SwitchNames);
+
         private static VisualElement BuildOverlay()
         {
             VisualTreeAsset overlay = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(OverlayPath);
             Assert.That(overlay, Is.Not.Null, $"The simulation overlay UXML is missing at {OverlayPath}.");
             return overlay.Instantiate();
+        }
+
+        /// <summary>
+        /// A switch a session left on is still on when the next one opens the panel.
+        /// </summary>
+        [Test]
+        public void ASwitchLeftOnIsStillOnInTheNextSession()
+        {
+            // What an earlier run wrote when somebody turned the ground grid on.
+            VisualizationSwitchMemory.Store("VizGrid", true);
+
+            VisualElement root = BuildOverlay();
+            var panel = new SimulationVisualizationPanel(root);
+            VisualizationManager manager = Object.FindAnyObjectByType<VisualizationManager>();
+
+            try
+            {
+                Assert.That(manager, Is.Not.Null);
+                Assert.That(manager.showGrid, Is.True,
+                    "The switch of the last session has to be put back into the setting behind it.");
+                Assert.That(root.Q<Toggle>("VizGrid").value, Is.True,
+                    "The panel shows the setting it restored.");
+                Assert.That(manager.enabled, Is.True,
+                    "A restored switch is a switch that draws, so it wakes the manager on its own.");
+            }
+            finally
+            {
+                if (manager != null)
+                    Object.DestroyImmediate(manager.gameObject);
+            }
+        }
+
+        /// <summary>
+        /// A switch nobody ever touched keeps the value the scene authored: the memory is not a reset of
+        /// every setting to off.
+        /// </summary>
+        [Test]
+        public void ASwitchNobodyTouchedKeepsWhatTheSceneAuthored()
+        {
+            var host = new GameObject("test-visualization");
+            VisualizationManager authored = host.AddComponent<VisualizationManager>();
+            authored.showAxes = true;
+
+            VisualElement root = BuildOverlay();
+            var panel = new SimulationVisualizationPanel(root);
+
+            try
+            {
+                Assert.That(authored.showAxes, Is.True,
+                    "A switch with nothing remembered leaves the setting the scene was authored with.");
+                panel.Refresh();
+                Assert.That(root.Q<Toggle>("VizAxes").value, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
         }
 
         [Test]

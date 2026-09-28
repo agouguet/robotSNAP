@@ -148,6 +148,7 @@ public sealed class SimulationVisualizationPanel
             _collapseButton.clicked += ToggleCollapsed;
 
         BuildSwitches(root);
+        RestoreStoredSettings();
         SyncFromSettings();
 
         // Folded to its tab: it floats over the shot, and a run nobody is debugging is a run that wants its
@@ -214,6 +215,7 @@ public sealed class SimulationVisualizationPanel
                 continue;
 
             _switches[index].Write(value);
+            VisualizationSwitchMemory.Store(toggleName, value);
             // A manager nobody asks anything of should not be walking the crowd: it runs while a switch is on.
             _manager.enabled = AnySwitchOn();
             return true;
@@ -223,6 +225,26 @@ public sealed class SimulationVisualizationPanel
     }
 
     private void ToggleCollapsed() => SetCollapsed(!_collapsed);
+
+    /// <summary>
+    /// Puts every switch back where the last run left it, before the settings are read back into the toggles.
+    ///
+    /// It runs on the settings rather than on the toggles so a restored value takes the same path as a
+    /// clicked one, and it leaves a switch nobody ever touched alone: the value the scene authored is then
+    /// what the first run of a hand-built environment starts from.
+    /// </summary>
+    private void RestoreStoredSettings()
+    {
+        for (int index = 0; index < _switches.Count; index++)
+        {
+            Switch entry = _switches[index];
+            string name = entry.Toggle.name;
+            if (!VisualizationSwitchMemory.Has(name))
+                continue;
+
+            entry.Write(VisualizationSwitchMemory.Load(name, entry.Read()));
+        }
+    }
 
     private void SetCollapsed(bool collapsed)
     {

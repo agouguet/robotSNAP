@@ -283,7 +283,9 @@ public sealed class SimulationAgentPanel
             _info.Add(CreateInfoRow("Max speed", $"{FormatNumber(profile.MaxLinearSpeed)} m/s"));
 
         _info.Add(CreateInfoRow("Goal", agent.HasGoal ? FormatPlanar(agent.Goal) : "—"));
-        _info.Add(CreateInfoRow("Goal reached", agent.HasGoal ? "No" : "Yes"));
+        // "Reached" is read from the agent, not from the absence of a goal: a robot nobody gave a route
+        // never had one, and one whose route a takeover interrupted still has a mission to finish.
+        _info.Add(CreateInfoRow("Goal reached", agent.GoalReached ? "Yes" : "No"));
         _info.Add(CreateInfoRow("Status", agent.IsActive ? "Active" : "Idle"));
     }
 

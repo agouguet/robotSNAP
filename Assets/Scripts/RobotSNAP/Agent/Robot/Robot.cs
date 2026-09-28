@@ -20,6 +20,7 @@ namespace RobotSNAP.Agents
         private Supervisor _supervisor;
         private readonly Queue<Vector3> _routeGoals = new();
         private bool _followingRoute;
+        private bool _goalReached;
 
         /// <summary>
         /// What turns a velocity command into motion: the wheels of a wheeled base, or the kinematic base of
@@ -46,6 +47,15 @@ namespace RobotSNAP.Agents
         public override Vector3 Forward => Rotation * Vector3.forward;
         public override Vector3 Velocity => _baseLinkArticulation != null ? _baseLinkArticulation.linearVelocity : Vector3.zero;
         public override float AngularSpeed => _baseLinkArticulation != null ? _baseLinkArticulation.angularVelocity.y : 0f;
+
+        /// <summary>
+        /// Vrai quand le robot a parcouru la route du scénario jusqu'à son dernier point.
+        ///
+        /// Le panneau d'agent s'en sert pour dire si la mission est finie. Il déduisait auparavant ce
+        /// résultat de l'absence d'objectif, ce qui annonçait une mission accomplie dès qu'une prise de
+        /// contrôle effaçait l'objectif : c'est ce drapeau, et lui seul, qui veut dire "arrivé".
+        /// </summary>
+        public override bool GoalReached => _goalReached;
 
         public Transform RobotTransform => baseLink != null ? baseLink.transform : transform;
 
@@ -287,6 +297,8 @@ namespace RobotSNAP.Agents
                 {
                     _followingRoute = false;
                     _hasGoal = false;
+                    // Le dernier point de la route est atteint : c'est la seule façon d'arriver.
+                    _goalReached = true;
                     Stop();
                 }
             }
@@ -296,12 +308,14 @@ namespace RobotSNAP.Agents
         {
             _routeGoals.Clear();
             _followingRoute = false;
+            _goalReached = false;
             base.SetGoal(goal);
         }
 
         public void SetGoals(IEnumerable<Vector3> goals)
         {
             _routeGoals.Clear();
+            _goalReached = false;
             if (goals != null)
             {
                 foreach (Vector3 goal in goals)
@@ -319,6 +333,7 @@ namespace RobotSNAP.Agents
         {
             _routeGoals.Clear();
             _followingRoute = false;
+            _goalReached = false;
             base.ClearGoal();
         }
 

@@ -161,6 +161,64 @@ namespace RobotSNAP.Tests.Editor
             Assert.That(Position(snapshot["robot_goal"]), Is.EqualTo(Position(snapshot["robots"][0]["goal"])));
         }
 
+        /// <summary>
+        /// A takeover takes the route of the scenario away from the robot without taking its goal with it.
+        ///
+        /// The route used to be erased - ClearGoal() - which also zeroed the goal: the goal marker of the
+        /// simulation view vanished the moment anybody touched the robot, and the agent panel reads a robot
+        /// that has no goal as a robot that has arrived.
+        /// </summary>
+        [Test]
+        public void AControlTakeoverSuspendsTheRouteInsteadOfErasingTheGoal()
+        {
+            var created = new GameObject("test-robot-takeover");
+            created.SetActive(false);
+            _created.Add(created);
+
+            Robot robot = created.AddComponent<Robot>();
+            RobotInputController controller = created.AddComponent<RobotInputController>();
+
+            // A component added outside play mode does not run its own Awake, and that is where the
+            // controller finds the robot it drives.
+            Invoke(controller, "Awake");
+
+            robot.SetGoals(new[] { new Vector3(1f, 0f, 1f), new Vector3(4f, 0f, 4f) });
+            Vector3 authored = robot.Goal;
+
+            controller.SetControlMode(RobotInputController.ControlMode.Keyboard);
+
+            Assert.That(robot.HasGoal, Is.True, "The mission a takeover interrupts is kept, not erased.");
+            Assert.That(robot.Goal, Is.EqualTo(authored));
+            Assert.That(robot.RouteOwnedByScenario, Is.False, "The scenario no longer steers the robot.");
+            Assert.That(robot.GoalReached, Is.False, "Nothing was reached, so the panel must not say so.");
+        }
+
+        /// <summary>"Goal reached" means the last point of the route was walked, and nothing else.</summary>
+        [Test]
+        public void TheGoalIsReportedAsReachedOnlyOnceTheLastRoutePointIsWalked()
+        {
+            var created = new GameObject("test-robot-arrival");
+            created.SetActive(false);
+            _created.Add(created);
+
+            Robot robot = created.AddComponent<Robot>();
+
+            // The robot stands on the only point of its route: the movement step has nothing left to walk.
+            robot.SetGoals(new[] { Vector3.zero });
+            Assert.That(robot.GoalReached, Is.False, "A route just handed over has not been walked.");
+
+            Invoke(robot, "UpdateScenarioMovement");
+
+            Assert.That(robot.GoalReached, Is.True);
+            Assert.That(robot.HasGoal, Is.False);
+        }
+
+        /// <summary>Runs a private method of a component the editor runs no lifecycle for.</summary>
+        private static void Invoke(object target, string method) =>
+            target.GetType()
+                .GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(target, null);
+
         /// <summary>A publisher in the scene, read without the ROS loop the editor does not run.</summary>
         private JObject Snapshot()
         {

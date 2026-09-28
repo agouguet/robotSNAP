@@ -58,6 +58,15 @@ namespace RobotSNAP.Agents
         
         /// <summary>Position de l'objectif courant (en 3D).</summary>
         Vector3 Goal { get; }
+
+        /// <summary>
+        /// Indique que l'agent a réellement terminé la mission qu'on lui avait donnée.
+        ///
+        /// Ce n'est pas l'inverse de <see cref="HasGoal"/> : un agent à qui personne n'a donné de route n'a
+        /// jamais eu d'objectif, et une route qu'une prise de contrôle interrompt reste la mission de
+        /// l'agent. Seul le fait d'avoir parcouru le dernier point met ce drapeau à vrai.
+        /// </summary>
+        bool GoalReached { get; }
         
         /// <summary>Définit un nouvel objectif.</summary>
         void SetGoal(Vector3 goal);

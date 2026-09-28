@@ -40,6 +40,12 @@ namespace RobotSNAP.Agents
         public virtual float Mass => mass;
         public virtual bool HasGoal => _hasGoal;
         public virtual Vector3 Goal => _currentGoal;
+        /// <summary>
+        /// Vrai une fois la mission de l'agent réellement accomplie. Les agents qui n'ont pas de route
+        /// propre - la base elle-même - ne sont jamais "arrivés" : c'est aux sous-classes qui savent
+        /// parcourir un itinéraire de le dire.
+        /// </summary>
+        public virtual bool GoalReached => false;
         public virtual string Behavior => _currentBehavior;
         public virtual float DesiredSpeed => desiredSpeed;
         public virtual float InteractionRadius => interactionRadius;

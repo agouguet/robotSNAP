@@ -34,6 +34,11 @@ namespace RobotSNAP.Agents
         private readonly HumanRouteWalker _walker = new();
         private bool _followingRoute;
 
+        // Vrai une fois le dernier point de la route parcouru. Une route qui boucle n'arrive jamais, et une
+        // route qu'on remplace ou qu'on efface n'est pas une route accomplie : ce drapeau ne se pose que
+        // dans CompleteRoute.
+        private bool _routeCompleted;
+
         // What happens once the last point of the route is reached.
         public HumanEndBehavior endBehavior = HumanEndBehavior.Stay;
 
@@ -241,10 +246,14 @@ namespace RobotSNAP.Agents
 
         public void Initialize() { }
 
+        /// <summary>Vrai quand l'agent a parcouru toute la route qu'un scénario lui avait donnée.</summary>
+        public override bool GoalReached => _routeCompleted;
+
         public override void SetGoal(Vector3 goal)
         {
             _walker.Clear();
             _followingRoute = false;
+            _routeCompleted = false;
             SetRouteGoal(goal);
         }
 
@@ -263,6 +272,7 @@ namespace RobotSNAP.Agents
         /// </summary>
         public void SetGoals(IEnumerable<Vector3> goals)
         {
+            _routeCompleted = false;
             _walker.EndBehavior = endBehavior;
             _walker.SetRoute(goals);
             _stalledTime = 0f;
@@ -353,6 +363,7 @@ namespace RobotSNAP.Agents
         /// <summary>Called when the walker really ran out of points (a looping route never does).</summary>
         private void CompleteRoute()
         {
+            _routeCompleted = true;
             if (endBehavior == HumanEndBehavior.Disappear)
             {
                 _group?.ApplyEndBehavior(HumanEndBehavior.Disappear);
@@ -603,6 +614,7 @@ namespace RobotSNAP.Agents
             LeaveGroup();
             _walker.Clear();
             _followingRoute = false;
+            _routeCompleted = false;
             _stalledTime = 0f;
             hasDestination = false;
             _hasGoal = false;
@@ -673,6 +685,7 @@ namespace RobotSNAP.Agents
         {
             _walker.Clear();
             _followingRoute = false;
+            _routeCompleted = false;
             _stalledTime = 0f;
             hasDestination = false;
             _hasGoal = false;

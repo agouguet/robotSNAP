@@ -30,6 +30,7 @@ namespace RobotSNAP
         [SerializeField] private bool autoDetectPrefix = true;
         [SerializeField] private string customPrefix = "";
         [SerializeField] private string cmdVelTopic = RobotSNAPTopics.CmdVel;
+        [Tooltip("Silence a client is allowed before this robot stops obeying it, in seconds of wall time. A client publishes on its own clock, so this one timeout must not follow the simulation's time scale: at a scale of five a client publishing at 10 Hz would otherwise look silent for half a second of simulated time between two commands.")]
         [SerializeField] private float rosCommandTimeout = 0.5f;
 
         [Header("Debug")]
@@ -43,6 +44,8 @@ namespace RobotSNAP
         /// robot, so an old client drives robot 1 and a new one can address any robot by id.
         /// </summary>
         private readonly List<string> _fullCmdVelTopics = new List<string>(2);
+        // When the last velocity command arrived, read on the wall clock: the timeout it is compared against
+        // asks whether the *client* is still talking, and a client knows nothing of the simulation's scale.
         private float _lastRosCommandTime;
         /// <summary>What the keys are asking for, kept apart from what a client asks for.</summary>
         private float _keyLinear;
@@ -146,13 +149,14 @@ namespace RobotSNAP
                 return;
 
             // A robot handed to a client belongs to that client, not to the scenario: a session that asked
-            // for ROS control keeps it even when a scenario hands the robot a route.
-            if (controlMode == ControlMode.ROS && _robot.HasGoal)
-                _robot.ClearGoal();
+            // for ROS control keeps it even when a scenario hands the robot a route. The route is suspended
+            // rather than erased - see SuspendScenarioRoute - so the goal stays what it was.
+            if (controlMode == ControlMode.ROS)
+                SuspendScenarioRoute();
 
             if (controlMode == ControlMode.Scenario) return;
 
-            if (controlMode == ControlMode.Hybrid && Time.time - _lastRosCommandTime > rosCommandTimeout &&
+            if (controlMode == ControlMode.Hybrid && Time.unscaledTime - _lastRosCommandTime > rosCommandTimeout &&
                 !_keyboardDriving && showDebugInfo && Time.frameCount % 60 == 0)
                 Debug.Log("[RobotInputController] ROS timeout, fallback to keyboard");
 
@@ -188,7 +192,7 @@ namespace RobotSNAP
         /// </summary>
         private bool TryResolveCommand(out float linear, out float angular)
         {
-            bool clientTalking = Time.time - _lastRosCommandTime <= rosCommandTimeout;
+            bool clientTalking = Time.unscaledTime - _lastRosCommandTime <= rosCommandTimeout;
             linear = 0f;
             angular = 0f;
 
@@ -282,7 +286,7 @@ namespace RobotSNAP
 
         private void OnRosCommandReceived(RosMessageTypes.Geometry.TwistMsg msg)
         {
-            _lastRosCommandTime = Time.time;
+            _lastRosCommandTime = Time.unscaledTime;
             if (controlMode == ControlMode.ROS || controlMode == ControlMode.Hybrid)
             {
                 _rosLinear = Mathf.Clamp((float)msg.linear.x, -maxLinearSpeed, maxLinearSpeed);
@@ -304,7 +308,25 @@ namespace RobotSNAP
             // The hand takes this robot away from the route it was given, so the two never steer it at once.
             _keyboardDriving = Mathf.Abs(_keyLinear) > 0.01f || Mathf.Abs(_keyAngular) > 0.01f;
             if (_keyboardDriving)
-                _robot.ClearGoal();
+                SuspendScenarioRoute();
+        }
+
+        /// <summary>
+        /// Takes the route of the scenario away from this robot without throwing it away.
+        ///
+        /// A takeover used to call <see cref="Robot.ClearGoal"/>, which erases the route *and* the position
+        /// of the goal: the goal marker of the simulation view disappeared the moment anybody touched the
+        /// robot, and the agent panel - which reads "no goal" as "goal reached" - announced a mission that
+        /// had not been run. Suspending leaves the goal where the scenario put it, stops the scenario from
+        /// steering at the same time as the driver, and lets the route carry on from the point it had
+        /// reached when the robot is handed back to the scenario.
+        /// </summary>
+        private void SuspendScenarioRoute()
+        {
+            if (!_robot.RouteOwnedByScenario)
+                return;
+
+            _robot.SetRouteOwnedByScenario(false);
         }
 
         public void SetControlMode(ControlMode newMode)
@@ -323,9 +345,9 @@ namespace RobotSNAP
             _lastRosCommandTime = float.NegativeInfinity;
 
             // A robot handed to a client - or to the keyboard - stops walking the route the scenario gave
-            // it: without this the scenario and the driver would steer it at the same time.
-            if (newMode != ControlMode.Scenario)
-                _robot.ClearGoal();
+            // it: without this the scenario and the driver would steer it at the same time. The route itself
+            // is kept, so the simulation view still shows where this robot was going and handing the robot
+            // back to the scenario resumes it where it stopped instead of starting the mission over.
             _robot.SetRouteOwnedByScenario(newMode == ControlMode.Scenario);
 
             // The subscription used to be created once, in Start, and only when the Inspector already said
@@ -362,7 +384,7 @@ namespace RobotSNAP
             {
                 _rosLinear = Mathf.Clamp(linear, -maxLinearSpeed, maxLinearSpeed);
                 _rosAngular = Mathf.Clamp(angular, -maxAngularSpeed, maxAngularSpeed);
-                _lastRosCommandTime = Time.time;
+                _lastRosCommandTime = Time.unscaledTime;
             }
         }
 

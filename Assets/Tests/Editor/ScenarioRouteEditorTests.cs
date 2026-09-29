@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using RobotSNAP.Agents;
 using RobotSNAP.Core.Scenario;
@@ -27,6 +28,19 @@ namespace RobotSNAP.Tests.Editor
             Assert.That(tab, Is.Not.Null, $"The creation tab UXML is missing at {CreationTabPath}.");
             return new ScenarioRouteEditor(tab.Instantiate());
         }
+
+        /// <summary>The editor and the visual tree it bound itself to, for what only the tab can show.</summary>
+        private static ScenarioRouteEditor BuildEditor(out VisualElement root)
+        {
+            VisualTreeAsset tab = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(CreationTabPath);
+            Assert.That(tab, Is.Not.Null, $"The creation tab UXML is missing at {CreationTabPath}.");
+            root = tab.Instantiate();
+            return new ScenarioRouteEditor(root);
+        }
+
+        /// <summary>How many routes the wizard is showing: the list the author picks a route from.</summary>
+        private static int RouteRows(VisualElement root) =>
+            root.Query<VisualElement>(null, "route-selector-row").ToList().Count;
 
         private static void AddPoint(ScenarioData scenario, string reference, float x, float z)
         {
@@ -72,13 +86,77 @@ namespace RobotSNAP.Tests.Editor
         }
 
         [Test]
-        public void Reset_OpensOnOneRobotAndOneCrowdRoute()
+        public void Reset_OpensOnTheRobotAlone()
         {
-            ScenarioRouteEditor editor = BuildEditor();
+            ScenarioRouteEditor editor = BuildEditor(out VisualElement root);
             editor.Reset();
 
             Assert.That(editor.RobotRouteCount, Is.EqualTo(1), "A scenario always drives at least one robot.");
             Assert.That(editor.PrimaryRobotTypeName, Is.EqualTo(RobotProfiles.Default.DisplayName));
+            // Pure robot navigation is a scenario like any other: the author asks for a crowd, the wizard
+            // does not put one in the way of a scenario that has none.
+            Assert.That(editor.TotalHumanCount, Is.EqualTo(0), "A new scenario starts without a crowd.");
+            Assert.That(RouteRows(root), Is.EqualTo(1), "One route is one row of the route list.");
+        }
+
+        /// <summary>
+        /// A scenario of navigation only - the robot, and nobody else - goes through the wizard and comes
+        /// back out of it with no crowd.
+        /// </summary>
+        [Test]
+        public void ANavigationOnlyScenarioSurvivesTheWizard()
+        {
+            var scenario = new ScenarioData
+            {
+                Info = new ScenarioInfo { Name = "Navigation only" },
+                Points = new Dictionary<string, RefPoint>(),
+                Robots = new List<RobotScenarioConfig>
+                {
+                    new RobotScenarioConfig
+                    {
+                        Id = "robot_1",
+                        Type = "jackal",
+                        StartRef = "robot_1_start",
+                        GoalRef = "robot_1_goal",
+                        Speed = 2f
+                    }
+                },
+                Humans = new List<HumanScenarioConfig>()
+            };
+            AddPoint(scenario, "robot_1_start", -4f, 0f);
+            AddPoint(scenario, "robot_1_goal", 4f, 0f);
+
+            ScenarioRouteEditor editor = BuildEditor(out VisualElement root);
+            editor.Load(scenario);
+
+            Assert.That(RouteRows(root), Is.EqualTo(1),
+                "Opening a scenario with no crowd route must not invent one.");
+
+            var saved = new ScenarioData { Info = new ScenarioInfo { Name = "Navigation only" } };
+            editor.WriteToScenario(saved);
+
+            Assert.That(saved.Robots, Has.Count.EqualTo(1));
+            Assert.That(saved.Humans, Is.Empty, "Writing it back leaves it a scenario with no crowd.");
+        }
+
+        /// <summary>
+        /// Removing the crowd route leaves the robot where it is: the wizard used to put a fresh crowd route
+        /// back the moment the last one went, which is what made a navigation-only scenario impossible.
+        /// </summary>
+        [Test]
+        public void RemoveActiveRoute_LeavesTheRobotWithoutACrowd()
+        {
+            ScenarioRouteEditor editor = BuildEditor(out VisualElement root);
+            editor.Reset();
+            editor.AddHumanRoute();
+
+            Assert.That(RouteRows(root), Is.EqualTo(2), "The crowd route is the second row.");
+
+            editor.RemoveActiveRoute();
+
+            Assert.That(RouteRows(root), Is.EqualTo(1), "Removing the last crowd route must not bring one back.");
+            Assert.That(editor.RobotRouteCount, Is.EqualTo(1));
+            Assert.That(editor.TotalHumanCount, Is.EqualTo(0));
         }
 
         [Test]

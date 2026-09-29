@@ -8,17 +8,23 @@ namespace RobotSNAP.Tests.Editor
 {
     public sealed class ScenarioRepositoryTests
     {
+        /// <summary>
+        /// The scenario every session starts from, so the one file this can be pointed at without pinning a
+        /// test to a scenario an author is free to delete or rename.
+        /// </summary>
+        private static string DefaultScenarioPath =>
+            Path.Combine(Application.streamingAssetsPath, "Scenarios", "default.yaml");
+
         [Test]
         public void Load_ParsesBundledScenarioAndCachesItsMetadata()
         {
-            string path = Path.Combine(Application.streamingAssetsPath, "Scenarios", "corner.yaml");
             var repository = new ScenarioRepository();
 
-            ScenarioData scenario = repository.Load("corner", path, cache: true);
-            ScenarioInfo info = repository.GetInfo("corner", path);
+            ScenarioData scenario = repository.Load("default", DefaultScenarioPath, cache: true);
+            ScenarioInfo info = repository.GetInfo("default", DefaultScenarioPath);
 
             Assert.That(scenario, Is.Not.Null);
-            Assert.That(scenario.Info.Name, Is.EqualTo("Corner"));
+            Assert.That(scenario.Info.Name, Is.EqualTo("Default"));
             Assert.That(repository.CacheSize, Is.EqualTo(1));
             Assert.That(info, Is.SameAs(scenario.Info));
         }
@@ -26,14 +32,13 @@ namespace RobotSNAP.Tests.Editor
         [Test]
         public void Clear_RemovesScenarioCache()
         {
-            string path = Path.Combine(Application.streamingAssetsPath, "Scenarios", "corner.yaml");
             var repository = new ScenarioRepository();
-            repository.Load("corner", path, cache: true);
+            repository.Load("default", DefaultScenarioPath, cache: true);
 
             repository.Clear();
 
             Assert.That(repository.CacheSize, Is.Zero);
-            Assert.That(repository.TryGetScenario("corner", out _), Is.False);
+            Assert.That(repository.TryGetScenario("default", out _), Is.False);
         }
 
         [Test]

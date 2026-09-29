@@ -677,12 +677,20 @@ public sealed class ScenarioRouteEditor
         return routes;
     }
 
+    /// <summary>
+    /// A blank scenario: the one robot every scenario drives, and no crowd.
+    ///
+    /// The crowd used to be laid down here and put back whenever the last route was removed, which made a
+    /// scenario of pure robot navigation impossible to write: the author had to add a route they did not
+    /// want, and could not delete it. A scenario with no human route is a scenario like any other - the
+    /// runtime spawns nobody when the list is empty - so the editor now leaves the crowd to whoever asks
+    /// for one, with the "Human route" button.
+    /// </summary>
     public void Reset()
     {
         _routes.Clear();
         _plannedGeometry.Clear();
         _routes.Add(CreateRobotDraft(RobotProfiles.DefaultId, 0));
-        _routes.Add(CreateHumanDraft(1));
         _activeRouteIndex = 0;
         _pendingPointIndex = 0;
         ResetHistory();
@@ -734,8 +742,6 @@ public sealed class ScenarioRouteEditor
                 _routes.Add(draft);
             }
         }
-        if (!_routes.Any(route => !route.IsRobot))
-            _routes.Add(CreateHumanDraft(1));
 
         _activeRouteIndex = 0;
         _pendingPointIndex = 0;
@@ -1524,6 +1530,10 @@ public sealed class ScenarioRouteEditor
         return candidate;
     }
 
+    /// <summary>
+    /// Removes the route the editor is on. The last robot stays - a scenario drives one, and an empty
+    /// scenario has nothing to open - and every crowd route can go, down to none at all.
+    /// </summary>
     public void RemoveActiveRoute()
     {
         RouteDraft active = ActiveRoute;
@@ -1539,8 +1549,6 @@ public sealed class ScenarioRouteEditor
 
         PushUndo();
         _routes.RemoveAt(_activeRouteIndex);
-        if (_routes.Count == 1)
-            _routes.Add(CreateHumanDraft(1));
         _activeRouteIndex = Mathf.Clamp(_activeRouteIndex - 1, 0, _routes.Count - 1);
         _pendingPointIndex = 0;
         RebuildRouteList();

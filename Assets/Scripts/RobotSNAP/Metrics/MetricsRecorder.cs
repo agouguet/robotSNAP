@@ -119,6 +119,13 @@ namespace RobotSNAP.Metrics
         private double _startedWallSeconds;
         private bool _armed = true;
 
+        // World time of the last step the open episode recorded, and whether it recorded one at all. A clock
+        // that reads earlier than the first of those has been reset under the episode - a reset leaves the
+        // session running and puts the world back to zero - which is a boundary; the pair also keeps the
+        // closed episode from being stamped with the rewound reading.
+        private double _lastWorldSeconds;
+        private bool _episodeSampled;
+
         /// <summary>
         /// The recorder of the running session, or null outside play mode. It is created by
         /// <see cref="Bootstrap"/> so the session records itself without an object of the scene naming it, which
@@ -202,7 +209,7 @@ namespace RobotSNAP.Metrics
             if (!running)
             {
                 if (_accumulator != null)
-                    Finish(MetricsContract.OutcomeStopped, clock.ElapsedSeconds);
+                    Finish(MetricsContract.OutcomeStopped, ClosingWorldTime(clock.ElapsedSeconds));
 
                 // A state that is not running is the session saying "start the next run whenever you like", so
                 // a reset or a scenario load re-arms the recorder for the episode that follows.
@@ -211,7 +218,7 @@ namespace RobotSNAP.Metrics
             }
 
             if (_accumulator != null && !string.Equals(_scenario, scenario, StringComparison.Ordinal))
-                Finish(MetricsContract.OutcomeStopped, clock.ElapsedSeconds);
+                Finish(MetricsContract.OutcomeStopped, ClosingWorldTime(clock.ElapsedSeconds));
 
             if (_accumulator == null)
             {
@@ -228,9 +235,28 @@ namespace RobotSNAP.Metrics
             CollectRobots();
 
             double world = clock.ElapsedSeconds;
+
+            // A clock that reads earlier than the last step this episode recorded was reset under it. The
+            // reset is a boundary: the episode is closed where it really was - never at the rewound reading,
+            // which would file a run of thirty seconds as a run of none - and the world that follows opens
+            // the next one at its new origin. An accumulator a reset landed under before it recorded a single
+            // step is not a run, and is dropped rather than filed.
+            if (_accumulator != null && world < _lastWorldSeconds)
+            {
+                if (_episodeSampled)
+                    Finish(MetricsContract.OutcomeStopped, _lastWorldSeconds);
+                else
+                    Discard();
+
+                Begin(manager, clock, scenario);
+                if (_accumulator == null) return;
+            }
+
             if (robot.HasGoal) _accumulator.SetGoal(robot.Goal);
 
             _accumulator.Sample(world, _robotSamples, _humanSamples);
+            _lastWorldSeconds = world;
+            _episodeSampled = true;
 
             // Reaching the goal, touching something or leaving the map names the run; it does not end it. A
             // driver who arrives and keeps going, or clips a wall and backs off, is still driving the session,
@@ -259,6 +285,12 @@ namespace RobotSNAP.Metrics
             _startedWallSeconds = Time.realtimeSinceStartupAsDouble;
             _armed = false;
 
+            // The origin is the last time the episode has recorded until it records one, so a clock reset
+            // before the first step is told from a clock that simply has not moved yet.
+            double origin = clock.ElapsedSeconds;
+            _lastWorldSeconds = origin;
+            _episodeSampled = false;
+
             _accumulator = new EpisodeAccumulator(
                 store.NextEpisodeId(out int index),
                 index,
@@ -268,7 +300,7 @@ namespace RobotSNAP.Metrics
                 personalSpaceRadiusMetres,
                 maxTrajectoryPointsPerAgent,
                 DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
-                clock.ElapsedSeconds);
+                origin);
 
             RefreshHumanManagers();
         }
@@ -276,15 +308,15 @@ namespace RobotSNAP.Metrics
         /// <summary>
         /// Names what happened to the run, in the project's own vocabulary, or null while nothing has.
         ///
-        /// The order is the order of the conditions a mission cares about: a robot that reached its goal has
-        /// succeeded even if it is standing close to a wall, and a robot that left the map is out of the
-        /// mission whether or not it is also close to something. These are names, not ends - the episode
-        /// carries on after them - so the time limit is deliberately not part of this: it is the one
-        /// condition that closes a run, and the recorder applies it where it closes one.
+        /// The order is the order of the conditions a mission cares about: the fleet that reached every one of
+        /// its goals has succeeded even if a robot of it is standing close to a wall, and a robot that left
+        /// the map is out of the mission whether or not it is also close to something. These are names, not
+        /// ends - the episode carries on after them - so the time limit is deliberately not part of this: it
+        /// is the one condition that closes a run, and the recorder applies it where it closes one.
         /// </summary>
         private string Classify(Robot robot, double worldSeconds)
         {
-            if (robot.GoalReached)
+            if (AllRobotsReachedTheGoal(robot))
                 return MetricsContract.OutcomeGoal;
 
             if (detectCollisions && NearestObstacleMetres(robot) is double range && range < collisionDistanceMetres)
@@ -294,6 +326,32 @@ namespace RobotSNAP.Metrics
                 return MetricsContract.OutcomeOutOfBounds;
 
             return null;
+        }
+
+        /// <summary>
+        /// Whether the mission the episode files is over: every robot of the scenario has reached its own
+        /// goal. A run that fields several robots is a success only once the last of them arrives - the
+        /// primary robot reaching its goal while another one is still driving is not a mission the fleet
+        /// finished.
+        ///
+        /// A robot nobody gave a goal never reports having reached one, so it keeps the fleet short of the
+        /// goal, and a roster with no robot in it is not an arrived one either. A scene with no roster is the
+        /// single-robot case the recorder has always measured, where the one tracked robot's arrival is the
+        /// whole mission.
+        /// </summary>
+        private bool AllRobotsReachedTheGoal(Robot robot)
+        {
+            RobotRoster roster = RobotRoster.Current;
+            if (roster == null || _robots.Count == 0)
+                return robot.GoalReached;
+
+            for (int index = 0; index < _robots.Count; index++)
+            {
+                Robot member = _robots[index];
+                if (member == null || !member.GoalReached) return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -384,6 +442,24 @@ namespace RobotSNAP.Metrics
             Robot single = ResolveRobot();
             if (single != null)
                 _robotSamples.Add(new RobotSample(ResolveRobotId(single), single.Position, single.Radius));
+        }
+
+        /// <summary>
+        /// The world time an episode is closed at: the clock's own reading, unless the clock now stands behind
+        /// the last step the episode recorded - the time a reset puts it back to - in which case the run is
+        /// closed at the last moment it truly reached rather than at a reading earlier than its own samples.
+        /// </summary>
+        private double ClosingWorldTime(double worldSeconds) =>
+            _lastWorldSeconds > worldSeconds ? _lastWorldSeconds : worldSeconds;
+
+        /// <summary>
+        /// Drops the open episode without filing it. An accumulator a reset landed under before it recorded a
+        /// single step is not a run, and filing it would add a row the session never drove.
+        /// </summary>
+        private void Discard()
+        {
+            _accumulator = null;
+            _armed = false;
         }
 
         /// <summary>

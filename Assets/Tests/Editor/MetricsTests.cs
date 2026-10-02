@@ -1,7 +1,12 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using RobotSNAP.Agents;
+using RobotSNAP.Core;
+using RobotSNAP.Core.Scenario;
 using RobotSNAP.Metrics;
 using RobotSNAP.ROS;
 using UnityEngine;
@@ -16,10 +21,44 @@ namespace RobotSNAP.Tests.Editor
     /// </summary>
     public sealed class MetricsTests
     {
+        private static readonly System.Type RosterSlotType =
+            typeof(RobotRoster).GetNestedType("Slot", BindingFlags.NonPublic);
+
+        private static readonly FieldInfo RosterSlots =
+            typeof(RobotRoster).GetField("_slots", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        private readonly List<GameObject> _created = new List<GameObject>();
+        private ScenarioManager _sessionManager;
+        private Supervisor _sessionSupervisor;
+
         [TearDown]
         public void ResetStore()
         {
             MetricsStore.Instance.Clear();
+        }
+
+        /// <summary>
+        /// A component added outside play mode does not run its own lifecycle, so the roster a case plants is
+        /// cleared here rather than left to the objects that case built.
+        /// </summary>
+        [TearDown]
+        public void DestroyTheSceneBuiltByACase()
+        {
+            SetRosterCurrent(null);
+
+            // A supervisor added without a configuration makes its own, and that instance is not owned by the
+            // scene, so it is read before the object carrying it goes away.
+            SimulationConfig config = _sessionSupervisor != null ? _sessionSupervisor.ActiveConfig : null;
+            _sessionSupervisor = null;
+            _sessionManager = null;
+
+            foreach (GameObject created in _created)
+                if (created != null) UnityEngine.Object.DestroyImmediate(created);
+
+            _created.Clear();
+
+            if (config != null && config.name == "DefaultConfig")
+                UnityEngine.Object.DestroyImmediate(config);
         }
 
         private static EpisodeMetrics Synthetic(string id = "ep")
@@ -447,6 +486,119 @@ namespace RobotSNAP.Tests.Editor
             Assert.That(MetricsStore.Instance.Episodes, Is.Empty);
         }
 
+        // -- the mission of a fleet ------------------------------------------
+
+        /// <summary>One robot arriving is not the fleet arriving: the run is not a goal yet.</summary>
+        [Test]
+        public void OneRobotArrivingDoesNotFileTheFleetAsAGoal()
+        {
+            Robot primary = NewRobot("robot_1");
+            Robot second = NewRobot("robot_2");
+            ArriveAtGoal(primary);
+            DrivingTowards(second, new Vector3(5f, 0f, 5f));
+
+            RobotRoster roster = Roster(primary, second);
+
+            Assert.That(Classify(roster, primary), Is.Not.EqualTo(MetricsContract.OutcomeGoal),
+                "the second robot is still driving, so the fleet has not finished its mission");
+        }
+
+        /// <summary>The fleet succeeds only once every one of its robots has arrived.</summary>
+        [Test]
+        public void TheFleetIsAGoalOnceEveryRobotOfItArrived()
+        {
+            Robot primary = NewRobot("robot_1");
+            Robot second = NewRobot("robot_2");
+            ArriveAtGoal(primary);
+            ArriveAtGoal(second);
+
+            RobotRoster roster = Roster(primary, second);
+
+            Assert.That(Classify(roster, primary), Is.EqualTo(MetricsContract.OutcomeGoal),
+                "every robot reached its goal, which is what the mission asks of the fleet");
+        }
+
+        /// <summary>A robot nobody gave a goal never arrives, so it keeps the fleet short of the goal.</summary>
+        [Test]
+        public void ARobotNobodyGaveAGoalKeepsTheFleetShortOfTheGoal()
+        {
+            Robot primary = NewRobot("robot_1");
+            Robot ungoaled = NewRobot("robot_2");
+            ArriveAtGoal(primary);
+
+            RobotRoster roster = Roster(primary, ungoaled);
+
+            Assert.That(Classify(roster, primary), Is.Not.EqualTo(MetricsContract.OutcomeGoal),
+                "a robot nobody gave a goal to cannot have arrived");
+        }
+
+        /// <summary>A scene with no roster is the single-robot case, and it is measured as it always was.</summary>
+        [Test]
+        public void ASingleRobotSceneFilesItsOwnArrivalAsTheGoal()
+        {
+            Robot alone = NewRobot("robot_1");
+            ArriveAtGoal(alone);
+
+            Assert.That(Classify(null, alone), Is.EqualTo(MetricsContract.OutcomeGoal),
+                "one robot is the whole fleet, so its own arrival is the mission");
+        }
+
+        // -- a reset is an episode boundary ----------------------------------
+
+        /// <summary>
+        /// A reset puts the clock back to zero under the episode it was running through. The run interrupted
+        /// that way is filed with the time it really reached, and the world that follows is a new episode at
+        /// the new origin, so the time of the session and the file of the benchmark name the same run.
+        /// </summary>
+        [Test]
+        public void AClockResetUnderARunningEpisodeClosesItAtTheTimeItReached()
+        {
+            Clock clock = NewClock();
+            MetricsRecorder recorder = NewSessionRecorder(clock, "corridor");
+
+            Drive(recorder, clock, 0.0);
+            Drive(recorder, clock, 30.0);
+
+            // The reset: the world goes back to zero while the session keeps running.
+            Drive(recorder, clock, 0.0);
+
+            Assert.That(MetricsStore.Instance.Count, Is.EqualTo(1), "the interrupted run was closed, once");
+            EpisodeMetrics interrupted = MetricsStore.Instance.Episodes[0];
+            Assert.That(interrupted.WorldSeconds, Is.EqualTo(30.0).Within(1e-6),
+                "the episode is filed where it really was, not at the rewound reading");
+            Assert.That(interrupted.Steps, Is.EqualTo(2), "both steps before the reset were recorded");
+            Assert.That(interrupted.Outcome, Is.EqualTo(MetricsContract.OutcomeStopped),
+                "a reset interrupts the run the way a stop does");
+
+            // The new episode begins at the new origin: five seconds after the reset it is five seconds old.
+            Drive(recorder, clock, 5.0);
+            Drive(recorder, clock, 0.0);
+
+            Assert.That(MetricsStore.Instance.Count, Is.EqualTo(2), "the second reset closed the second run");
+            Assert.That(MetricsStore.Instance.Episodes[1].WorldSeconds, Is.EqualTo(5.0).Within(1e-6),
+                "the run after the reset counts from the new zero, not from the old origin");
+        }
+
+        /// <summary>
+        /// A reset that lands before the episode recorded a single step leaves nothing behind: an accumulator
+        /// with no sample is not a run, and filing it would be a row the session never drove.
+        /// </summary>
+        [Test]
+        public void AResetUnderAnEpisodeThatNeverSampledFilesNothing()
+        {
+            Clock clock = NewClock();
+            MetricsRecorder recorder = NewSessionRecorder(clock, "corridor");
+
+            // An episode open at thirty seconds that has taken no step yet, which is the state a reset lands in.
+            SetPrivate(clock, "_elapsedSeconds", 30.0);
+            Invoke(recorder, "Begin", _sessionManager, clock, "corridor");
+
+            Drive(recorder, clock, 0.0);
+
+            Assert.That(MetricsStore.Instance.Count, Is.EqualTo(0),
+                "an episode that never recorded a step is dropped, not filed");
+        }
+
         // -- helpers --------------------------------------------------------
 
         private static EpisodeAccumulator NewAccumulator(double personalSpaceRadius = 0.5, int capacity = 64)
@@ -461,6 +613,148 @@ namespace RobotSNAP.Tests.Editor
                 capacity,
                 "2026-09-30T10:00:00.0000000Z",
                 0.0);
+        }
+
+        /// <summary>
+        /// The verdict the recorder would file for <paramref name="robot"/> over that roster: the roster is
+        /// planted as the current one, the recorder gathers its robots through the very step FixedUpdate
+        /// runs, and the classifier the loop calls is read back. A null roster is the single-robot shape.
+        /// </summary>
+        private string Classify(RobotRoster roster, Robot robot)
+        {
+            SetRosterCurrent(roster);
+
+            var host = new GameObject("test-metrics-recorder");
+            _created.Add(host);
+            MetricsRecorder recorder = host.AddComponent<MetricsRecorder>();
+
+            Invoke(recorder, "CollectRobots");
+            return (string)Invoke(recorder, "Classify", robot, 0.0);
+        }
+
+        private Robot NewRobot(string name)
+        {
+            var host = new GameObject(name);
+            _created.Add(host);
+            return host.AddComponent<Robot>();
+        }
+
+        /// <summary>Latches a robot as arrived through the same watch a client-steered robot goes through.</summary>
+        private static void ArriveAtGoal(Robot robot)
+        {
+            robot.SetGoal(robot.Position);
+            Invoke(robot, "WatchManualArrival");
+        }
+
+        private static void DrivingTowards(Robot robot, Vector3 goal) => robot.SetGoal(goal);
+
+        /// <summary>A roster holding the robots given, in the order given, planted as the current one.</summary>
+        private RobotRoster Roster(params Robot[] robots)
+        {
+            var host = new GameObject("test-robot-roster");
+            _created.Add(host);
+            var roster = host.AddComponent<RobotRoster>();
+            var slots = (IList)RosterSlots.GetValue(roster);
+
+            foreach (Robot robot in robots)
+                slots.Add(SlotFor(robot));
+
+            SetRosterCurrent(roster);
+            return roster;
+        }
+
+        private static object SlotFor(Robot robot)
+        {
+            object slot = System.Activator.CreateInstance(RosterSlotType, nonPublic: true);
+            RosterSlotType.GetField("Id").SetValue(slot, robot.gameObject.name);
+            RosterSlotType.GetField("TypeId").SetValue(slot, RobotProfiles.DefaultId);
+            RosterSlotType.GetField("Robot").SetValue(slot, robot);
+            return slot;
+        }
+
+        private static void SetRosterCurrent(RobotRoster roster)
+        {
+            typeof(RobotRoster)
+                .GetProperty("Current", BindingFlags.Public | BindingFlags.Static)
+                .GetSetMethod(true)
+                .Invoke(null, new object[] { roster });
+        }
+
+        private static object Invoke(object target, string method, params object[] arguments)
+        {
+            return target.GetType()
+                .GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(target, arguments);
+        }
+
+        private static void SetPrivate(object target, string field, object value)
+        {
+            target.GetType()
+                .GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(target, value);
+        }
+
+        /// <summary>A clock of the session, whose elapsed time the cases below move by hand.</summary>
+        private Clock NewClock()
+        {
+            var host = new GameObject("test-clock");
+            _created.Add(host);
+            return host.AddComponent<Clock>();
+        }
+
+        /// <summary>
+        /// A recorder watching a session that reads Running: a scenario manager holding a scenario, a
+        /// supervisor that is not paused - which is what the session state is derived from - one robot to be
+        /// the subject of the episode, and the clock the case moves. The recorder is driven through the very
+        /// FixedUpdate the loop runs, because an edit-mode test runs no frame of its own. The session file and
+        /// the two detectors are switched off: what is measured here is the clock boundary, not the map.
+        /// </summary>
+        private MetricsRecorder NewSessionRecorder(Clock clock, string scenario)
+        {
+            _sessionSupervisor = NewSupervisor();
+            _sessionManager = NewRunningManager(scenario);
+            Roster(NewRobot("robot_1"));
+
+            var host = new GameObject("test-metrics-recorder");
+            _created.Add(host);
+            MetricsRecorder recorder = host.AddComponent<MetricsRecorder>();
+
+            SetPrivate(recorder, "_initialized", true);
+            SetPrivate(recorder, "_manager", _sessionManager);
+            SetPrivate(recorder, "_clock", clock);
+            SetPrivate(recorder, "exportOnFinish", false);
+            SetPrivate(recorder, "detectCollisions", false);
+            SetPrivate(recorder, "detectOutOfBounds", false);
+            return recorder;
+        }
+
+        /// <summary>The supervisor the session state is derived from; without a clock it is never paused.</summary>
+        private Supervisor NewSupervisor()
+        {
+            var host = new GameObject("test-supervisor");
+            _created.Add(host);
+            Supervisor supervisor = host.AddComponent<Supervisor>();
+            SetPrivate(supervisor, "_clock", null);
+            return supervisor;
+        }
+
+        /// <summary>A manager whose session reads Running, which is the state a reset happens in.</summary>
+        private ScenarioManager NewRunningManager(string scenario)
+        {
+            var host = new GameObject("test-scenario-manager");
+            _created.Add(host);
+            ScenarioManager manager = host.AddComponent<ScenarioManager>();
+            SetPrivate(manager, "_currentScenarioData", new ScenarioData { Info = new ScenarioInfo { Name = scenario } });
+            SetPrivate(manager, "_currentScenarioId", scenario);
+            SetPrivate(manager, "_scenarioApplied", true);
+            return manager;
+        }
+
+        /// <summary>One FixedUpdate of the recorder with the clock standing at that world time.</summary>
+        private static void Drive(MetricsRecorder recorder, Clock clock, double seconds)
+        {
+            SetPrivate(clock, "_elapsedSeconds", seconds);
+            Invoke(recorder, "FixedUpdate");
         }
     }
 }

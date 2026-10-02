@@ -115,6 +115,45 @@ namespace RobotSNAP.Tests.Editor
         }
 
         /// <summary>
+        /// The very frame of a stop, which is the one the list used to be rebuilt on.
+        ///
+        /// A stop destroys its robots with the deferred Destroy, so they are still standing - and still
+        /// findable by their tag - while the session announces that it has ended. A list that goes looking
+        /// at that moment finds them, and a list that is no longer empty never rebuilds again: the robots of
+        /// the session that just ended stay listed for good. The pedestrians were never caught by this,
+        /// because the pool switches them off synchronously.
+        ///
+        /// An applied scenario is the explicit refresh that arms the list again.
+        /// </summary>
+        [Test]
+        public void ARobotStillStandingDoesNotComeBackIntoTheList()
+        {
+            GameObject robot = NewAgent("robot_1", "Robot");
+            robot.AddComponent<Robot>();
+
+            CameraController camera = NewCamera();
+            VisualElement root = BuildOverlay();
+            var panel = new SimulationAgentPanel(root, camera);
+
+            Assert.That(RowCount(root), Is.EqualTo(1), "The robot of the session is listed while it is up.");
+
+            // The stop of that frame: the list is released while the robot is still there to be found.
+            camera.ReleaseFollowableAgents();
+            panel.Refresh();
+
+            Assert.That(RowCount(root), Is.Zero,
+                "A robot still standing on the frame of the stop is not a robot of the list that follows.");
+            Assert.That(camera.GetFollowableTargets(), Is.Empty,
+                "The scene is not searched behind the back of the session that just ended.");
+
+            camera.RefreshFollowableTargets();
+            panel.Refresh();
+
+            Assert.That(RowCount(root), Is.EqualTo(1),
+                "A scenario that spawns its cast fills the list again.");
+        }
+
+        /// <summary>
         /// The list of the camera holds the agents of a session, so it cannot outlive one: a robot that is
         /// destroyed leaves the list on its own, and a release empties it even when the agent it held was
         /// destroyed before the call - the case that used to keep a dead reference the panel would list.

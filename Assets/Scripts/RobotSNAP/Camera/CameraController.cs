@@ -44,6 +44,18 @@ namespace RobotSNAP.CameraControl
         // Scratch list for the robots of the roster, so a refresh reuses one buffer instead of building one.
         private readonly List<Robot> _rosterRobots = new List<Robot>();
 
+        /// <summary>
+        /// Set by a release, cleared by an explicit refresh. While it is set, an empty list is the answer
+        /// and not a reason to search the scene again.
+        ///
+        /// The release runs on the frame a stop destroys its robots, and Destroy is deferred to the end of
+        /// that frame: the robots of the session that just ended are still standing, and still found by
+        /// their tag, when the session says it has ended. Rebuilding the list then put them back, and a list
+        /// that is no longer empty rebuilds no further - the robots stayed in the agent list for good. The
+        /// pedestrians never showed this, because the pool switches them off synchronously.
+        /// </summary>
+        private bool _agentsReleased;
+
         [Header("Orbit View")]
         [Tooltip("The view opens on an orbit angle rather than a straight top-down one: this is the pitch, in degrees.")]
         public float orbitPitch = 38f;
@@ -454,7 +466,9 @@ namespace RobotSNAP.CameraControl
         /// </summary>
         private Transform NearestTargetToPointer(Vector2 viewportPointer, float radius)
         {
-            if (_followableTargets.Count == 0)
+            // A released list is not looked up again: a click in the view cannot hand the camera back to an
+            // agent of a session that has ended.
+            if (_followableTargets.Count == 0 && !_agentsReleased)
                 RefreshFollowableTargets();
 
             Rect view = ViewElement()?.worldBound ?? default;
@@ -702,6 +716,9 @@ namespace RobotSNAP.CameraControl
         /// </summary>
         public void RefreshFollowableTargets()
         {
+            // An explicit rebuild is what arms the list again: this is the call an applied scenario makes.
+            _agentsReleased = false;
+
             _followableTargets.Clear();
 
             RobotRoster roster = RobotRoster.Current;
@@ -757,9 +774,14 @@ namespace RobotSNAP.CameraControl
         ///
         /// The two events this raises are what empty the agent panel and the list, and what hands the
         /// minimap back to the camera.
+        ///
+        /// The release is authoritative: it also stops the list from being rebuilt on its own, because
+        /// the frame it runs on still holds the agents of the session (see <see cref="_agentsReleased"/>).
         /// </summary>
         public void ReleaseFollowableAgents()
         {
+            _agentsReleased = true;
+
             // A destroyed agent compares equal to null while the field still holds it, so the plain
             // null test would call a released view empty and leave the dead reference in place.
             if (_followableTargets.Count == 0 && _currentFollowTarget is null) return;
@@ -849,7 +871,7 @@ namespace RobotSNAP.CameraControl
                     _followableTargets.RemoveAt(index);
             }
 
-            if (_followableTargets.Count == 0) RefreshFollowableTargets();
+            if (_followableTargets.Count == 0 && !_agentsReleased) RefreshFollowableTargets();
             return new List<Transform>(_followableTargets);
         }
         

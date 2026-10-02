@@ -147,7 +147,6 @@ namespace RobotSNAP.Agents
             }
         }
 
-        public static float DefaultWedgeAngle => DefaultWedgeAngleDegrees;
         public static float DefaultRowStagger(float spacing) => Mathf.Max(0.1f, spacing * RowStaggerFactor);
         public static float DefaultClusterRadius(float spacing) => Mathf.Max(0.3f, spacing * ClusterRadiusFactor);
         public static float DefaultPairLateral(float spacing) => Mathf.Max(0.2f, spacing * PairLateralFactor);

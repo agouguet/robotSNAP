@@ -42,7 +42,6 @@ namespace RobotSNAP
         public float Angle => angle;
         public IReadOnlyDictionary<GameObject, bool> AgentsView => _agentsView;
         public List<GameObject> VisibleAgents => GetVisibleAgents();
-        public int VisibleCount => _agentsView.Count(kv => kv.Value);
         
         // Private state
         private Dictionary<GameObject, bool> _agentsView = new Dictionary<GameObject, bool>();
@@ -159,23 +158,6 @@ namespace RobotSNAP
         {
             if (agent == null) return float.MaxValue;
             return Vector3.Distance(transform.position, agent.transform.position);
-        }
-        
-        /// <summary>
-        /// Get the direction to an agent
-        /// </summary>
-        public Vector3 GetDirectionToAgent(GameObject agent)
-        {
-            if (agent == null) return Vector3.zero;
-            return (agent.transform.position - transform.position).normalized;
-        }
-        
-        /// <summary>
-        /// Check if an agent is currently visible
-        /// </summary>
-        public bool IsAgentVisible(GameObject agent)
-        {
-            return _agentsView.TryGetValue(agent, out bool visible) && visible;
         }
         
         #endregion

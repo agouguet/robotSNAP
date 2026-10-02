@@ -62,15 +62,6 @@ namespace RobotSNAP.Core.Scenario
         [YamlIgnore]
         public string DisplayText => $"{Name} v{Version} - {(Description?.Length > 50 ? Description.Substring(0, 47) + "..." : Description)}";
         
-        /// <summary>
-        /// Vérifie si le scénario a un tag spécifique
-        /// </summary>
-        public bool HasTag(string tag)
-        {
-            if (Tags == null) return false;
-            return Array.Exists(Tags, t => string.Equals(t, tag, StringComparison.OrdinalIgnoreCase));
-        }
-        
         public override string ToString() => DisplayText;
     }
 

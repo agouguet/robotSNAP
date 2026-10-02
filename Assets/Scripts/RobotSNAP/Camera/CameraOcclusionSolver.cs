@@ -44,9 +44,6 @@ namespace RobotSNAP.CameraControl
             _eyeHeight = Mathf.Max(0.1f, eyeHeight);
         }
 
-        /// <summary>How many renderers are out of the picture right now. Read by the tests.</summary>
-        public int RevealedCount => _revealed.Count;
-
         /// <summary>
         /// Reveals whatever stands between the camera and <paramref name="target"/>. A null target —
         /// nothing is followed — puts every wall back, because there is no subject to keep in sight.

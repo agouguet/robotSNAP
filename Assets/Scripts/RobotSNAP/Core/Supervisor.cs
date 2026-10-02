@@ -52,7 +52,6 @@ namespace RobotSNAP
         #region Private Fields
 
         private SimulationConfig _runtimeConfig;
-        private bool _isQuitting;
         private bool _isInitialized;
 
         #endregion
@@ -61,7 +60,6 @@ namespace RobotSNAP
 
         public SimulationConfig ActiveConfig => Application.isPlaying ? _runtimeConfig : _defaultConfig;
         public bool IsInitialized => _isInitialized;
-        public bool IsQuitting => _isQuitting;
 
         #endregion
 
@@ -108,7 +106,6 @@ namespace RobotSNAP
 
         private void OnApplicationQuit()
         {
-            _isQuitting = true;
             if (_autoSaveOnQuit && _runtimeConfig != null)
                 SaveDefaultConfig();
         }
@@ -176,26 +173,6 @@ namespace RobotSNAP
 
             ConfigPersistence.Save(source, fileName);
             if (_logEvents) Debug.Log($"[Supervisor] Config saved to JSON: {ConfigPersistence.GetPath(fileName)}");
-        }
-
-        public bool LoadConfigFromJson(string fileName)
-        {
-            if (!ConfigPersistence.TryLoad(fileName, out var loaded))
-            {
-                Debug.LogError($"[Supervisor] Config file not found: {ConfigPersistence.GetPath(fileName)}");
-                return false;
-            }
-            if (loaded != null)
-            {
-                UpdateConfig(loaded);
-                return true;
-            }
-            return false;
-        }
-
-        public List<string> GetAvailableConfigs()
-        {
-            return new List<string>(ConfigPersistence.GetAvailableNames());
         }
 
         public void ResetConfigToDefault()

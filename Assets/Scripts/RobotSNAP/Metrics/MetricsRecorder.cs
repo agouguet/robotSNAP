@@ -505,17 +505,5 @@ namespace RobotSNAP.Metrics
         }
 
         #endregion
-
-        #region Router Surface
-
-        /// <summary>
-        /// Command names the router answers from the same store this component fills; see
-        /// <see cref="SimulationCommandRouter"/>.
-        /// </summary>
-        public const string ListCommand = "metrics_episodes";
-        public const string GetCommand = "metrics_episode";
-        public const string ClearCommand = "metrics_clear";
-
-        #endregion
     }
 }

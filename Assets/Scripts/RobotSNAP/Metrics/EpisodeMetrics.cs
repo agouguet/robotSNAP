@@ -97,9 +97,5 @@ namespace RobotSNAP.Metrics
 
         /// <summary>The document as it goes on the wire and into the session file.</summary>
         public string ToJson() => JsonConvert.SerializeObject(this, Formatting.None);
-
-        /// <summary>Reads back a document this class wrote. Null for a blank body.</summary>
-        public static EpisodeMetrics FromJson(string json)
-            => string.IsNullOrWhiteSpace(json) ? null : JsonConvert.DeserializeObject<EpisodeMetrics>(json);
     }
 }

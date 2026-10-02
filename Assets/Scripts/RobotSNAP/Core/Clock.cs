@@ -121,7 +121,6 @@ namespace RobotSNAP.Core
         public bool IsPaused => _isPaused;
         public float TimeScale => timeScale;
         public bool UseRealTime => useRealTime;
-        public DateTime LocalNow => GetLocalTime();
 
         /// <summary>
         /// Simulated seconds elapsed since the last <see cref="Initialize"/>: how far the world has moved
@@ -131,9 +130,6 @@ namespace RobotSNAP.Core
         /// freeze - it is only the elapsed counter, and <see cref="Initialize"/> puts it back to zero.
         /// </summary>
         public double ElapsedSeconds => _elapsedSeconds;
-
-        // Unix epoch
-        public static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 
         #region Unity Lifecycle
 

@@ -183,14 +183,6 @@ namespace RobotSNAP.Agents
                 Debug.Log($"[HumanPoolManager] Returned all humans to pool");
         }
         
-        /// <summary>
-        /// Désactive tous les humains actifs (équivalent à ReturnAllHumans).
-        /// </summary>
-        public void DeactivateAllHumans()
-        {
-            ReturnAllHumans();
-        }
-        
         #endregion
         
         #region IPlayable Implementation
@@ -217,44 +209,6 @@ namespace RobotSNAP.Agents
             ReturnAllHumans();
             Debug.Log($"[HumanPoolManager] Reset complete. Active: {ActiveCount}, Available: {_availablePool.Count}");
             yield return null;
-        }
-        
-        #endregion
-        
-        #region Public Methods
-        
-        public void SetPoolParent(Transform newParent)
-        {
-            _poolParent = newParent;
-            _actualPoolParent = newParent ?? (_createPoolParentIfMissing ? CreatePoolContainer() : transform);
-            
-            foreach (var human in _availablePool)
-            {
-                if (human != null) human.transform.SetParent(_actualPoolParent);
-            }
-            
-            foreach (var human in _activeHumans)
-            {
-                if (human != null) human.transform.SetParent(_actualPoolParent);
-            }
-        }
-        
-        private Transform CreatePoolContainer()
-        {
-            GameObject container = new GameObject(_poolParentName);
-            container.transform.SetParent(transform);
-            return container.transform;
-        }
-        
-        public void ClearPool()
-        {
-            ReturnAllHumans();
-            
-            foreach (var human in _availablePool)
-            {
-                if (human != null) Destroy(human);
-            }
-            _availablePool.Clear();
         }
         
         #endregion

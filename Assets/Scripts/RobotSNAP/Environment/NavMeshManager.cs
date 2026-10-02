@@ -21,7 +21,6 @@ namespace RobotSNAP.Core
         [SerializeField] private NavMeshSurface navigationSurface;
 
         private bool _isReady;
-        private NavMeshQueryFilter _spawnFilter;
         private NavMeshQueryFilter _navigationFilter;
         private bool _isRebuilding = false;
         
@@ -33,29 +32,6 @@ namespace RobotSNAP.Core
         /// </summary>
         private void InitializeFilters()
         {
-            // Filtrer spawn
-            if (spawnSurface != null)
-            {
-                int agentTypeID = spawnSurface.agentTypeID;
-                if (agentTypeID < 0)
-                {
-                    Debug.LogWarning($"[NavMeshManager] AgentTypeID invalide ({agentTypeID}) pour spawnSurface, utilisation de 0");
-                    agentTypeID = 0;
-                }
-                
-                _spawnFilter = new NavMeshQueryFilter
-                {
-                    agentTypeID = agentTypeID,
-                    areaMask = spawnSurface.layerMask
-                };
-                
-                Debug.Log($"[NavMeshManager] Spawn Filter initialisé - AgentTypeID: {_spawnFilter.agentTypeID}, AreaMask: {_spawnFilter.areaMask}");
-            }
-            else
-            {
-                Debug.LogWarning("[NavMeshManager] spawnSurface est null, le filtre ne sera pas créé.");
-            }
-            
             // Filtrer navigation
             if (navigationSurface != null)
             {
@@ -136,17 +112,6 @@ namespace RobotSNAP.Core
             EventBus.Instance.Publish(new NavMeshBuiltEvent { success = true });
         }
 
-        public void ClearNavMeshes()
-        {
-            if (spawnSurface != null)
-                spawnSurface.RemoveData();
-            if (navigationSurface != null)
-                navigationSurface.RemoveData();
-            
-            NavMesh.RemoveAllNavMeshData();
-            _isReady = false;
-        }
-        
         public Vector3 GetRandomNavigationPoint(float radius)
         {
             if (!_isReady)
@@ -189,12 +154,7 @@ namespace RobotSNAP.Core
             yield return BuildNavMeshes();
         }
         
-        public NavMeshQueryFilter GetNavigationFilter() => _navigationFilter;
-        public NavMeshQueryFilter GetSpawnFilter() => _spawnFilter;
-
         public NavMeshSurface GetSpawnSurface() => spawnSurface;
         public NavMeshSurface GetNavigationSurface() => navigationSurface;
-
-        public System.Action OnNavMeshVisualizationReady;
     }
 }

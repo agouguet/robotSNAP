@@ -30,7 +30,6 @@ namespace RobotSNAP.Core
         private HumanManager _humanManager;
 
         // Properties (publiques pour ScenarioManager)
-        public int EnvironmentId => _environmentId;
         public bool IsInitialized => _isInitialized;
         public EnvironmentBuilder EnvironmentBuilder => _environmentBuilder;
         public NavMeshManager NavMeshManager => _navMeshManager;
@@ -152,8 +151,6 @@ namespace RobotSNAP.Core
             RequestReset();
         }
 
-        public void ResetEnvironment() => EditorReset();
-
         #endregion
 
         #region Reset Sequence
@@ -196,23 +193,6 @@ namespace RobotSNAP.Core
         #endregion
 
         #region Public API - Agent Management
-
-        public List<HumanAgent> GetAllHumans()
-        {
-            var humans = new List<HumanAgent>();
-            if (_humanPool != null)
-            {
-                foreach (var go in _humanPool.GetActiveHumans())
-                {
-                    var h = go.GetComponent<HumanAgent>();
-                    if (h != null) humans.Add(h);
-                }
-            }
-            return humans;
-        }
-
-        public Robot GetRobot() => GetComponentInChildren<Robot>();
-        // public void ClearAllAgents() => _spawnCoordinator?.ClearAll();
 
         /// <summary>
         /// Supprime tous les agents (robot + humains) de l'environnement, mais conserve la carte.

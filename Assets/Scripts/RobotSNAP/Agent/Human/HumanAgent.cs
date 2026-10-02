@@ -96,7 +96,6 @@ namespace RobotSNAP.Agents
         public bool HasDestination => hasDestination;
         public Vector3 CurrentGoal => _currentGoal;
         public float CurrentSpeed => _currentSpeed;
-        public string CurrentBehavior => _currentBehavior;
         public HumanEndBehavior EndBehavior => endBehavior;
         public IReadOnlyList<Vector3> RoutePoints => _walker.Points;
         /// <summary>True while the agent walks as part of a group. Nobody in the group is a leader.</summary>
@@ -325,9 +324,6 @@ namespace RobotSNAP.Agents
         /// </summary>
         public void SetStartHold(float seconds) => _holdRemaining = Mathf.Max(0f, seconds);
 
-        /// <summary>True while the agent is still waiting for its entry delay to expire.</summary>
-        public bool IsHoldingStart => _holdRemaining > 0f;
-
         private void AdvanceToNextGoal()
         {
             _stalledTime = 0f;
@@ -481,9 +477,6 @@ namespace RobotSNAP.Agents
         }
 
         public void SetFormationOffset(Vector2 offset) => _formationOffset = offset;
-
-        /// <summary>Slot this member holds in its group's frame, relative to the group reference.</summary>
-        public Vector2 FormationOffset => _formationOffset;
 
         /// <summary>
         /// Turns the agent on the spot, used at spawn so it looks at its first objective instead of keeping
@@ -646,15 +639,6 @@ namespace RobotSNAP.Agents
             if (_avatarObject != null) _avatarObject.SetActive(true);
         }
 
-        public void SetColor(Color color)
-        {
-            var renderer = GetComponentInChildren<Renderer>();
-            if (renderer != null) renderer.material.color = color;
-        }
-
-        public Vector3 GetPosition() => Position;
-        public Vector3 GetVelocity() => currentVelocity3D;
-        public Vector3 GetCurrentPosition3D() => Position;
         public Vector2 GetCurrentPosition2D() => Position2D;
         public void SetVelocity(Vector3 velocity) => currentVelocity3D = velocity;
 
@@ -730,8 +714,6 @@ namespace RobotSNAP.Agents
         public void SetAgentId(int id) => agentId = id;
         public void SetAgentName(string name) => agentName = name;
         public HumanMovement GetMovement() => _movement;
-        public Animator GetAnimator() => _animator;
-        public Rigidbody GetRigidbody() => null; // Plus utilisé, on retourne null
 
         #endregion
 

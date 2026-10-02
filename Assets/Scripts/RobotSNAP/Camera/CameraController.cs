@@ -43,7 +43,6 @@ namespace RobotSNAP.CameraControl
         private List<Transform> _followableTargets = new List<Transform>();
         // Scratch list for the robots of the roster, so a refresh reuses one buffer instead of building one.
         private readonly List<Robot> _rosterRobots = new List<Robot>();
-        private int _currentFollowIndex = -1;
 
         [Header("Orbit View")]
         [Tooltip("The view opens on an orbit angle rather than a straight top-down one: this is the pitch, in degrees.")]
@@ -771,7 +770,6 @@ namespace RobotSNAP.CameraControl
         {
             if (target == null) return;
             _currentFollowTarget = target;
-            _currentFollowIndex = _followableTargets.IndexOf(target);
             OnFollowTargetChanged?.Invoke(target);
             Debug.Log($"[CameraController] Following target: {target.name}");
         }
@@ -800,7 +798,6 @@ namespace RobotSNAP.CameraControl
             Vector3 position = _currentFollowTarget.position;
             OrbitPivot = new Vector3(position.x, 0f, position.z);
             _currentFollowTarget = null;
-            _currentFollowIndex = -1;
 
             OnFollowTargetChanged?.Invoke(null);
         }
@@ -812,19 +809,6 @@ namespace RobotSNAP.CameraControl
 
             activeTool = tool;
             OnToolChanged?.Invoke(tool);
-        }
-        
-        public void CycleFollowTarget(int direction)
-        {
-            if (_followableTargets.Count == 0)
-            {
-                RefreshFollowableTargets();
-                if (_followableTargets.Count == 0) return;
-            }
-            int newIndex = _currentFollowIndex + direction;
-            if (newIndex >= _followableTargets.Count) newIndex = 0;
-            else if (newIndex < 0) newIndex = _followableTargets.Count - 1;
-            SetFollowTarget(_followableTargets[newIndex]);
         }
         
         public List<Transform> GetFollowableTargets()

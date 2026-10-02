@@ -232,51 +232,6 @@ namespace RobotSNAP.Core
             Debug.Log($"{targetSurface?.name} visualization: {(isVisible ? "ON" : "OFF")}");
         }
         
-        public void SetVisibility(bool visible)
-        {
-            isVisible = visible;
-            if (visualObject != null)
-            {
-                visualObject.SetActive(visible);
-            }
-            
-            if (visible)
-            {
-                UpdateVisualization();
-            }
-        }
-        
-        public void SetSurface(NavMeshSurface newSurface)
-        {
-            targetSurface = newSurface;
-            needsUpdate = true;
-        }
-        
-        public void ForceUpdate()
-        {
-            needsUpdate = true;
-        }
-        
-        // Méthode pour changer la couleur en runtime
-        public void SetColor(Color newColor)
-        {
-            surfaceColor = newColor;
-            if (meshRenderer != null && meshRenderer.material != null)
-            {
-                meshRenderer.material.color = newColor;
-            }
-        }
-        
-        // Méthode pour changer le décalage en runtime
-        public void SetYOffset(float offset)
-        {
-            yOffset = offset;
-            if (visualObject != null)
-            {
-                visualObject.transform.localPosition = Vector3.up * yOffset;
-            }
-        }
-        
         #if UNITY_EDITOR
         private void OnValidate()
         {

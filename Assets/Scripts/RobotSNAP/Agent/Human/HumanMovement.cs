@@ -93,11 +93,6 @@ namespace RobotSNAP.Agents
         private float _nextRobotLookup;
         private const float RobotLookupInterval = 2f;
 
-        // Public properties
-        public bool IsPlaying => _isPlaying;
-        public Vector2 CurrentVelocity => _currentVelocity;
-        public Vector2 CurrentPosition => _currentPosition;
-
         #region Unity Lifecycle
 
         private void Awake()
@@ -783,8 +778,6 @@ namespace RobotSNAP.Agents
 
         #region Getters
 
-        public IMovementController GetController() => _controller;
-        public MovementControllerType GetControllerType() => _currentControllerType;
         public float GetConfidence() => _controller?.GetConfidence() ?? 0f;
         public bool HasGoal => _avatar != null && _avatar.hasDestination;
         public Vector2 GoalPosition2D => _avatar != null ? _avatar.currentDestination : Vector2.zero;

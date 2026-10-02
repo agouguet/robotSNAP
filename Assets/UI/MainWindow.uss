@@ -186,22 +186,6 @@
     border-radius: 10px;
 }
 
-.app-menu-option {
-    height: 28px;
-    padding-left: 8px;
-    padding-right: 8px;
-    border-width: 0;
-    border-radius: 6px;
-    background-color: rgba(0, 0, 0, 0);
-    color: var(--dropdown-text);
-    font-size: 12px;
-    -unity-text-align: middle-left;
-}
-
-.app-menu-option:hover {
-    background-color: var(--button-bg);
-}
-
 .is-hidden {
     display: none;
 }
@@ -269,54 +253,6 @@
     margin-top: 4px;
 }
 
-.view-selector {
-    flex-direction: row;
-    margin-top: 12px;
-}
-
-.simulation-view {
-    background-color: var(--bg-secondary);
-    border-radius: 6px;
-    margin: 8px;
-    padding: 8px;
-}
-
-.render-zone {
-    background-color: rgb(0, 0, 0);
-    min-height: 300px;
-    border-radius: 4px;
-}
-
-.simulation-status {
-    margin-top: 12px;
-    padding: 8px;
-    background-color: rgba(0, 0, 0, 0.4);
-    border-radius: 4px;
-}
-
-.metrics-row {
-    flex-direction: row;
-    justify-content: space-between;
-    margin-top: 8px;
-}
-
-.metric-card {
-    flex-grow: 1;
-    margin: 4px;
-    padding: 8px;
-    background-color: var(--card-bg);
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 4px;
-    align-items: center;
-}
-
-.metric-value {
-    font-size: 22px;
-    color: var(--accent);
-    -unity-font-style: bold;
-}
-
 .panel {
     background-color: var(--panel-bg);
     border-width: 1px;
@@ -370,24 +306,6 @@
 .robot-progress {
     margin-top: 6px;
     width: 150px;
-}
-
-.bottom-controls {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 16px;
-    border-top-width: 1px;
-    border-top-color: var(--border-color);
-}
-
-.control-button {
-    margin-left: 8px;
-    min-width: 80px;
-}
-
-.speed-slider {
-    width: 120px;
 }
 
 .tab-pane {

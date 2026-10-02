@@ -91,14 +91,7 @@ namespace RobotSNAP.Core
             // }
 
             _isInitialized = true;
-            
-            // Notification via EventBus au lieu d'un événement C#
-            EventBus.Instance.Publish(new GameManagerInitializedEvent 
-            { 
-                EnvironmentId = _environmentId,
-                Success = true
-            });
-            
+
             Debug.Log($"[GameManager:{_environmentId}] Initialization complete");
         }
 
@@ -142,15 +135,6 @@ namespace RobotSNAP.Core
             Debug.Log($"[GameManager:{_environmentId}] Config applied");
         }
 
-        public void NotifyScenarioDurationReached()
-        {
-            // Notification via EventBus
-            EventBus.Instance.Publish(new ScenarioDurationReachedEvent
-            {
-                EnvironmentId = _environmentId
-            });
-        }
-
         // SUPPRIMÉ : public void SetROSPrefix(string prefix) => _envROS?.UpdatePrefix(prefix);
 
         #endregion
@@ -186,12 +170,6 @@ namespace RobotSNAP.Core
             if (_isResetting) yield break;
             _isResetting = true;
 
-            // Notification : reset démarré
-            EventBus.Instance.Publish(new GameManagerResetStartedEvent
-            {
-                EnvironmentId = _environmentId
-            });
-            
             Debug.Log($"[GameManager:{_environmentId}] Starting reset sequence...");
 
             // Désactiver les agents en mouvement
@@ -211,13 +189,6 @@ namespace RobotSNAP.Core
 
             _isResetting = false;
             _currentResetCoroutine = null;
-            
-            // Notification : reset terminé
-            EventBus.Instance.Publish(new GameManagerResetCompletedEvent
-            {
-                EnvironmentId = _environmentId,
-                Success = true
-            });
             
             Debug.Log($"[GameManager:{_environmentId}] Reset complete");
         }

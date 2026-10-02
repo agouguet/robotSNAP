@@ -44,9 +44,6 @@ namespace RobotSNAP.Agents
                  "pinned here comes from the catalogue the editor tool writes.")]
         [SerializeField] private List<Body> _bodies = new List<Body>();
 
-        [Header("Debug")]
-        [SerializeField] private bool _logEvents = false;
-
         private sealed class Slot
         {
             public string Id;

@@ -548,26 +548,6 @@
 }
 
 
-.upload-icon {
-    width: 28px;
-    height: 28px;
-
-    align-items: center;
-    justify-content: center;
-
-    margin-bottom: 5px;
-}
-
-
-.upload-icon Label {
-    color: var(--text-secondary);
-
-    font-size: 20px;
-
-    -unity-text-align: middle-center;
-}
-
-
 .upload-title {
     color: var(--text-secondary);
 
@@ -724,36 +704,6 @@
 }
 
 
-.view-mode-button {
-    width: 36px;
-    height: 28px;
-
-    padding: 0;
-
-    background-color: transparent;
-
-    border-width: 0;
-
-    color: var(--text-secondary);
-
-    font-size: 10px;
-
-    -unity-text-align: middle-center;
-}
-
-
-.view-mode-button:hover {
-    background-color: var(--button-hover);
-}
-
-
-.view-mode-button.selected {
-    background-color: var(--accent);
-
-    color: white;
-}
-
-
 /* ================================================================
    ENVIRONMENT CANVAS
    ================================================================ */
@@ -808,21 +758,6 @@
 
     border-width: 2px;
     border-color: rgb(10, 30, 20);
-}
-
-
-.goal-marker {
-    position: absolute;
-
-    width: 18px;
-    height: 18px;
-
-    border-radius: 9px;
-
-    background-color: var(--accent);
-
-    border-width: 2px;
-    border-color: rgb(10, 30, 50);
 }
 
 
@@ -1072,11 +1007,6 @@
 }
 
 
-.primary-objective-dot {
-    background-color: rgb(235, 150, 40);
-}
-
-
 .interest-objective-dot {
     background-color: rgb(145, 80, 220);
 }
@@ -1216,12 +1146,6 @@
     -unity-text-align: middle-right;
 }
 
-.agent-config-panel {
-    width: 300px;
-    margin-right: 14px;
-    overflow: hidden;
-}
-
 .human-config-panel {
     margin-right: 0;
 }
@@ -1267,17 +1191,8 @@
     flex-basis: 0;
 }
 
-.field-row-right,
-.coordinate-middle {
+.field-row-right {
     margin-left: 8px;
-}
-
-.point-card {
-    padding: 14px;
-    background-color: var(--bg-primary);
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 7px;
 }
 
 .point-card-header {
@@ -1288,31 +1203,6 @@
     color: var(--text-primary);
     font-size: 12px;
     -unity-font-style: bold;
-}
-
-.goal-dot {
-    background-color: rgb(235, 150, 40);
-}
-
-.coordinate-label {
-    margin-bottom: 5px;
-    color: var(--text-secondary);
-    font-size: 9px;
-}
-
-.coordinate-placeholder {
-    visibility: hidden;
-}
-
-.route-arrow {
-    height: 34px;
-    align-items: center;
-    justify-content: center;
-}
-
-.route-arrow Label {
-    color: var(--accent);
-    font-size: 18px;
 }
 
 .point-section-label {
@@ -1706,15 +1596,6 @@
     background-color: rgb(235, 150, 40);
 }
 
-.human-spawn-map-marker {
-    background-color: rgb(55, 145, 230);
-}
-
-.human-goal-map-marker,
-.human-goal-dot {
-    background-color: rgb(155, 90, 220);
-}
-
 .map-legend {
     min-height: 38px;
     flex-direction: row;
@@ -1731,36 +1612,11 @@
     font-size: 11px;
 }
 
-.legend-robot-start {
-    color: rgb(75, 220, 135);
-}
-
-.legend-robot-goal {
-    color: rgb(245, 170, 65);
-}
-
-.legend-human-start {
-    color: rgb(80, 165, 245);
-}
-
-.legend-human-goal {
-    color: rgb(180, 115, 240);
-}
-
 .manual-coordinates-panel {
     width: 300px;
     min-width: 256px;
     padding: 0;
     overflow: hidden;
-}
-
-.compact-point-card {
-    margin-bottom: 10px;
-    padding: 10px;
-}
-
-.compact-point-card .point-card-header {
-    margin-bottom: 8px;
 }
 
 .last-point-card {

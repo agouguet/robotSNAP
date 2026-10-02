@@ -54,7 +54,6 @@ namespace RobotSNAP.CameraControl
         public float orbitDistance = 14f;
 
         [Header("Follow Settings")]
-        public Vector3 followOffset = new Vector3(0, 5, -10);
         public Vector3 topDownOffset = new Vector3(0, 20, 0);
         public Vector3 firstPersonOffset = new Vector3(0, 1.5f, 0.5f);
         public Vector3 thirdPersonOffset = new Vector3(0, 2, 5);

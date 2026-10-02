@@ -335,7 +335,6 @@ namespace RobotSNAP.Core.Scenario
         private IEnumerator HandleSimulationDuration(float duration)
         {
             yield return new WaitForSeconds(duration);
-            _gameManager?.NotifyScenarioDurationReached();
             Supervisor.Instance?.Pause();
             if (_logEvents) Debug.Log($"[ScenarioApplier] Duration {duration}s reached. Simulation paused.");
         }

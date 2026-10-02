@@ -19,30 +19,13 @@ namespace RobotSNAP.Core
         [Header("NavMesh Surfaces")]
         [SerializeField] private NavMeshSurface spawnSurface;
         [SerializeField] private NavMeshSurface navigationSurface;
-        
-        [Header("Settings")]
-        [SerializeField] private bool autoBuildOnEnvironmentReady = true;
-        
+
         private bool _isReady;
         private NavMeshQueryFilter _spawnFilter;
         private NavMeshQueryFilter _navigationFilter;
         private bool _isRebuilding = false;
         
         public bool IsReady => _isReady;
-        
-        private void Awake()
-        {
-            // Ne pas initialiser les filtres ici, attendre que les surfaces soient prêtes
-            // On s'abonne aux événements
-            EventBus.Instance.Subscribe<EnvironmentCreatedEvent>(OnEnvironmentCreated);
-            EventBus.Instance.Subscribe<ResetRequestEvent>(OnResetRequest);
-        }
-        
-        private void OnDestroy()
-        {
-            EventBus.Instance.Unsubscribe<EnvironmentCreatedEvent>(OnEnvironmentCreated);
-            EventBus.Instance.Unsubscribe<ResetRequestEvent>(OnResetRequest);
-        }
         
         /// <summary>
         /// Initialise les filtres avec les valeurs valides des surfaces.
@@ -95,28 +78,6 @@ namespace RobotSNAP.Core
             {
                 Debug.LogWarning("[NavMeshManager] navigationSurface est null, le filtre ne sera pas créé.");
             }
-        }
-        
-        private void OnEnvironmentCreated(EnvironmentCreatedEvent evt)
-        {
-            if (autoBuildOnEnvironmentReady)
-            {
-                StartCoroutine(DelayedBuildNavMeshes());
-            }
-        }
-        
-        private IEnumerator DelayedBuildNavMeshes()
-        {
-            // Attendre quelques frames pour que l'environnement soit complètement instancié
-            yield return new WaitForEndOfFrame();
-            yield return new WaitForEndOfFrame();
-            
-            yield return BuildNavMeshes();
-        }
-        
-        private void OnResetRequest(ResetRequestEvent evt)
-        {
-            StartCoroutine(Reset());
         }
         
         public IEnumerator BuildNavMeshes()

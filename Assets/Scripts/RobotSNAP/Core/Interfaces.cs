@@ -3,50 +3,20 @@ using UnityEngine;
 
 namespace RobotSNAP.Core
 {
+    // The events and interfaces still in force. The ones that were only ever declared - a spawn request
+    // nobody published, a bridge nobody implemented, the environment notifications that the direct calls in
+    // GameManager replaced long ago - are gone, so what a reader finds in this file is what the simulation
+    // actually speaks.
+
     #region Events
 
-    // --- Événements existants ---
-    
-    public struct EnvironmentCreatedEvent
-    {
-        public GameObject environmentRoot;
-        public float floorRadius;
-    }
-    
+    /// <summary>Raised by the NavMesh manager once the surfaces of an environment have been rebuilt.</summary>
     public struct NavMeshBuiltEvent
     {
         public bool success;
     }
-    
-    public struct SpawnRequestEvent
-    {
-        public SpawnType type;
-        public int count;
-    }
-    
-    public struct SpawnCompletedEvent
-    {
-        public GameObject[] spawnedObjects;
-        public SpawnType type;
-    }
-    
-    public struct ResetRequestEvent
-    {
-        public string dataset;
-    }
-    
-    public struct ResetCompletedEvent
-    {
-        public bool success;
-    }
-    
-    // Événement legacy, conservé pour rétrocompatibilité
-    public struct PlayStateChangedEvent
-    {
-        public bool isPlaying;
-    }
 
-    // --- Nouveaux événements de commande (plus explicites) ---
+    // --- Commandes de la simulation (plus explicites que les événements ci-dessus) ---
 
     /// <summary>
     /// Commande : Démarrer la simulation depuis zéro.
@@ -87,37 +57,6 @@ namespace RobotSNAP.Core
         Paused      // Scénario chargé mais Clock en pause
     }
 
-    // --- Enums existants ---
-
-    public enum SpawnType
-    {
-        Robot,
-        Human,
-        All
-    }
-
-    public struct GameManagerInitializedEvent
-    {
-        public int EnvironmentId;
-        public bool Success;
-    }
-
-    public struct GameManagerResetStartedEvent
-    {
-        public int EnvironmentId;
-    }
-
-    public struct GameManagerResetCompletedEvent
-    {
-        public int EnvironmentId;
-        public bool Success;
-    }
-
-    public struct ScenarioDurationReachedEvent
-    {
-        public int EnvironmentId;
-    }
-
     #endregion
 
     #region Interfaces
@@ -129,13 +68,6 @@ namespace RobotSNAP.Core
         void Unsubscribe<T>(Action<T> handler);
     }
 
-    public interface IEnvironmentBuilder
-    {
-        System.Collections.IEnumerator BuildEnvironment();
-        // float GetFloorRadius();
-        bool IsReady { get; }
-    }
-
     public interface INavMeshManager
     {
         System.Collections.IEnumerator BuildNavMeshes();
@@ -144,14 +76,6 @@ namespace RobotSNAP.Core
         Vector3 GetRandomNavigationPoint(float radius);
         Vector3 GetRandomPointSimple(float radius);
         float GetPathLength(Vector3 start, Vector3 end);
-    }
-
-    public interface ISpawner
-    {
-        System.Collections.IEnumerator SpawnRobot(SpawnData data);
-        System.Collections.IEnumerator SpawnHuman(SpawnData data);
-        void DespawnAll();
-        bool CanSpawn { get; }
     }
 
     public interface IHumanController
@@ -166,14 +90,6 @@ namespace RobotSNAP.Core
         void SetReactionTime(float time);
     }
 
-    public interface IROSBridge
-    {
-        void Initialize(string prefix);
-        void PublishResetDone(bool success);
-        void PublishMap(MapData map);
-        void PublishLocalGoal(Vector3 goal);
-    }
-
     public interface IResettable
     {
         System.Collections.IEnumerator Reset();
@@ -183,29 +99,6 @@ namespace RobotSNAP.Core
     {
         void SetPlay(bool isPlaying);
         bool IsPlaying { get; }
-    }
-
-    #endregion
-
-    #region Data Structures
-
-    public struct SpawnData
-    {
-        public Vector3 position;
-        public Quaternion rotation;
-        public Vector3 goalPosition;
-        public Quaternion goalRotation;
-        public string id;
-        public SpawnType type;
-    }
-
-    public struct MapData
-    {
-        public int width;
-        public int height;
-        public float resolution;
-        public byte[] data;
-        public Vector3 origin;
     }
 
     #endregion

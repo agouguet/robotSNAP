@@ -29,14 +29,6 @@ namespace RobotSNAP.Core
                 EventBus.Instance.Publish(new StartSimulationCommand());
             }
 
-            // Touche C : Créer un environnement (commande générique, peut être utilisée ailleurs)
-            if (Input.GetKeyDown(KeyCode.C))
-            {
-                Debug.Log("[InputHandler] Create environment requested (C key)");
-                EventBus.Instance.Publish(new CreateEnvironmentCommand()); // à définir si besoin
-                // Sinon, on peut ignorer cette touche ou la réaffecter
-            }
-
             // Touche Espace : Pause / Resume (toggle)
             if (Input.GetKeyDown(KeyCode.Space))
             {
@@ -57,7 +49,4 @@ namespace RobotSNAP.Core
             }
         }
     }
-
-    // Optionnel : si tu veux conserver la touche C pour autre chose
-    public struct CreateEnvironmentCommand { }
 }

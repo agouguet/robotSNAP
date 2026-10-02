@@ -56,15 +56,6 @@ namespace RobotSNAP.Agents
             {
                 StartCoroutine(Prewarm(_defaultPoolSize));
             }
-            
-            EventBus.Instance.Subscribe<ResetRequestEvent>(OnResetRequest);
-            EventBus.Instance.Subscribe<PlayStateChangedEvent>(OnPlayStateChanged);
-        }
-        
-        private void OnDestroy()
-        {
-            EventBus.Instance.Unsubscribe<ResetRequestEvent>(OnResetRequest);
-            EventBus.Instance.Unsubscribe<PlayStateChangedEvent>(OnPlayStateChanged);
         }
         
         #endregion
@@ -87,20 +78,6 @@ namespace RobotSNAP.Agents
             {
                 _actualPoolParent = transform;
             }
-        }
-        
-        #endregion
-        
-        #region Event Handlers
-        
-        private void OnResetRequest(ResetRequestEvent evt)
-        {
-            StartCoroutine(Reset());
-        }
-        
-        private void OnPlayStateChanged(PlayStateChangedEvent evt)
-        {
-            SetPlay(evt.isPlaying);
         }
         
         #endregion

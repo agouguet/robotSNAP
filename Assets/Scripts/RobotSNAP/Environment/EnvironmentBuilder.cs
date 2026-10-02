@@ -214,6 +214,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.AI.Navigation;
 using UnityEngine.SceneManagement;
+using RobotSNAP.Core;
 using RobotSNAP.Core.Scenario;
 
 namespace RobotSNAP.Environment
@@ -287,9 +288,9 @@ namespace RobotSNAP.Environment
         private IEnumerator ClearEnvironmentCoroutine()
         {
             // Nettoyer l'ancien prefab ou l'ancienne image
-            DestroyInCurrentContext(_currentEnvironmentInstance);
-            DestroyInCurrentContext(_floor);
-            DestroyInCurrentContext(_walls);
+            SceneTeardown.Destroy(_currentEnvironmentInstance);
+            SceneTeardown.Destroy(_floor);
+            SceneTeardown.Destroy(_walls);
             _currentEnvironmentInstance = null;
             _floor = null;
             _walls = null;
@@ -447,7 +448,7 @@ namespace RobotSNAP.Environment
                             mesh = tempWall.GetComponent<MeshFilter>().sharedMesh,
                             transform = transform.worldToLocalMatrix * tempWall.transform.localToWorldMatrix
                         });
-                        DestroyInCurrentContext(tempWall);
+                        SceneTeardown.Destroy(tempWall);
                     }
                 }
             }
@@ -493,27 +494,8 @@ namespace RobotSNAP.Environment
 
         private void Clear()
         {
-            DestroyInCurrentContext(_floor);
-            DestroyInCurrentContext(_walls);
-        }
-
-        /// <summary>
-        /// Removes a GameObject of the previous environment. Destroy() is refused outside play mode, where the
-        /// builder is also driven from the editor, so the immediate form is used there instead.
-        /// </summary>
-        private static void DestroyInCurrentContext(GameObject target)
-        {
-            if (target == null)
-                return;
-
-#if UNITY_EDITOR
-            if (!Application.isPlaying)
-            {
-                DestroyImmediate(target);
-                return;
-            }
-#endif
-            Destroy(target);
+            SceneTeardown.Destroy(_floor);
+            SceneTeardown.Destroy(_walls);
         }
 
         private void OnDestroy()

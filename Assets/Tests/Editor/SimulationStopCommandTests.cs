@@ -2,14 +2,12 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using NUnit.Framework;
 using RobotSNAP.Agents;
 using RobotSNAP.Core;
 using RobotSNAP.Core.Scenario;
 using RobotSNAP.ROS;
 using UnityEngine;
-using UnityEngine.TestTools;
 
 namespace RobotSNAP.Tests.Editor
 {
@@ -125,18 +123,20 @@ namespace RobotSNAP.Tests.Editor
             PlantRosterRobots(roster, first, second);
             Assert.That(roster.Count, Is.EqualTo(2), "the environment carries two robots to begin with");
 
-            // Edit mode has no frame in which a deferred Destroy can run, so the engine logs that it cannot
-            // carry the destruction out - one message per robot. What this case measures is that the stop lets
-            // go of *every* robot, i.e. the roster's own count, which is the state the survivor bug lived in.
-            LogAssert.Expect(LogType.Error, new Regex("Destroy may not be called from edit mode"));
-            LogAssert.Expect(LogType.Error, new Regex("Destroy may not be called from edit mode"));
-
             CommandResult result = _router.Execute("{\"command\":\"stop_simulation\"}");
 
             Assert.That(result.Ok, Is.True);
             Assert.That(roster.Count, Is.EqualTo(0),
                 "every robot is let go, not only the first one a single search happened to find");
             Assert.That(roster.Primary, Is.Null, "no robot is left as the one a client would reach");
+
+            // The bodies go with the slots. This is the mode where that used to fail: the tear-down called
+            // the deferred Destroy, which acts only in play mode, so it logged that it could not carry the
+            // destruction out and left both robots standing while the roster forgot them. The immediate form
+            // is used here, and the two assertions below are what a return to the deferred call would break -
+            // an unexpected error log would fail the case on its own.
+            Assert.That(firstHost == null, Is.True, "the body of the first robot is gone, not merely forgotten");
+            Assert.That(secondHost == null, Is.True, "and the second one went with it");
         }
 
         [Test]

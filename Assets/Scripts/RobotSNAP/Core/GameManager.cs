@@ -201,7 +201,7 @@ namespace RobotSNAP.Core
         /// <c>GetComponentInChildren&lt;Robot&gt;()</c> n'en renvoyait qu'un, ce qui laissait les autres debout
         /// après un arrêt. Le roster est vidé en même temps que les corps, sinon une ré-application dans la même
         /// frame - un stop suivi d'un start depuis Python - réutiliserait un robot déjà détruit par
-        /// <see cref="UnityEngine.Object.Destroy"/>, qui n'agit qu'en fin de frame.
+        /// <see cref="SceneTeardown.Destroy"/>, qui diffère la destruction à la fin de la frame en mode Play.
         /// </summary>
         public void ClearAgents()
         {
@@ -227,7 +227,7 @@ namespace RobotSNAP.Core
                 for (int index = 0; index < robots.Length; index++)
                 {
                     if (robots[index] != null)
-                        Destroy(robots[index].gameObject);
+                        SceneTeardown.Destroy(robots[index].gameObject);
                 }
 
                 if (robots.Length > 0)

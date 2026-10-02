@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using RobotSNAP.Core;
 using RobotSNAP.Core.Scenario;
 
 namespace RobotSNAP.Agents
@@ -248,7 +249,7 @@ namespace RobotSNAP.Agents
             foreach (Slot stale in _slots)
             {
                 if (stale.Robot != null)
-                    Destroy(stale.Robot.gameObject);
+                    SceneTeardown.Destroy(stale.Robot.gameObject);
             }
 
             _slots.Clear();
@@ -269,7 +270,7 @@ namespace RobotSNAP.Agents
             foreach (Slot slot in _slots)
             {
                 if (slot.Robot != null)
-                    Destroy(slot.Robot.gameObject);
+                    SceneTeardown.Destroy(slot.Robot.gameObject);
             }
 
             _slots.Clear();
@@ -320,7 +321,7 @@ namespace RobotSNAP.Agents
             if (robot == null)
             {
                 Debug.LogError($"[RobotRoster] The body of '{profile.Id}' carries no Robot component.");
-                Destroy(instance);
+                SceneTeardown.Destroy(instance);
                 return null;
             }
 

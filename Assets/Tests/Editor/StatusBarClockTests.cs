@@ -1,5 +1,8 @@
+using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 using RobotSNAP.Core;
+using RobotSNAP.Core.Scenario;
 using UnityEngine;
 
 namespace RobotSNAP.Tests.Editor
@@ -15,8 +18,12 @@ namespace RobotSNAP.Tests.Editor
     /// </summary>
     public sealed class StatusBarClockTests
     {
+        private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
+
         private GameObject _clockHost;
         private Clock _clock;
+        private readonly List<GameObject> _created = new List<GameObject>();
+        private System.Action<StartSimulationCommand> _startHandler;
 
         [SetUp]
         public void SetUp()
@@ -28,8 +35,23 @@ namespace RobotSNAP.Tests.Editor
         [TearDown]
         public void TearDown()
         {
+            if (_startHandler != null)
+            {
+                // The bus outlives the fixture, so the handler is removed rather than left for another test.
+                EventBus.Instance.Unsubscribe(_startHandler);
+                _startHandler = null;
+            }
+
             if (_clockHost != null)
                 Object.DestroyImmediate(_clockHost);
+
+            foreach (GameObject created in _created)
+            {
+                if (created != null)
+                    Object.DestroyImmediate(created);
+            }
+
+            _created.Clear();
         }
 
         [Test]
@@ -57,6 +79,89 @@ namespace RobotSNAP.Tests.Editor
 
             Assert.That(_clock.ElapsedSeconds, Is.EqualTo(0.0).Within(1e-9));
             Assert.That(AppStatusBar.DisplayedSeconds(_clock, 999.0), Is.EqualTo(0.0).Within(1e-9));
+        }
+
+        [Test]
+        public void AScenarioResetPutsTheDisplayedTimeBackToZero()
+        {
+            // The rule above, walked through the path the application actually takes: the scenario manager's
+            // reset re-applies the scenario and writes the clock itself, so a caller - the reset command of the
+            // bridge, a button, anything else - cannot leave the episode's origin behind at the session total.
+            _clock.Initialize();
+            _clock.AdvanceSimulated(37.5);
+            Assert.That(
+                AppStatusBar.DisplayedSeconds(Clock.Instance, 999.0),
+                Is.EqualTo(37.5).Within(1e-9),
+                "the bar is showing the session's total before the reset");
+
+            ScenarioManager manager = NewManager();
+            SetField(manager, "_currentScenarioData",
+                new ScenarioData { Info = new ScenarioInfo { Name = "reset_under_test" } });
+            SetField(manager, "_gameManagers", new List<GameManager>());
+
+            manager.ResetAndReapply();
+
+            Assert.That(_clock.ElapsedSeconds, Is.EqualTo(0.0).Within(1e-9),
+                "the reset puts the session's clock back to the start of the episode");
+            Assert.That(
+                AppStatusBar.DisplayedSeconds(Clock.Instance, 999.0),
+                Is.EqualTo(0.0).Within(1e-9),
+                "so the bar reads 00:00 rather than the total of the session");
+        }
+
+        [Test]
+        public void RestartingAStoppedScenarioPutsTheDisplayedTimeBackToZero()
+        {
+            // The other way into an episode: a stop leaves the scenario loaded but cleared, and pressing start
+            // again re-applies it. That restart is what a run of the same scenario after a stop is, so it puts
+            // the clock back too - without it, the bar of the second run carries on from the first one's total.
+            ScenarioManager manager = NewManager();
+            SetField(manager, "_currentScenarioData",
+                new ScenarioData { Info = new ScenarioInfo { Name = "restart_under_test" } });
+            SetField(manager, "_gameManagers", new List<GameManager>());
+            SetField(manager, "_scenarioApplied", false);
+            WireStartHandler(manager);
+
+            _clock.Initialize();
+            _clock.AdvanceSimulated(21.0);
+            Assert.That(_clock.ElapsedSeconds, Is.EqualTo(21.0).Within(1e-9));
+
+            EventBus.Instance.Publish(new StartSimulationCommand());
+
+            Assert.That(_clock.ElapsedSeconds, Is.EqualTo(0.0).Within(1e-9),
+                "a start after a stop begins an episode, and an episode begins at zero");
+        }
+
+        /// <summary>
+        /// A scenario manager on its own, holding no environment: the reset reaches the clock without needing a
+        /// map, a prefab or a crowd, which is what lets this case run in edit mode.
+        /// </summary>
+        private ScenarioManager NewManager()
+        {
+            var host = new GameObject("status_bar_reset_manager_under_test");
+            _created.Add(host);
+            return host.AddComponent<ScenarioManager>();
+        }
+
+        /// <summary>
+        /// Subscribes the manager's own start handler to the bus, which is what its Start does for a session
+        /// running in play mode: a component added in edit mode never gets that call.
+        /// </summary>
+        private void WireStartHandler(ScenarioManager manager)
+        {
+            MethodInfo onStart = typeof(ScenarioManager).GetMethod("OnStartCommand", Private);
+            Assert.That(onStart, Is.Not.Null, "the manager still carries the handler the start event reaches");
+
+            _startHandler = (System.Action<StartSimulationCommand>)System.Delegate.CreateDelegate(
+                typeof(System.Action<StartSimulationCommand>), manager, onStart);
+            EventBus.Instance.Subscribe(_startHandler);
+        }
+
+        private static void SetField(object target, string name, object value)
+        {
+            FieldInfo field = target.GetType().GetField(name, Private);
+            Assert.That(field, Is.Not.Null, $"the test plants '{name}' through reflection");
+            field.SetValue(target, value);
         }
 
         [Test]

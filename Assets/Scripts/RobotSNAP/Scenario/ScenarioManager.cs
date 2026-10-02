@@ -207,7 +207,9 @@ namespace RobotSNAP.Core.Scenario
         {
             if (_logEvents) Debug.Log("[ScenarioManager] Applying scenario and resuming...");
 
-            yield return StartCoroutine(ApplyScenarioToAllCoroutine());
+            // Relancer un scénario déjà chargé (Stop puis Start) commence un épisode : l'horloge repart de
+            // zéro avec lui, comme au chargement d'un scénario.
+            yield return StartCoroutine(ApplyScenarioToAllCoroutine(resetClock: true));
             _scenarioApplied = true;
 
             _isClockStarted = true;
@@ -412,7 +414,10 @@ namespace RobotSNAP.Core.Scenario
             return gm;
         }
 
-        private IEnumerator ApplyScenarioToAllCoroutine()
+        /// <param name="resetClock">Si true, l'horloge de session repart de zéro une fois le monde en place.
+        /// C'est ce que font une réinitialisation et une relance : le temps de la barre du bas est celui de
+        /// l'épisode, pas celui de la session, donc son origine est le monde qu'il chronomètre.</param>
+        private IEnumerator ApplyScenarioToAllCoroutine(bool resetClock = false)
         {
             if (_currentScenarioData == null) yield break;
 
@@ -425,6 +430,12 @@ namespace RobotSNAP.Core.Scenario
                 applier.SetLoader(_scenarioLoader);
                 yield return StartCoroutine(applier.ApplyScenario(gm, _currentScenarioData));
             }
+
+            // Remis à zéro avant l'annonce, pas après : ce qui écoute cet événement - la barre du bas, le
+            // publieur d'état et le handshake /reset_done qu'il envoie - lit alors le premier instant de
+            // l'épisode et non le dernier de celui qui vient de finir.
+            if (resetClock)
+                Clock.Instance?.ResetTime();
 
             OnScenarioApplied?.Invoke(_currentScenarioData);
 
@@ -552,7 +563,8 @@ namespace RobotSNAP.Core.Scenario
         /// Applique le scénario courant à tous les environnements existants (sans recréer les envs).
         /// Utile pour un rechargement à chaud.
         /// </summary>
-        public void ApplyCurrentScenarioToAll()
+        /// <param name="resetClock">Si true, l'horloge de session repart de zéro avec le scénario réappliqué.</param>
+        public void ApplyCurrentScenarioToAll(bool resetClock = false)
         {
             if (_currentScenarioData == null)
             {
@@ -560,17 +572,21 @@ namespace RobotSNAP.Core.Scenario
                 return;
             }
             CancelLoad();
-            _loadCoroutine = StartCoroutine(ApplyScenarioToAllCoroutine());
+            _loadCoroutine = StartCoroutine(ApplyScenarioToAllCoroutine(resetClock));
         }
 
         /// <summary>
         /// Réinitialise les agents dans tous les environnements et réapplique le scénario.
+        ///
+        /// L'horloge de session repart de zéro avec eux : une réinitialisation ouvre un épisode, et le temps
+        /// affiché en bas est celui de l'épisode, pas le total de la session. La remise à zéro appartient donc
+        /// à ce chemin, et non à l'appelant qui l'a demandé.
         /// </summary>
         public void ResetAndReapply()
         {
             foreach (var gm in _gameManagers)
                 gm?.EditorReset();   // reset des positions des agents
-            ApplyCurrentScenarioToAll();
+            ApplyCurrentScenarioToAll(resetClock: true);
         }
 
         /// <summary>

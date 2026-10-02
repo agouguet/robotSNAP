@@ -260,17 +260,15 @@ namespace RobotSNAP.ROS
 
         /// <summary>
         /// Back to the start of a scenario: the agents of the scenario in the scene are reset and re-applied,
-        /// and the clock is put back to the initial state of the session. The optional "scenario" key loads
-        /// another scenario instead, with the clock started and the scenario applied; the optional "seed" key
-        /// is written before the scenario is applied, which is the moment the seed is read.
+        /// which puts the clock back to the start of the new run once the world is in place. The optional
+        /// "scenario" key loads another scenario instead, with the clock started and the scenario applied; the
+        /// optional "seed" key is written before the scenario is applied, which is the moment the seed is read.
         /// </summary>
         private static CommandResult Reset(JObject body, string command)
         {
             ScenarioManager manager = ResolveScenarioManager();
             if (manager == null)
                 return new CommandResult(false, command, "no scenario manager in the scene");
-
-            Clock clock = ResolveClock();
 
             if (HasValue(body, "scenario"))
             {
@@ -298,9 +296,10 @@ namespace RobotSNAP.ROS
             if (!TryApplySeed(body, command, out CommandResult inPlaceSeedFailure))
                 return inPlaceSeedFailure;
 
+            // The clock is reset by the manager itself, once the re-applied world is in place; resetting it
+            // here as well would put it back twice for one command, which is two episode boundaries for a
+            // single reset.
             manager.ResetAndReapply();
-            if (clock != null)
-                clock.ResetTime();
 
             string current = manager.CurrentScenarioId;
             return new CommandResult(true, command, string.IsNullOrEmpty(current)

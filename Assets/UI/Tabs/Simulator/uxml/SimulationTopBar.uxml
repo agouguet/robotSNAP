@@ -6,7 +6,7 @@
         </ui:VisualElement>
         <ui:VisualElement style="flex-direction: row; align-items: center;">
             <ui:Button name="LoadScenarioButton" class="action-button">
-                <ui:VisualElement class="button-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/folder.png?fileID=2800000&amp;guid=e5af9e7dfb7d9e0e68161298d5377cb7&amp;type=3#folder&quot;);"/>
+                <ui:VisualElement class="button-icon" style="background-image: url(&quot;project://database/Assets/Resources/Icons/folder.png?fileID=2800000&amp;guid=e5af9e7dfb7d9e0e68161298d5377cb7&amp;type=3#folder&quot;);"/>
                 <ui:Label text="Load scenario" class="button-label"/>
             </ui:Button>
             <ui:Button name="StartStopButton" class="action-button start-stop-button">
@@ -14,7 +14,7 @@
                 <ui:Label name="StartStopLabel" text="Start" class="button-label"/>
             </ui:Button>
             <ui:Button name="PauseResumeButton" class="action-button">
-                <ui:VisualElement name="PauseResumeIcon" class="button-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/pause.png?fileID=2800000&amp;guid=6c722e01cbb6bb3b585de31b4bd00cda&amp;type=3#pause&quot;);"/>
+                <ui:VisualElement name="PauseResumeIcon" class="button-icon" style="background-image: url(&quot;project://database/Assets/Resources/Icons/pause.png?fileID=2800000&amp;guid=6c722e01cbb6bb3b585de31b4bd00cda&amp;type=3#pause&quot;);"/>
                 <ui:Label name="PauseResumeLabel" text="Pause" class="button-label"/>
             </ui:Button>
             <!-- The speed of the session, next to the transport controls it belongs with. The presets are

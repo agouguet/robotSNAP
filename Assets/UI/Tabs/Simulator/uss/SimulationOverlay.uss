@@ -459,24 +459,6 @@
     margin-right: 8px;
 }
 
-.agent-row-action {
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    border-width: 0;
-    border-radius: 6px;
-    background-color: rgba(0, 0, 0, 0);
-    color: var(--text-secondary);
-    font-size: 13px;
-    -unity-text-align: middle-center;
-}
-
-.agent-row-action:hover {
-    background-color: var(--accent-glow);
-    color: var(--accent);
-}
-
-
 /* ================================================================
    VISUALIZATION PANEL
    The debug switches of the shot: a floating panel of the top right

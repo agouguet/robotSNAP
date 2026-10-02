@@ -686,15 +686,7 @@
    METRICS DASHBOARD
    ================================================================ */
 
-.analysis-dashboard {
-    flex-direction: column;
-}
-
 /* Session overview: the headline numbers, one tile each. */
-.analysis-tiles {
-    flex-direction: row;
-    flex-wrap: wrap;
-}
 
 .analysis-tile {
     flex-direction: column;
@@ -721,9 +713,6 @@
 }
 
 /* Outcome mix: a count and a proportional bar per outcome. */
-.analysis-distribution {
-    flex-direction: column;
-}
 
 .analysis-distribution-row {
     flex-direction: row;

@@ -173,19 +173,6 @@
     color: var(--text-primary);
 }
 
-/* Opens upwards from the bar, so it sits above the bottom edge of the window. */
-.app-menu {
-    position: absolute;
-    bottom: 30px;
-    right: 12px;
-    padding: 6px;
-    min-width: 180px;
-    background-color: var(--dropdown-bg);
-    border-width: 1px;
-    border-color: var(--border-color);
-    border-radius: 10px;
-}
-
 .is-hidden {
     display: none;
 }
@@ -232,11 +219,6 @@
     font-size: 14px;
 }
 
-.button-accent {
-    background-color: var(--accent);
-    color: rgb(255, 255, 255);
-}
-
 .top-bar {
     padding: 12px 16px;
 }
@@ -263,21 +245,6 @@
     flex-direction: column;
 }
 
-.panel-title {
-    font-size: 12px;
-    color: var(--accent-soft);
-    margin-bottom: 8px;
-}
-
-.logs-scroll {
-    max-height: 200px;
-}
-
-.log-entry {
-    font-size: 10px;
-    padding: 2px 4px;
-}
-
 #LogsPanel .unity-list-view__item {
     font-size: 10px;
     padding: 2px 6px;
@@ -291,21 +258,6 @@
 
 .viz-toggle {
     margin: 2px 0;
-}
-
-.robot-panel {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.robot-info {
-    flex-grow: 1;
-}
-
-.robot-progress {
-    margin-top: 6px;
-    width: 150px;
 }
 
 .tab-pane {

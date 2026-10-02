@@ -1,6 +1,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <ui:Template name="Sidebar" src="project://database/Assets/UI/Sidebar.uxml?fileID=9197481963319205126&amp;guid=c13731eb285ae0729a9f9a6f6118ce39&amp;type=3#Sidebar"/>
-    <ui:Template name="SimulationTab" src="project://database/Assets/UI/Tabs/Simulator/Simulator.uxml?fileID=9197481963319205126&amp;guid=cbda52829e825662596fd6c254609f8a&amp;type=3#Simulator"/>
+    <ui:Template name="SimulationTab" src="project://database/Assets/UI/Tabs/Simulator/uxml/Simulator.uxml?fileID=9197481963319205126&amp;guid=cbda52829e825662596fd6c254609f8a&amp;type=3#Simulator"/>
     <Style src="project://database/Assets/UI/MainWindow.uss?fileID=7433441132597879392&amp;guid=a8f8b32c4d27d9bedaf2031c6a9bf7d5&amp;type=3#MainWindow"/>
     <Style src="project://database/Assets/UI/ConfirmationDialog.uss?fileID=7433441132597879392&amp;guid=010bb023570045b791be4fb99ca50288&amp;type=3#ConfirmationDialog"/>
     <ui:VisualElement name="MainContainer" class="main-container">

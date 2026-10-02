@@ -32,7 +32,6 @@
     display: none;
 }
 
-
 /* ================================================================
    HEADER
    ================================================================ */
@@ -51,13 +50,11 @@
     flex-shrink: 0;
 }
 
-
 .creation-header-left {
     flex-direction: row;
     align-items: center;
     flex-grow: 1;
 }
-
 
 .creation-back-button {
     width: 32px;
@@ -78,60 +75,10 @@
     -unity-text-align: middle-center;
 }
 
-
 .creation-back-button:hover {
     color: var(--text-primary);
     background-color: var(--button-hover);
 }
-
-
-.creation-title-container {
-    flex-direction: column;
-}
-
-
-.creation-title {
-    color: var(--text-primary);
-
-    font-size: 22px;
-    -unity-font-style: bold;
-
-    margin-bottom: 4px;
-}
-
-
-.creation-subtitle {
-    color: var(--text-secondary);
-
-    font-size: 13px;
-}
-
-
-.creation-header-actions {
-    flex-direction: row;
-    align-items: center;
-
-    flex-shrink: 0;
-}
-
-
-.creation-draft-button {
-    height: 40px;
-
-    margin-right: 12px;
-
-    padding-left: 18px;
-    padding-right: 18px;
-}
-
-
-.creation-next-button {
-    height: 40px;
-
-    padding-left: 20px;
-    padding-right: 20px;
-}
-
 
 /* ================================================================
    STEPPER
@@ -149,14 +96,12 @@
     flex-shrink: 0;
 }
 
-
 .creation-step {
     flex-direction: row;
     align-items: center;
 
     flex-shrink: 0;
 }
-
 
 .step-number {
     width: 28px;
@@ -173,7 +118,6 @@
     justify-content: center;
 }
 
-
 .step-number Label {
     width: 100%;
     height: 100%;
@@ -188,7 +132,6 @@
     -unity-text-align: middle-center;
 }
 
-
 .step-label {
     margin-left: 8px;
 
@@ -197,18 +140,15 @@
     font-size: 13px;
 }
 
-
 .creation-step.active .step-number {
     background-color: var(--accent);
 
     border-color: var(--accent);
 }
 
-
 .creation-step.active .step-number Label {
     color: white;
 }
-
 
 .creation-step.active .step-label {
     color: var(--text-primary);
@@ -224,7 +164,6 @@
     color: var(--accent);
 }
 
-
 .step-line {
     height: 1px;
 
@@ -237,7 +176,6 @@
 
     background-color: var(--border-color);
 }
-
 
 /* ================================================================
    MAIN BODY
@@ -256,7 +194,6 @@
     overflow: hidden;
 }
 
-
 /* ================================================================
    COMMON PANEL
    ================================================================ */
@@ -274,7 +211,6 @@
     flex-shrink: 0;
 }
 
-
 .creation-panel-title {
     color: var(--text-primary);
 
@@ -285,7 +221,6 @@
 
     flex-shrink: 0;
 }
-
 
 /* ================================================================
    LEFT COLUMN
@@ -302,7 +237,6 @@
     overflow: hidden;
 }
 
-
 /* The title stays where it is and the fields travel under it: the tags and the cover image were below the
    fold of this column, and nothing could bring them into view. */
 .general-information-panel > .creation-panel-title {
@@ -312,7 +246,6 @@
 
     margin-bottom: 12px;
 }
-
 
 .creation-panel-scroll {
     flex-grow: 1;
@@ -324,11 +257,9 @@
     padding-bottom: 16px;
 }
 
-
 .creation-panel-scroll .creation-field {
     flex-shrink: 0;
 }
-
 
 /* The fields are taller than this column whatever the window height, and a content container that is
    allowed to shrink collapses onto the viewport instead of scrolling: the fields then overflow it and
@@ -337,11 +268,9 @@
     flex-shrink: 0;
 }
 
-
 .creation-panel-scroll .unity-scroll-view__content-viewport {
     padding-right: 0;
 }
-
 
 /* ================================================================
    FORM FIELDS
@@ -353,7 +282,6 @@
     margin-bottom: 10px;
 }
 
-
 .creation-field-label {
     color: var(--text-primary);
 
@@ -361,7 +289,6 @@
 
     margin-bottom: 6px;
 }
-
 
 .creation-text-field,
 .creation-dropdown {
@@ -397,12 +324,10 @@
     -unity-text-overflow-position: end;
 }
 
-
 .creation-text-field:focus,
 .creation-dropdown:focus {
     border-color: var(--accent);
 }
-
 
 /* Unity TextField internal input */
 
@@ -418,7 +343,6 @@
     padding-left: 8px;
     padding-right: 8px;
 }
-
 
 .creation-textarea {
     min-height: 66px;
@@ -436,7 +360,6 @@
     font-size: 12px;
 }
 
-
 .creation-textarea .unity-text-field__input {
     background-color: transparent;
 
@@ -449,7 +372,6 @@
     padding: 8px;
 }
 
-
 .field-counter {
     align-self: flex-end;
 
@@ -459,7 +381,6 @@
 
     font-size: 11px;
 }
-
 
 /* ================================================================
    TAGS
@@ -472,12 +393,10 @@
     margin-top: 6px;
 }
 
-
 .selected-tags > * {
     margin-right: 4px;
     margin-bottom: 4px;
 }
-
 
 /* ================================================================
    UPLOAD IMAGE
@@ -490,7 +409,6 @@
 
     margin-bottom: 0;
 }
-
 
 .cover-image-drop-zone {
     flex-grow: 1;
@@ -508,7 +426,6 @@
     background-color: rgba(255, 255, 255, 0.01);
 }
 
-
 .cover-image-drop-zone:hover {
     border-color: var(--accent);
 
@@ -522,7 +439,6 @@
 
     margin-bottom: 12px;
 }
-
 
 .map-image-drop-zone {
     flex-grow: 1;
@@ -540,29 +456,17 @@
     background-color: rgba(255, 255, 255, 0.01);
 }
 
-
 .map-image-drop-zone:hover {
     border-color: var(--accent);
 
     background-color: rgba(0, 110, 255, 0.04);
 }
 
-
 .upload-title {
     color: var(--text-secondary);
 
     font-size: 12px;
 }
-
-
-.upload-link {
-    color: var(--accent);
-
-    font-size: 12px;
-
-    margin-top: 2px;
-}
-
 
 .upload-hint {
     color: var(--text-secondary);
@@ -571,7 +475,6 @@
 
     margin-top: 7px;
 }
-
 
 /* ================================================================
    CENTER COLUMN
@@ -588,7 +491,6 @@
     flex-direction: column;
 }
 
-
 /* ================================================================
    ENVIRONMENT PANEL
    ================================================================ */
@@ -603,106 +505,12 @@
     overflow: hidden;
 }
 
-
 .environment-preview-panel > .creation-panel-title {
     padding-left: 16px;
     padding-top: 14px;
 
     margin-bottom: 10px;
 }
-
-
-/* ================================================================
-   ENVIRONMENT TOOLBAR
-   ================================================================ */
-
-.environment-toolbar {
-    height: 42px;
-
-    flex-direction: row;
-
-    justify-content: space-between;
-    align-items: center;
-
-    padding-left: 10px;
-    padding-right: 10px;
-
-    border-top-width: 1px;
-    border-bottom-width: 1px;
-
-
-    border-top-color: var(--border-color);
-    border-bottom-color: var(--border-color);
-
-    background-color: var(--bg-primary);
-}
-
-
-.environment-tools {
-    flex-direction: row;
-    align-items: center;
-}
-
-
-.environment-tool {
-    width: 30px;
-    height: 30px;
-
-    margin-right: 3px;
-
-    padding: 0;
-
-    background-color: transparent;
-
-    border-width: 0;
-
-    border-radius: 5px;
-
-    color: var(--text-secondary);
-
-    font-size: 15px;
-
-    -unity-text-align: middle-center;
-}
-
-
-.environment-tool:hover {
-    color: var(--text-primary);
-
-    background-color: var(--button-hover);
-}
-
-
-.environment-tool.selected {
-    color: white;
-
-    background-color: var(--accent);
-}
-
-
-.toolbar-separator {
-    width: 1px;
-    height: 20px;
-
-    margin-left: 5px;
-    margin-right: 5px;
-
-    background-color: var(--border-color);
-}
-
-
-.environment-view-mode {
-    flex-direction: row;
-    align-items: center;
-
-    border-width: 1px;
-    border-color: var(--border-color);
-
-    border-radius: 5px;
-
-    overflow: hidden;
-}
-
 
 /* ================================================================
    ENVIRONMENT CANVAS
@@ -720,7 +528,6 @@
     overflow: hidden;
 }
 
-
 .environment-image {
     position: absolute;
 
@@ -734,32 +541,6 @@
 
     -unity-background-scale-mode: scale-and-crop;
 }
-
-
-.environment-overlay {
-    position: absolute;
-
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
-}
-
-
-.robot-marker {
-    position: absolute;
-
-    width: 18px;
-    height: 18px;
-
-    border-radius: 9px;
-
-    background-color: rgb(55, 220, 125);
-
-    border-width: 2px;
-    border-color: rgb(10, 30, 20);
-}
-
 
 /* ================================================================
    ENVIRONMENT FOOTER
@@ -782,13 +563,11 @@
     background-color: var(--bg-secondary);
 }
 
-
 .environment-metadata {
     flex-direction: row;
 
     align-items: center;
 }
-
 
 .environment-metadata-item {
     min-width: 110px;
@@ -798,7 +577,6 @@
     flex-direction: column;
 }
 
-
 .metadata-label {
     color: var(--text-secondary);
 
@@ -806,7 +584,6 @@
 
     margin-bottom: 4px;
 }
-
 
 .metadata-value {
     color: var(--text-primary);
@@ -829,7 +606,6 @@
     overflow: hidden;
 }
 
-
 /* ================================================================
    SUMMARY PANELS
    ================================================================ */
@@ -840,11 +616,9 @@
     margin-bottom: 12px;
 }
 
-
 .summary-panel .creation-panel-title {
     margin-bottom: 10px;
 }
-
 
 .summary-row {
     min-height: 30px;
@@ -858,18 +632,15 @@
     border-bottom-color: rgba(255, 255, 255, 0.05);
 }
 
-
 .summary-row.last {
     border-bottom-width: 0;
 }
-
 
 .summary-label {
     color: var(--text-secondary);
 
     font-size: 13px;
 }
-
 
 .summary-value {
     color: var(--text-primary);
@@ -879,32 +650,9 @@
     -unity-text-align: middle-right;
 }
 
-
 /* ================================================================
    AGENT SUMMARY
    ================================================================ */
-
-.summary-panel-header {
-    flex-direction: row;
-
-    justify-content: flex-start;
-    align-items: center;
-}
-
-
-.summary-panel-header .creation-panel-title {
-    margin-bottom: 10px;
-}
-
-
-.info-icon {
-    color: var(--text-secondary);
-
-    font-size: 10px;
-
-    margin-left: 6px;
-}
-
 
 .agent-summary-row {
     min-height: 32px;
@@ -917,7 +665,6 @@
     border-bottom-color: rgba(255, 255, 255, 0.05);
 }
 
-
 .agent-summary-name {
     flex-direction: row;
 
@@ -925,7 +672,6 @@
 
     flex-grow: 1;
 }
-
 
 .agent-status-dot {
     width: 9px;
@@ -936,34 +682,19 @@
     margin-right: 8px;
 }
 
-
 .robot-dot {
     background-color: rgb(80, 220, 125);
 }
 
-
 .pedestrian-dot {
     background-color: rgb(55, 145, 240);
 }
-
 
 .agent-summary-row .summary-value {
     width: 28px;
 
     margin-right: 12px;
 }
-
-
-.summary-action {
-    width: 52px;
-
-    color: var(--accent);
-
-    font-size: 11px;
-
-    -unity-text-align: middle-right;
-}
-
 
 .summary-total-row {
     flex-direction: row;
@@ -974,50 +705,9 @@
     margin-top: 8px;
 }
 
-
 /* ================================================================
    OBJECTIVES
    ================================================================ */
-
-.objective-summary-row {
-    min-height: 34px;
-
-    flex-direction: row;
-
-    align-items: center;
-}
-
-
-.objective-name {
-    flex-grow: 1;
-
-    flex-direction: row;
-
-    align-items: center;
-}
-
-
-.objective-dot {
-    width: 9px;
-    height: 9px;
-
-    border-radius: 5px;
-
-    margin-right: 8px;
-}
-
-
-.interest-objective-dot {
-    background-color: rgb(145, 80, 220);
-}
-
-
-.objective-summary-row .summary-value {
-    width: 25px;
-
-    margin-right: 12px;
-}
-
 
 /* ================================================================
    FOOTER
@@ -1039,13 +729,11 @@
     flex-shrink: 0;
 }
 
-
 .creation-cancel-button {
     min-width: 120px;
 
     height: 38px;
 }
-
 
 .creation-save-button {
     min-width: 120px;
@@ -1057,21 +745,10 @@
     flex-grow: 1;
 }
 
-.drop-zone-dropdown {
-    width: 90%;
-    max-width: 250px;
-    margin-top: 8px;
-}
-
-.drop-zone-dropdown > .unity-base-field__input {
-    background-color: var(--bg-primary);
-}
-
 .tag-entry-row,
 .creation-footer-actions,
 .coordinate-row,
 .config-panel-heading,
-.point-card-header,
 .validation-heading,
 .review-grid {
     flex-direction: row;
@@ -1146,17 +823,6 @@
     -unity-text-align: middle-right;
 }
 
-.human-config-panel {
-    margin-right: 0;
-}
-
-.route-config-panel {
-    flex-grow: 1;
-    min-width: 360px;
-    margin-right: 14px;
-    overflow: hidden;
-}
-
 .config-panel-heading {
     margin-bottom: 18px;
 }
@@ -1185,32 +851,13 @@
     white-space: normal;
 }
 
-.half-field,
-.coordinate-field {
+.half-field {
     flex-grow: 1;
     flex-basis: 0;
 }
 
 .field-row-right {
     margin-left: 8px;
-}
-
-.point-card-header {
-    margin-bottom: 12px;
-}
-
-.point-card-title {
-    color: var(--text-primary);
-    font-size: 12px;
-    -unity-font-style: bold;
-}
-
-.point-section-label {
-    margin-top: 4px;
-    margin-bottom: 7px;
-    color: var(--text-primary);
-    font-size: 10px;
-    -unity-font-style: bold;
 }
 
 .validation-layout {
@@ -1364,19 +1011,6 @@
 /* ================================================================
    OCCUPANCY GRID IMPORT
    ================================================================ */
-
-.upload-environment-button {
-    margin-top: 7px;
-    padding: 5px 10px;
-    background-color: transparent;
-    border-width: 0;
-    color: var(--accent);
-    font-size: 10px;
-}
-
-.upload-environment-button:hover {
-    background-color: rgba(0, 110, 255, 0.09);
-}
 
 .creation-modal-overlay {
     position: absolute;
@@ -1570,32 +1204,6 @@
     -unity-background-scale-mode: scale-to-fit;
 }
 
-.placement-marker {
-    position: absolute;
-    width: 22px;
-    height: 22px;
-    align-items: center;
-    justify-content: center;
-    border-width: 2px;
-    border-color: rgb(12, 20, 27);
-    border-radius: 11px;
-}
-
-.placement-marker Label {
-    color: white;
-    font-size: 9px;
-    -unity-font-style: bold;
-    -unity-text-align: middle-center;
-}
-
-.robot-start-map-marker {
-    background-color: rgb(55, 200, 115);
-}
-
-.robot-goal-map-marker {
-    background-color: rgb(235, 150, 40);
-}
-
 .map-legend {
     min-height: 38px;
     flex-direction: row;
@@ -1617,15 +1225,6 @@
     min-width: 256px;
     padding: 0;
     overflow: hidden;
-}
-
-.last-point-card {
-    margin-bottom: 0;
-}
-
-.yaw-field {
-    margin-top: 8px;
-    margin-bottom: 0;
 }
 
 /* ================================================================
@@ -2095,7 +1694,6 @@
     -unity-text-align: middle-center;
 }
 
-
 /* ================================================================
    ROUTE SELECTOR & MAP INTERACTION
    ================================================================ */
@@ -2286,7 +1884,6 @@
     font-size: 12px;
     color: var(--text-secondary);
 }
-
 
 /* ================================================================
    STEP 2 - COLLAPSIBLE ROUTE EDITOR SECTIONS

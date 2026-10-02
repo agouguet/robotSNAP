@@ -239,3 +239,107 @@
     background-color: var(--button-bg);
     color: var(--text-secondary-muted);
 }
+
+/* ---- saved configurations ------------------------------------- */
+
+/* The name and the button that writes it share one line, and the field takes whatever the button leaves. */
+.settings-profile-save-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.settings-profile-save-row > .settings-button {
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+/* The field keeps the size and the radius of the rows above it, and the placeholder says what belongs in
+   it, so it carries no label of its own. */
+.settings-text-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    height: 34px;
+    font-size: 13px;
+}
+
+.settings-text-field .unity-text-field__input {
+    background-color: var(--bg-primary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    padding: 4px 10px;
+}
+
+/* What the last attempt left behind: a save, a load, or the reason one of them did not happen. */
+.settings-profile-status {
+    font-size: 12px;
+    color: var(--text-secondary-muted);
+    white-space: normal;
+    margin-top: 8px;
+}
+
+.settings-profile-status.is-error {
+    color: rgb(200, 60, 70);
+}
+
+.settings-profile-empty {
+    font-size: 12px;
+    color: var(--text-secondary-muted);
+    margin-top: 8px;
+}
+
+.settings-profile-empty.is-hidden {
+    display: none;
+}
+
+.settings-profile-list {
+    flex-direction: column;
+    margin-top: 4px;
+}
+
+/* One saved configuration: its name, and the two things that can be done with it. */
+.settings-profile-row {
+    flex-direction: row;
+    align-items: center;
+    min-height: 32px;
+    padding-left: 10px;
+    padding-right: 2px;
+    border-radius: 6px;
+}
+
+.settings-profile-row:hover {
+    background-color: var(--button-bg);
+}
+
+.settings-profile-name {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    font-size: 13px;
+    color: var(--text-primary);
+    margin-right: 12px;
+}
+
+/* The verbs of a saved row are smaller than the page's own buttons: they belong to one line of a list
+   rather than to the decision the page is making. */
+.settings-button-small {
+    height: 26px;
+    padding-left: 12px;
+    padding-right: 12px;
+    font-size: 12px;
+    margin-left: 6px;
+}
+
+/* Removing a profile is the one verb here that cannot be taken back, and it reads in the same red the
+   confirmation in front of it uses. */
+.settings-button-danger {
+    color: rgb(200, 60, 70);
+    border-color: rgb(200, 60, 70);
+}
+
+.settings-button-danger:hover {
+    background-color: rgba(200, 60, 70, 0.12);
+}

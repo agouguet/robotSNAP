@@ -84,6 +84,17 @@
                     </ui:VisualElement>
                     <ui:Label name="SettingsApplyHint" text="" class="settings-apply-hint"/>
                 </ui:VisualElement>
+                <ui:VisualElement name="ConfigurationsSection" class="settings-section">
+                    <ui:Label text="Configurations" class="settings-section-title"/>
+                    <ui:Label text="Save the configuration the simulation runs under, and load one back." class="settings-section-hint"/>
+                    <ui:VisualElement class="settings-profile-save-row">
+                        <ui:TextField name="ProfileNameField" class="settings-text-field" max-length="64" placeholder="Configuration name" tooltip="Name a saved configuration is listed under."/>
+                        <ui:Button name="SaveProfileButton" text="Save" class="settings-button" tooltip="Write the configuration in force to the saved configurations."/>
+                    </ui:VisualElement>
+                    <ui:Label name="ProfileStatusLabel" text="" class="settings-profile-status"/>
+                    <ui:Label name="ProfileEmptyLabel" text="No saved configurations yet." class="settings-profile-empty"/>
+                    <ui:VisualElement name="ProfileListHost" class="settings-profile-list"/>
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:ScrollView>
     </ui:VisualElement>

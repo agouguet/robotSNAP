@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using RobotSNAP;
+using RobotSNAP.Core;
 using RobotSNAP.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -67,6 +69,15 @@ public class SettingsTabController : MonoBehaviour
     private Label _stateFrameRate;
     private Label _stateQuality;
 
+    private TextField _profileNameField;
+    private Button _saveProfileButton;
+    private Label _profileStatus;
+    private Label _profileEmpty;
+    private VisualElement _profileListHost;
+
+    /// <summary>The page itself, which is what a confirmation is shown over.</summary>
+    private VisualElement _page;
+
     /// <summary>The resolutions behind the dropdown, in the order the dropdown lists them.</summary>
     private readonly List<ResolutionChoice> _resolutions = new List<ResolutionChoice>();
 
@@ -105,6 +116,7 @@ public class SettingsTabController : MonoBehaviour
         // away mid-decision did not decide to abandon it. Only the live figures are refreshed.
         FillLiveLabels();
         UpdateApplyState();
+        RefreshProfileList();
     }
 
     private void TryInitialize()
@@ -117,8 +129,11 @@ public class SettingsTabController : MonoBehaviour
             return;
 
         VisualElement root = document.rootVisualElement;
-        if (root == null || root.Q<VisualElement>("SettingsPage") == null)
+        VisualElement page = root?.Q<VisualElement>("SettingsPage");
+        if (page == null)
             return; // The tab has not been shown yet, so its template is not in the tree.
+
+        _page = page;
 
         var missing = new List<string>();
         _windowModeDropdown = Require<DropdownField>(root, "WindowModeDropdown", missing);
@@ -136,6 +151,11 @@ public class SettingsTabController : MonoBehaviour
         _stateMode = Require<Label>(root, "StateModeLabel", missing);
         _stateFrameRate = Require<Label>(root, "StateFrameRateLabel", missing);
         _stateQuality = Require<Label>(root, "StateQualityLabel", missing);
+        _profileNameField = Require<TextField>(root, "ProfileNameField", missing);
+        _saveProfileButton = Require<Button>(root, "SaveProfileButton", missing);
+        _profileStatus = Require<Label>(root, "ProfileStatusLabel", missing);
+        _profileEmpty = Require<Label>(root, "ProfileEmptyLabel", missing);
+        _profileListHost = Require<VisualElement>(root, "ProfileListHost", missing);
         if (missing.Count > 0)
         {
             Debug.LogError($"[SettingsTabController] Missing UI elements: {string.Join(", ", missing)}");
@@ -158,6 +178,7 @@ public class SettingsTabController : MonoBehaviour
         AdoptCurrent();
         FillControls();
         UpdateApplyState();
+        RefreshProfileList();
     }
 
     private UIDocument ResolveDocument()
@@ -291,6 +312,8 @@ public class SettingsTabController : MonoBehaviour
         _vsyncToggle.RegisterValueChangedCallback(evt => OnVsyncChanged(evt.newValue));
         _applyButton.clicked += OnApplyClicked;
         _resetButton.clicked += OnResetClicked;
+        _saveProfileButton.clicked += OnSaveProfileClicked;
+        _profileNameField.RegisterCallback<KeyDownEvent>(OnProfileNameKeyDown);
     }
 
     /// <summary>Points the page at the display that is in force, as the starting point of a decision.</summary>
@@ -483,6 +506,205 @@ public class SettingsTabController : MonoBehaviour
         _pending = DisplaySettings.Shipped();
         FillControls();
         UpdateApplyState();
+    }
+
+    // -- saved configurations -----------------------------------------------------------------------
+
+    /// <summary>
+    /// The configurations that can be loaded, read through the boundary that owns those files and shown in
+    /// the order a reader looks for a name in. The list is rebuilt rather than patched because every action
+    /// of the card - save, load, delete - changes it, and it is short.
+    /// </summary>
+    private void RefreshProfileList()
+    {
+        if (!_initialized)
+            return;
+
+        var names = new List<string>(ConfigPersistence.GetAvailableNames());
+        names.Sort(StringComparer.OrdinalIgnoreCase);
+
+        _profileListHost.Clear();
+        foreach (string name in names)
+            _profileListHost.Add(BuildProfileRow(name));
+
+        _profileEmpty.EnableInClassList("is-hidden", names.Count > 0);
+    }
+
+    /// <summary>One saved configuration, with the two things that can be done with it.</summary>
+    private VisualElement BuildProfileRow(string name)
+    {
+        var row = new VisualElement();
+        row.AddToClassList("settings-profile-row");
+
+        var label = new Label(name);
+        label.AddToClassList("settings-profile-name");
+        row.Add(label);
+
+        var load = new Button(() => OnLoadProfileRequested(name)) { text = "Load" };
+        load.AddToClassList("settings-button");
+        load.AddToClassList("settings-button-small");
+        load.tooltip = $"Replace the configuration in force with '{name}'.";
+        row.Add(load);
+
+        var remove = new Button(() => OnDeleteProfileRequested(name)) { text = "Delete" };
+        remove.AddToClassList("settings-button");
+        remove.AddToClassList("settings-button-small");
+        remove.AddToClassList("settings-button-danger");
+        remove.tooltip = $"Remove '{name}' from the saved configurations.";
+        row.Add(remove);
+
+        return row;
+    }
+
+    /// <summary>A name typed and confirmed with the keyboard is a save, the way it is anywhere else.</summary>
+    private void OnProfileNameKeyDown(KeyDownEvent evt)
+    {
+        if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.KeypadEnter)
+            return;
+
+        evt.StopPropagation();
+        OnSaveProfileClicked();
+    }
+
+    /// <summary>
+    /// Writes the configuration in force under the typed name. The name is checked against the same list the
+    /// card shows, so a name that would collide with a saved profile, escape the folder, or that a file
+    /// system would refuse for its characters is answered here rather than by a failed write.
+    /// </summary>
+    private void OnSaveProfileClicked()
+    {
+        Supervisor supervisor = Supervisor.Instance;
+        if (supervisor == null || supervisor.ActiveConfig == null)
+        {
+            SetProfileStatus("The simulation configuration is not available.", error: true);
+            return;
+        }
+
+        ConfigNameProblem problem = ConfigPersistence.CheckName(
+            _profileNameField.value, ConfigPersistence.GetAvailableNames(), out string cleanName);
+        if (problem != ConfigNameProblem.None)
+        {
+            SetProfileStatus(DescribeNameProblem(problem, cleanName), error: true);
+            return;
+        }
+
+        ConfigPersistence.Save(supervisor.ActiveConfig, cleanName);
+        _profileNameField.SetValueWithoutNotify(string.Empty);
+        SetProfileStatus($"Saved '{cleanName}'.", error: false);
+        RefreshProfileList();
+    }
+
+    /// <summary>
+    /// Asks before replacing the configuration in force, because a session already running under one
+    /// configuration is not the same session under another. It is the modal the rest of the application puts
+    /// in front of its irreversible actions.
+    /// </summary>
+    private void OnLoadProfileRequested(string name)
+    {
+        ConfirmationDialog dialog = new ConfirmationDialog(
+            "Load this configuration?",
+            $"Loading '{name}' replaces the configuration the simulation is running under. The display "
+            + "settings on this page are not affected.",
+            "Load",
+            destructive: false);
+
+        dialog.Confirmed += () => LoadProfile(name);
+        dialog.Show(_page);
+    }
+
+    private void LoadProfile(string name)
+    {
+        if (!ConfigPersistence.TryLoad(name, out SimulationConfig loaded) || loaded == null)
+        {
+            SetProfileStatus($"Could not read '{name}'.", error: true);
+            return;
+        }
+
+        try
+        {
+            Supervisor supervisor = Supervisor.Instance;
+            if (supervisor == null)
+            {
+                SetProfileStatus("The simulation configuration is not available.", error: true);
+                return;
+            }
+
+            // What a load produces is a working copy: the supervisor takes its values, and the copy is
+            // released here rather than left behind as an asset nobody owns.
+            supervisor.UpdateConfig(loaded);
+            SetProfileStatus($"Loaded '{name}'.", error: false);
+        }
+        finally
+        {
+            Release(loaded);
+        }
+    }
+
+    /// <summary>
+    /// Asks before removing a saved configuration, the way the Analysis tab asks before it removes an
+    /// episode. A configuration that ships beside the application is not in the user's folder and is
+    /// reported as not removed.
+    /// </summary>
+    private void OnDeleteProfileRequested(string name)
+    {
+        ConfirmationDialog dialog = new ConfirmationDialog(
+            "Delete this configuration?",
+            $"This removes '{name}' from the saved configurations. It cannot be undone.",
+            "Delete");
+
+        dialog.Confirmed += () =>
+        {
+            bool removed = ConfigPersistence.Delete(name);
+            SetProfileStatus(
+                removed ? $"Deleted '{name}'." : $"Could not delete '{name}'.",
+                error: !removed);
+            RefreshProfileList();
+        };
+        dialog.Show(_page);
+    }
+
+    /// <summary>Writes what the last action of the card left behind, tinted when it is a failure.</summary>
+    private void SetProfileStatus(string message, bool error)
+    {
+        _profileStatus.text = message ?? string.Empty;
+        _profileStatus.EnableInClassList("is-error", error);
+    }
+
+    /// <summary>The reason a typed name cannot be used, in the words the card shows.</summary>
+    private static string DescribeNameProblem(ConfigNameProblem problem, string cleanName)
+    {
+        switch (problem)
+        {
+            case ConfigNameProblem.Empty:
+                return "Enter a name for the configuration.";
+            case ConfigNameProblem.TooLong:
+                return $"A name may not be longer than {ConfigPersistence.MaxNameLength} characters.";
+            case ConfigNameProblem.InvalidCharacter:
+                return "A name cannot contain \\ / : * ? \" < > | or a control character.";
+            case ConfigNameProblem.Reserved:
+                return "A name cannot be \".\" or \"..\".";
+            case ConfigNameProblem.Taken:
+                return $"A configuration named '{cleanName}' already exists. Delete it first, or pick "
+                       + "another name.";
+            default:
+                return string.Empty;
+        }
+    }
+
+    /// <summary>Releases the working copy a load produced, with the call each mode takes.</summary>
+    private static void Release(ScriptableObject instance)
+    {
+        if (instance == null)
+            return;
+
+#if UNITY_EDITOR
+        if (!Application.isPlaying)
+        {
+            DestroyImmediate(instance);
+            return;
+        }
+#endif
+        Destroy(instance);
     }
 
     // -- writing a value the way the page reads it -------------------------------------------------

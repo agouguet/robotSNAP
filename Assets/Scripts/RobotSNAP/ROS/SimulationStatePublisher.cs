@@ -231,7 +231,7 @@ namespace RobotSNAP.ROS
 
             // Timing is set here so a rate edited in the inspector is honoured on the next initialize, and
             // a rate of zero parks its stream instead of publishing it every frame.
-            _stateInterval = Interval(1f / Mathf.Max(0f, publishFrequencyHz));
+            _stateInterval = Interval(1f / Mathf.Max(0f, RobotSNAPTopics.ResolveFrequency(publishFrequencyHz)));
             _mapInterval = Mathf.Max(1f, mapIntervalSeconds);
             _nextStateTime = Time.fixedTime + _stateInterval;
 
@@ -281,9 +281,9 @@ namespace RobotSNAP.ROS
                 return;
 
             _prefix = prefix;
-            _mapTopicName = BuildTopic(prefix, mapTopic);
-            _resetDoneTopicName = BuildTopic(prefix, resetDoneTopic);
-            _stateTopicName = BuildTopic(prefix, stateTopic);
+            _mapTopicName = BuildTopic(prefix, RobotSNAPTopics.Resolve(RosTopicSlot.Map, mapTopic));
+            _resetDoneTopicName = BuildTopic(prefix, RobotSNAPTopics.Resolve(RosTopicSlot.ResetDone, resetDoneTopic));
+            _stateTopicName = BuildTopic(prefix, RobotSNAPTopics.Resolve(RosTopicSlot.SimulationState, stateTopic));
 
             RegisterTopic<NavMsgs.OccupancyGridMsg>(_mapTopicName);
             RegisterTopic<BoolMsg>(_resetDoneTopicName);

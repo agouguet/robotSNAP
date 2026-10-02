@@ -23,7 +23,7 @@ MonoBehaviour:
   _enableROS: 0
   _rosMasterURI: http://localhost:11311
   _rosPrefix: 
-  _rosPublishFrequency: 10
+  _rosPublishFrequency: 0
   _recordData: 0
   _outputDirectory: SimulationData
   _datasetPath: Dataset

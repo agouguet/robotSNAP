@@ -146,8 +146,8 @@ namespace RobotSNAP.ROS
                 return;
 
             _prefix = prefix;
-            _controlTopicName = BuildTopic(prefix, controlTopic);
-            _resultTopicName = BuildTopic(prefix, resultTopic);
+            _controlTopicName = BuildTopic(prefix, RobotSNAPTopics.Resolve(RosTopicSlot.SimulationControl, controlTopic));
+            _resultTopicName = BuildTopic(prefix, RobotSNAPTopics.Resolve(RosTopicSlot.SimulationControlResult, resultTopic));
 
             RegisterTopic<StringMsg>(_resultTopicName);
         }

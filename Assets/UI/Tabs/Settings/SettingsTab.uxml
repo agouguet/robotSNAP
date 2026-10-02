@@ -4,7 +4,7 @@
     <ui:VisualElement name="SettingsPage" class="settings-page">
         <ui:VisualElement class="settings-header">
             <ui:Label name="SettingsPageTitle" text="Settings" class="settings-page-title"/>
-            <ui:Label name="SettingsPageSubtitle" text="How the application runs: display, performance and quality." class="settings-page-subtitle"/>
+            <ui:Label name="SettingsPageSubtitle" text="How the application runs: display, simulation, ROS bridge and quality." class="settings-page-subtitle"/>
         </ui:VisualElement>
         <ui:ScrollView name="SettingsScroll" class="settings-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden">
             <ui:VisualElement name="SettingsContent" class="settings-content">
@@ -94,6 +94,24 @@
                     <ui:Label name="ProfileStatusLabel" text="" class="settings-profile-status"/>
                     <ui:Label name="ProfileEmptyLabel" text="No saved configurations yet." class="settings-profile-empty"/>
                     <ui:VisualElement name="ProfileListHost" class="settings-profile-list"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="SimulationSection" class="settings-section">
+                    <ui:Label text="Simulation" class="settings-section-title"/>
+                    <ui:Label text="How a session runs. A change here is written to the configuration in force - the running session while one is playing - and the Configurations card above keeps it under a name." class="settings-section-hint"/>
+                    <ui:VisualElement name="SimulationFieldsHost" class="settings-field-list"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="RosSection" class="settings-section">
+                    <ui:Label text="ROS bridge" class="settings-section-title"/>
+                    <ui:Label text="The streams a client on the other side of the socket reads and writes. A name is the interface: renaming one here means renaming it in the client too." class="settings-section-hint"/>
+                    <ui:VisualElement name="RosFieldsHost" class="settings-field-list"/>
+                    <ui:Label text="Topic names" class="settings-subsection-title"/>
+                    <ui:Label text="Each name is relative. The robot id and the environment prefix are joined onto it, so one row names every robot of the fleet." class="settings-section-hint"/>
+                    <ui:VisualElement name="RosTopicHost" class="settings-field-list"/>
+                    <ui:VisualElement class="settings-actions-row">
+                        <ui:Button name="ResetTopicsButton" text="Reset topic names" class="settings-button" tooltip="Put every stream back to the name the application ships with."/>
+                    </ui:VisualElement>
+                    <ui:Label name="RosPreviewLabel" text="" class="settings-topic-preview"/>
+                    <ui:Label name="RosStatusLabel" text="" class="settings-profile-status"/>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:ScrollView>

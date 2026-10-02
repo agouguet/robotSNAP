@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using RobotSNAP;
 using RobotSNAP.Core;
+using RobotSNAP.ROS;
 using RobotSNAP.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -75,6 +76,13 @@ public class SettingsTabController : MonoBehaviour
     private Label _profileEmpty;
     private VisualElement _profileListHost;
 
+    private VisualElement _simulationFieldsHost;
+    private VisualElement _rosFieldsHost;
+    private VisualElement _rosTopicHost;
+    private Label _rosPreview;
+    private Label _rosStatus;
+    private Button _resetTopicsButton;
+
     /// <summary>The page itself, which is what a confirmation is shown over.</summary>
     private VisualElement _page;
 
@@ -117,6 +125,8 @@ public class SettingsTabController : MonoBehaviour
         FillLiveLabels();
         UpdateApplyState();
         RefreshProfileList();
+        FillSimulationSection();
+        FillRosSection();
     }
 
     private void TryInitialize()
@@ -156,6 +166,12 @@ public class SettingsTabController : MonoBehaviour
         _profileStatus = Require<Label>(root, "ProfileStatusLabel", missing);
         _profileEmpty = Require<Label>(root, "ProfileEmptyLabel", missing);
         _profileListHost = Require<VisualElement>(root, "ProfileListHost", missing);
+        _simulationFieldsHost = Require<VisualElement>(root, "SimulationFieldsHost", missing);
+        _rosFieldsHost = Require<VisualElement>(root, "RosFieldsHost", missing);
+        _rosTopicHost = Require<VisualElement>(root, "RosTopicHost", missing);
+        _rosPreview = Require<Label>(root, "RosPreviewLabel", missing);
+        _rosStatus = Require<Label>(root, "RosStatusLabel", missing);
+        _resetTopicsButton = Require<Button>(root, "ResetTopicsButton", missing);
         if (missing.Count > 0)
         {
             Debug.LogError($"[SettingsTabController] Missing UI elements: {string.Join(", ", missing)}");
@@ -179,6 +195,8 @@ public class SettingsTabController : MonoBehaviour
         FillControls();
         UpdateApplyState();
         RefreshProfileList();
+        FillSimulationSection();
+        FillRosSection();
     }
 
     private UIDocument ResolveDocument()
@@ -313,6 +331,7 @@ public class SettingsTabController : MonoBehaviour
         _applyButton.clicked += OnApplyClicked;
         _resetButton.clicked += OnResetClicked;
         _saveProfileButton.clicked += OnSaveProfileClicked;
+        _resetTopicsButton.clicked += OnResetTopicsClicked;
         _profileNameField.RegisterCallback<KeyDownEvent>(OnProfileNameKeyDown);
     }
 
@@ -633,6 +652,11 @@ public class SettingsTabController : MonoBehaviour
             // released here rather than left behind as an asset nobody owns.
             supervisor.UpdateConfig(loaded);
             SetProfileStatus($"Loaded '{name}'.", error: false);
+
+            // The configuration in force is a different one now, so both cards are rebuilt from it: a page
+            // still showing the values of the profile that was replaced would read as a load that failed.
+            FillSimulationSection();
+            FillRosSection();
         }
         finally
         {
@@ -793,6 +817,383 @@ public class SettingsTabController : MonoBehaviour
     {
         string[] names = QualitySettings.names;
         return level >= 0 && level < names.Length ? names[level] : $"level {level}";
+    }
+
+    // -- the simulation and the ROS bridge ---------------------------------------------------------
+
+    /// <summary>
+    /// The configuration the page edits: the one in force, which is the copy a running session uses and the
+    /// project's own asset otherwise. Null until there is a supervisor, which the cards report rather than
+    /// guessing at a value.
+    /// </summary>
+    private SimulationConfig Config
+    {
+        get
+        {
+            Supervisor supervisor = Supervisor.Instance;
+            return supervisor != null ? supervisor.ActiveConfig : null;
+        }
+    }
+
+    /// <summary>
+    /// Fills the simulation card with every setting of the configuration that the application actually reads.
+    /// The rows are rebuilt rather than patched because a configuration loaded from a file changes all of them
+    /// at once, and a dozen rows are cheap to rebuild.
+    /// </summary>
+    private void FillSimulationSection()
+    {
+        if (!_initialized)
+            return;
+
+        _simulationFieldsHost.Clear();
+
+        AddFloatRow(
+            _simulationFieldsHost, "TimeScaleField", "Time scale",
+            "1 is real time. A training run goes to tens of times, where the machine rather than this number "
+            + "is what limits the run.",
+            config => config.TimeScale,
+            (config, value) => config.TimeScale = value);
+
+        AddFloatRow(
+            _simulationFieldsHost, "FixedTimestepField", "Physics timestep",
+            "Seconds between two physics steps. 0.02 is fifty steps per simulated second.",
+            config => config.FixedTimestep,
+            (config, value) => config.FixedTimestep = value);
+
+        AddFloatRow(
+            _simulationFieldsHost, "MaximumDeltaField", "Frame catch-up cap",
+            "Most simulated time one drawn frame may catch up on, in seconds. It is what bounds a fast session "
+            + "when the frame rate falls.",
+            config => config.MaximumDeltaTime,
+            (config, value) => config.MaximumDeltaTime = value);
+
+        AddIntegerRow(
+            _simulationFieldsHost, "RandomSeedField", "Random seed",
+            "-1 draws from the clock. Any other value makes a session reproducible, which is what a benchmark "
+            + "run rests on.",
+            config => config.RandomSeed,
+            (config, value) => config.RandomSeed = value);
+
+        AddIntegerRow(
+            _simulationFieldsHost, "EnvironmentCountField", "Environments",
+            "How many copies of the scenario are instantiated side by side, for a parallel run.",
+            config => config.EnvironmentCount,
+            (config, value) => config.EnvironmentCount = value);
+
+        AddFloatRow(
+            _simulationFieldsHost, "EnvironmentSpacingField", "Spacing between environments",
+            "Distance, in metres, between two copies of the scenario.",
+            config => config.EnvironmentSpacing,
+            (config, value) => config.EnvironmentSpacing = value);
+
+        AddTextRow(
+            _simulationFieldsHost, "DefaultScenarioField", "Scenario a session opens with",
+            "Name of the scenario, without its extension.",
+            config => config.DefaultScenario,
+            (config, value) => config.DefaultScenario = value);
+
+        AddTextRow(
+            _simulationFieldsHost, "ScenariosFolderField", "Scenarios folder",
+            "Folder under StreamingAssets the scenario files are read from.",
+            config => config.ScenariosFolder,
+            (config, value) => config.ScenariosFolder = value);
+
+        AddTextRow(
+            _simulationFieldsHost, "DatasetFolderField", "Maps folder",
+            "Folder under StreamingAssets holding the imported maps - the occupancy grids and their JSON.",
+            config => config.DatasetPath,
+            (config, value) => config.DatasetPath = value);
+    }
+
+    /// <summary>
+    /// Fills the ROS card: the prefix every stream of this environment sits under, the rate the session
+    /// publishes at, and the name of each stream of the contract. Every row is rebuilt on entry because a
+    /// loaded configuration replaces all of them at once.
+    /// </summary>
+    private void FillRosSection()
+    {
+        if (!_initialized)
+            return;
+
+        _rosFieldsHost.Clear();
+        _rosTopicHost.Clear();
+
+        AddTextRow(
+            _rosFieldsHost, "RosPrefixField", "Environment prefix",
+            "A name every stream of this environment is nested under: 'env' turns /scan into /env/scan. Empty "
+            + "- the shipped answer - publishes at the root.",
+            config => config.RosPrefix,
+            (config, value) => config.RosPrefix = value,
+            _ => RefreshTopicPreview());
+
+        AddFloatRow(
+            _rosFieldsHost, "RosPublishFrequencyField", "Publish rate",
+            "Hertz. Zero - the shipped answer - keeps every stream at the rate it was authored with, because "
+            + "the lidar and the odometry of one robot do not share a cadence.",
+            config => config.RosPublishFrequency,
+            (config, value) => config.RosPublishFrequency = value);
+
+        SimulationConfig current = Config;
+        RosTopicNames names = current != null ? current.Topics : new RosTopicNames();
+
+        foreach (RosTopicNames.Row row in RosTopicNames.Rows)
+        {
+            _rosTopicHost.Add(BuildRow(row.Label, row.Tooltip, TopicField(row, names), _rosTopicHost.childCount > 0));
+        }
+
+        RefreshTopicPreview();
+    }
+
+    /// <summary>
+    /// One row of the topic table. A name is checked before it is written, and a refused one leaves the
+    /// configuration untouched and the field showing what is still in force: a stream nobody can address is
+    /// worse than the name that was already there.
+    /// </summary>
+    private TextField TopicField(RosTopicNames.Row row, RosTopicNames names)
+    {
+        RosTopicSlot slot = row.Slot;
+
+        var field = new TextField { name = "RosTopic" + slot, value = names.Get(slot) };
+        field.AddToClassList("settings-text-field");
+        field.isDelayed = true;
+        field.tooltip = row.Tooltip;
+
+        field.RegisterValueChangedCallback(evt =>
+        {
+            SimulationConfig config = Config;
+            if (config == null)
+            {
+                SetRosStatus("The simulation configuration is not available.", true);
+                return;
+            }
+
+            if (!RosTopicNames.TryNormalize(evt.newValue, out string normalized, out string problem))
+            {
+                field.SetValueWithoutNotify(config.Topics.Get(slot));
+                SetRosStatus(problem, true);
+                return;
+            }
+
+            config.Topics.Set(slot, normalized);
+            AppliedTo(config);
+            field.SetValueWithoutNotify(normalized);
+            RefreshTopicPreview();
+            SetRosStatus(
+                $"{row.Label} is now {RobotSNAPTopics.Full(normalized, config.RosPrefix)}, read once a "
+                + "session starts.",
+                false);
+        });
+
+        return field;
+    }
+
+    /// <summary>
+    /// Puts every stream back to the name the application ships with. The table is written and the card is
+    /// rebuilt, so the fields and the preview cannot disagree with the configuration.
+    /// </summary>
+    private void OnResetTopicsClicked()
+    {
+        SimulationConfig config = Config;
+        if (config == null)
+        {
+            SetRosStatus("The simulation configuration is not available.", true);
+            return;
+        }
+
+        config.Topics.ResetToDefaults();
+        AppliedTo(config);
+        FillRosSection();
+        SetRosStatus("Every stream is back to the name the application ships with.", false);
+    }
+
+    /// <summary>
+    /// What a client actually sees: the same table, joined twice - once for the robot a client reaches
+    /// without naming one, and once for a second robot. It is the answer to "what does multi-robot naming look
+    /// like", shown rather than described.
+    /// </summary>
+    private void RefreshTopicPreview()
+    {
+        if (!_initialized)
+            return;
+
+        SimulationConfig config = Config;
+        RosTopicNames names = config != null ? config.Topics : new RosTopicNames();
+        string prefix = config != null ? config.RosPrefix : string.Empty;
+
+        var first = new List<string>(RobotSNAPTopics.ContractSlots.Length);
+        var second = new List<string>(RobotSNAPTopics.ContractSlots.Length);
+
+        foreach (RosTopicSlot slot in RobotSNAPTopics.ContractSlots)
+        {
+            string name = names.Get(slot);
+            first.Add(RobotSNAPTopics.Full(name, prefix));
+            second.Add(RobotSNAPTopics.Full("robot_2/" + RobotSNAPTopics.Normalize(name), prefix));
+        }
+
+        _rosPreview.text =
+            "The first robot answers on " + string.Join(", ", first)
+            + "\nA second robot answers on " + string.Join(", ", second);
+    }
+
+    /// <summary>Writes what the last action of the ROS card left behind, tinted when it is a refusal.</summary>
+    private void SetRosStatus(string message, bool error)
+    {
+        _rosStatus.text = message ?? string.Empty;
+        _rosStatus.EnableInClassList("is-error", error);
+    }
+
+    /// <summary>
+    /// Lets the session follow an edit: the time settings are applied at once, and the topic table is handed
+    /// to the one resolver every stream is built from. The names of a stream are read once, when its publisher
+    /// registers, so a rename reaches the wire at the next start rather than mid-session.
+    /// </summary>
+    private void AppliedTo(SimulationConfig config)
+    {
+        if (Application.isPlaying)
+            config.ApplyTimeSettings();
+
+        RobotSNAPTopics.Use(config.Topics, config.RosPublishFrequency);
+
+#if UNITY_EDITOR
+        // An edit made outside Play lands in the project's own asset, which has to be marked so the editor
+        // writes it back rather than treating the change as a scratch one. During Play it is the runtime copy
+        // that is marked, which is what the Configurations card then saves under a name.
+        if (config != null)
+            UnityEditor.EditorUtility.SetDirty(config);
+#endif
+    }
+
+    /// <summary>
+    /// One row of a card built at runtime: a labelled line on the left and its control on the right, wearing
+    /// exactly the classes the rows written in the template wear. The divider is dropped for the first row of a
+    /// card, where there is nothing above it to divide from.
+    /// </summary>
+    private static VisualElement BuildRow(string label, string detail, VisualElement control, bool divided)
+    {
+        var row = new VisualElement();
+        row.AddToClassList("settings-row");
+        if (divided)
+            row.AddToClassList("settings-row--divided");
+
+        var text = new VisualElement();
+        text.AddToClassList("settings-row-label");
+        text.Add(new Label(label));
+
+        if (!string.IsNullOrEmpty(detail))
+        {
+            var note = new Label(detail);
+            note.AddToClassList("settings-row-detail");
+            text.Add(note);
+        }
+
+        row.Add(text);
+
+        var controls = new VisualElement();
+        controls.AddToClassList("settings-row-control");
+        controls.Add(control);
+        row.Add(controls);
+
+        return row;
+    }
+
+    /// <summary>
+    /// A row holding a real number. The field is delayed, so a half-typed value is not written, and what it
+    /// shows afterwards is what was kept rather than what was typed: the configuration clamps a value it will
+    /// not accept, and a field still showing the refused one would be a lie about the session.
+    /// </summary>
+    private void AddFloatRow(
+        VisualElement host,
+        string name,
+        string label,
+        string detail,
+        Func<SimulationConfig, float> read,
+        Action<SimulationConfig, float> write,
+        Action<float> after = null)
+    {
+        SimulationConfig initial = Config;
+        var field = new FloatField { name = name, value = initial != null ? read(initial) : 0f };
+        field.AddToClassList("settings-number-field");
+        field.isDelayed = true;
+
+        field.RegisterValueChangedCallback(evt =>
+        {
+            SimulationConfig config = Config;
+            if (config == null)
+                return;
+
+            write(config, evt.newValue);
+            AppliedTo(config);
+            float kept = read(config);
+            field.SetValueWithoutNotify(kept);
+            after?.Invoke(kept);
+        });
+
+        host.Add(BuildRow(label, detail, field, host.childCount > 0));
+    }
+
+    /// <summary>A row holding a whole number, with the same rules as <see cref="AddFloatRow"/>.</summary>
+    private void AddIntegerRow(
+        VisualElement host,
+        string name,
+        string label,
+        string detail,
+        Func<SimulationConfig, int> read,
+        Action<SimulationConfig, int> write,
+        Action<int> after = null)
+    {
+        SimulationConfig initial = Config;
+        var field = new IntegerField { name = name, value = initial != null ? read(initial) : 0 };
+        field.AddToClassList("settings-number-field");
+        field.isDelayed = true;
+
+        field.RegisterValueChangedCallback(evt =>
+        {
+            SimulationConfig config = Config;
+            if (config == null)
+                return;
+
+            write(config, evt.newValue);
+            AppliedTo(config);
+            int kept = read(config);
+            field.SetValueWithoutNotify(kept);
+            after?.Invoke(kept);
+        });
+
+        host.Add(BuildRow(label, detail, field, host.childCount > 0));
+    }
+
+    /// <summary>
+    /// A row holding a line of text. The field is delayed for the same reason the numbers are, and it shows
+    /// what the configuration kept, which is how a field that falls back to a default says so.
+    /// </summary>
+    private void AddTextRow(
+        VisualElement host,
+        string name,
+        string label,
+        string detail,
+        Func<SimulationConfig, string> read,
+        Action<SimulationConfig, string> write,
+        Action<string> after = null)
+    {
+        SimulationConfig initial = Config;
+        var field = new TextField { name = name, value = initial != null ? read(initial) : string.Empty };
+        field.AddToClassList("settings-text-field");
+        field.isDelayed = true;
+
+        field.RegisterValueChangedCallback(evt =>
+        {
+            SimulationConfig config = Config;
+            if (config == null)
+                return;
+
+            write(config, evt.newValue);
+            AppliedTo(config);
+            string kept = read(config) ?? string.Empty;
+            field.SetValueWithoutNotify(kept);
+            after?.Invoke(kept);
+        });
+
+        host.Add(BuildRow(label, detail, field, host.childCount > 0));
     }
 
     /// <summary>One size and rate the dropdown offers, kept beside the label it is shown under.</summary>

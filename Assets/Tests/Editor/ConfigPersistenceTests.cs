@@ -124,6 +124,7 @@ namespace RobotSNAP.Tests.Editor
             _config.TimeScale = 3f;
             _config.EnableROS = true;
             _config.RandomSeed = 42;
+            _config.Topics.SimulationAgents = "/crowd";
 
             ConfigPersistence.Save(_config, "round trip");
 
@@ -139,6 +140,10 @@ namespace RobotSNAP.Tests.Editor
                 Assert.That(loaded.TimeScale, Is.EqualTo(3f));
                 Assert.That(loaded.EnableROS, Is.True);
                 Assert.That(loaded.RandomSeed, Is.EqualTo(42));
+                Assert.That(
+                    loaded.Topics.SimulationAgents,
+                    Is.EqualTo("/crowd"),
+                    "the table of stream names is part of the profile, not a preference of the page");
             }
             finally
             {

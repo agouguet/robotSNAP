@@ -278,7 +278,8 @@ namespace RobotSNAP
             // the leading slash of `/cmd_vel` to separate them, so a topic configured without one came out
             // as `/myenvcmd_vel`.
             _fullCmdVelTopics.Clear();
-            _fullCmdVelTopics.AddRange(RobotIdentity.StreamNamesFor(this, cmdVelTopic, prefix));
+            string baseTopic = RobotSNAPTopics.Resolve(RosTopicSlot.CmdVel, cmdVelTopic);
+            _fullCmdVelTopics.AddRange(RobotIdentity.StreamNamesFor(this, baseTopic, prefix));
             foreach (string topic in _fullCmdVelTopics)
                 _envROS.RegisterSubscriber<RosMessageTypes.Geometry.TwistMsg>(topic, OnRosCommandReceived);
             _rosSubscribed = true;

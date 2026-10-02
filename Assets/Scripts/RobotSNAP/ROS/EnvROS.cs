@@ -1,4 +1,5 @@
 using System;
+using RobotSNAP.Core;
 using UnityEngine;
 using Unity.Robotics.ROSTCPConnector;
 using Unity.Robotics.ROSTCPConnector.MessageGeneration;
@@ -44,7 +45,10 @@ namespace RobotSNAP.ROS
             
             if (autoInitialize)
             {
-                Initialize(_prefix);
+                // The prefix is a property of the configuration in force, not of this component: a scene
+                // saved with an empty one still runs namespaced once a configuration asks for it, which is
+                // what makes the field in Settings mean something.
+                Initialize(ConfiguredPrefix() ?? _prefix);
             }
 
             if (publishSimulationState)
@@ -61,6 +65,24 @@ namespace RobotSNAP.ROS
         #endregion
         
         #region Initialization
+
+        /// <summary>
+        /// The environment prefix the configuration in force asks for, or null when there is no configuration
+        /// to ask. A blank prefix is a real answer - the bare names the project has always published - so the
+        /// caller keeps whatever it was given rather than replacing it with a default.
+        /// </summary>
+        private static string ConfiguredPrefix()
+        {
+            Supervisor supervisor = Supervisor.Instance;
+            SimulationConfig config = supervisor != null ? supervisor.ActiveConfig : null;
+            if (config == null)
+                return null;
+
+            // The names of the configuration are taken here too, so a session whose supervisor has not run
+            // yet still answers on the streams the reader asked for.
+            RobotSNAPTopics.Use(config.Topics);
+            return config.RosPrefix;
+        }
         
         /// <summary>
         /// Initialize the ROS bridge with a prefix

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using RobotSNAP.ROS;
 using UnityEngine;
 using RobotSNAP.Core;
 
@@ -83,6 +84,7 @@ namespace RobotSNAP
 
             InitializeDefaultConfig();
             SetupClock();
+            ApplyTopicNames();
 
             if (Application.isPlaying)
                 DontDestroyOnLoad(gameObject);
@@ -96,6 +98,11 @@ namespace RobotSNAP
                 _runtimeConfig.name = "RuntimeConfig";
                 _runtimeConfig.ApplyTimeSettings();
             }
+
+            // The names of the streams are the ones of the configuration in force, and they have to be in
+            // place before any publisher registers: a component reads them once, when it builds the name it
+            // answers on, and never looks again.
+            ApplyTopicNames();
 
             _isInitialized = true;
             OnInitialized?.Invoke();
@@ -124,6 +131,19 @@ namespace RobotSNAP
             }
         }
 
+        /// <summary>
+        /// Hands the names of the configuration in force to the one table every stream is built from, and the
+        /// environment prefix with them. It is called wherever the configuration changes rather than read on
+        /// demand, because a stream is named once, when its publisher registers.
+        /// </summary>
+        private void ApplyTopicNames()
+        {
+            SimulationConfig config = ActiveConfig ?? _defaultConfig;
+            RobotSNAPTopics.Use(
+                config != null ? config.Topics : null,
+                config != null ? config.RosPublishFrequency : 0f);
+        }
+
         private void SetupClock()
         {
             if (_clock == null)
@@ -150,6 +170,7 @@ namespace RobotSNAP
             newConfig.CopyTo(target);
             target.ApplyTimeSettings();
 
+            ApplyTopicNames();
             OnConfigChanged?.Invoke(target);
             if (_logEvents) Debug.Log("[Supervisor] Configuration updated");
         }
@@ -187,6 +208,7 @@ namespace RobotSNAP
             }
             fresh.CopyTo(_defaultConfig);
 
+            ApplyTopicNames();
             OnConfigChanged?.Invoke(ActiveConfig);
             Debug.Log("[Supervisor] Config reset to default");
         }

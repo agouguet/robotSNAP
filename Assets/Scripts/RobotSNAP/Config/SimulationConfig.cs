@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using RobotSNAP.ROS;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -74,8 +75,16 @@ namespace RobotSNAP.Core
         [Tooltip("Prefix for ROS topics (e.g., '/robot0/')")]
         [SerializeField] private string _rosPrefix = "";
         
-        [Tooltip("ROS publish frequency (Hz)")]
-        [SerializeField] private float _rosPublishFrequency = 10f;
+        [Tooltip("Rate every scheduled stream publishes at, in hertz. Zero - the shipped answer - means " +
+                 "each stream keeps the rate it was authored with: the lidar and the odometry of one robot " +
+                 "do not share a cadence, and one number for the session would flatten that.")]
+        [SerializeField] private float _rosPublishFrequency = 0f;
+
+        [Tooltip("The name of every stream the session speaks. The ten names of the contract keep their " +
+                 "shipped spelling unless a reader renames them here; a client on the other side of the " +
+                 "socket reads whatever is set here, so renaming a stream is a change to the interface, " +
+                 "not a local preference.")]
+        [SerializeField] private RosTopicNames _topics = new RosTopicNames();
 
         #endregion
 
@@ -186,7 +195,20 @@ namespace RobotSNAP.Core
         public float RosPublishFrequency 
         { 
             get => _rosPublishFrequency; 
-            set => _rosPublishFrequency = Mathf.Clamp(value, 1f, 60f); 
+            // Zero is a real setting: it is what says "each stream keeps the rate it was authored with",
+            // which is the behaviour the application has always had. A positive value overrides every
+            // scheduled stream at once, and the ceiling is the fastest rate a client can be trusted to read.
+            set => _rosPublishFrequency = Mathf.Clamp(value, 0f, 60f); 
+        }
+
+        /// <summary>
+        /// The names of the streams this configuration speaks. Never null: a configuration that carries none
+        /// answers with the ones the application ships with, so nothing downstream has to check.
+        /// </summary>
+        public RosTopicNames Topics
+        {
+            get => _topics ?? (_topics = new RosTopicNames());
+            set => _topics = value ?? new RosTopicNames();
         }
         
         public bool RecordData 
@@ -257,6 +279,7 @@ namespace RobotSNAP.Core
             target._rosMasterURI = this._rosMasterURI;
             target._rosPrefix = this._rosPrefix;
             target._rosPublishFrequency = this._rosPublishFrequency;
+            Topics.CopyTo(target.Topics);
             target._recordData = this._recordData;
             target._outputDirectory = this._outputDirectory;
             target._datasetPath = this._datasetPath;
@@ -323,7 +346,8 @@ namespace RobotSNAP.Core
             _enableROS = false;
             _rosMasterURI = "http://localhost:11311";
             _rosPrefix = "";
-            _rosPublishFrequency = 10f;
+            _rosPublishFrequency = 0f;
+            Topics.ResetToDefaults();
             _recordData = false;
             _outputDirectory = "SimulationData";
             _datasetPath = "Dataset";

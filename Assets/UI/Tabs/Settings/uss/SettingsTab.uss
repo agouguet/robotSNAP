@@ -343,3 +343,53 @@
 .settings-button-danger:hover {
     background-color: rgba(200, 60, 70, 0.12);
 }
+
+/* ---- simulation and ROS ---------------------------------------- */
+
+/* The rows of the simulation and ROS cards are built by the controller rather than written out in the
+   template, so this only holds them: a column, with no gap of its own, because each row already carries
+   the height and the divider the other cards' rows carry. */
+.settings-field-list {
+    flex-direction: column;
+}
+
+/* Names a group of rows inside a card - "Topic names" under the ROS bridge - so the two halves of a card
+   read as one section rather than two. */
+.settings-subsection-title {
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: var(--text-primary);
+    margin-top: 14px;
+}
+
+/* A number field wears the box of the text field: the base template would otherwise give it the height and
+   the type size of the control it inherits from, which is shorter than the rows around it. */
+.settings-number-field {
+    width: 100%;
+    height: 34px;
+    font-size: 13px;
+}
+
+.settings-number-field .unity-text-field__input {
+    background-color: var(--bg-primary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    padding: 4px 10px;
+}
+
+/* What a client actually sees, robot by robot, built from the names above it. It sits on its own surface
+   because it is a result rather than another control. */
+.settings-topic-preview {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: normal;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background-color: var(--bg-primary);
+    border-width: 1px;
+    border-color: var(--border-color);
+}

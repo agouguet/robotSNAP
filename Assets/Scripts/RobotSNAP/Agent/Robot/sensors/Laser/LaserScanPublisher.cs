@@ -77,7 +77,8 @@ namespace RobotSNAP
             // sensor belongs to: a second robot publishes under its own id, the first keeps the name the
             // project has always published.
             _fullTopicNames.Clear();
-            _fullTopicNames.AddRange(RobotIdentity.StreamNamesFor(this, laserTopic, prefix));
+            string baseTopic = RobotSNAPTopics.Resolve(RosTopicSlot.Scan, laserTopic);
+            _fullTopicNames.AddRange(RobotIdentity.StreamNamesFor(this, baseTopic, prefix));
             
             // Get laser scanner component
             _laserScanner = GetComponent<LaserScanner>();
@@ -95,12 +96,13 @@ namespace RobotSNAP
             // Initialize message
             InitializeMessage(prefix);
             
-            _publishInterval = 1f / publishFrequencyHz;
+            float rate = RobotSNAPTopics.ResolveFrequency(publishFrequencyHz);
+            _publishInterval = 1f / rate;
             _nextPublishTime = NextSlot(Time.fixedTime, _publishInterval);
             
             if (logPublishEvents)
             {
-                Debug.Log($"[{name}] Publishing laser scans to {string.Join(", ", _fullTopicNames)} at {publishFrequencyHz} Hz");
+                Debug.Log($"[{name}] Publishing laser scans to {string.Join(", ", _fullTopicNames)} at {rate} Hz");
             }
         }
         
@@ -198,7 +200,8 @@ namespace RobotSNAP
             {
                 // Build new topic name with new prefix
                 _fullTopicNames.Clear();
-                _fullTopicNames.AddRange(RobotIdentity.StreamNamesFor(this, laserTopic, newPrefix));
+                string baseTopic = RobotSNAPTopics.Resolve(RosTopicSlot.Scan, laserTopic);
+                _fullTopicNames.AddRange(RobotIdentity.StreamNamesFor(this, baseTopic, newPrefix));
                 
                 // Re-initialize message with new frame ID
                 InitializeMessage(newPrefix);

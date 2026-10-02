@@ -55,6 +55,7 @@ namespace RobotSNAP.Tests.Editor
             _config.DefaultScenario = "warehouse";
             _config.RosPrefix = "robot_1";
             _config.TimeScale = 2f;
+            _config.Topics.CmdVel = "/drive";
 
             SimulationConfig clone = _config.Clone();
             try
@@ -63,11 +64,29 @@ namespace RobotSNAP.Tests.Editor
                 Assert.That(clone.DefaultScenario, Is.EqualTo("warehouse"));
                 Assert.That(clone.RosPrefix, Is.EqualTo("robot_1"));
                 Assert.That(clone.TimeScale, Is.EqualTo(2f));
+                Assert.That(clone.Topics.CmdVel, Is.EqualTo("/drive"));
+
+                // The table is copied rather than shared: editing the copy of a configuration must not edit
+                // the configuration a session is still running under.
+                clone.Topics.CmdVel = "/wheel";
+                Assert.That(_config.Topics.CmdVel, Is.EqualTo("/drive"));
             }
             finally
             {
                 Object.DestroyImmediate(clone);
             }
+        }
+
+        [Test]
+        public void ResetToDefaultsPutsTheShippedTopicNamesBack()
+        {
+            _config.Topics.CmdVel = "/drive";
+            _config.Topics.Scan = "/lidar";
+
+            _config.ResetToDefaults();
+
+            Assert.That(_config.Topics.CmdVel, Is.EqualTo("/cmd_vel"));
+            Assert.That(_config.Topics.Scan, Is.EqualTo("/scan"));
         }
     }
 }

@@ -111,7 +111,7 @@ namespace RobotSNAP.ROS
             
             // Build topic name with the one rule the whole project joins names with: with a prefix, `clock`
             // used to come out as `/myenvclock` instead of `/myenv/clock`.
-            _fullTopicName = RobotSNAPTopics.Full(topicName, prefix);
+            _fullTopicName = RobotSNAPTopics.Full(RobotSNAPTopics.Resolve(RosTopicSlot.Clock, topicName), prefix);
             
             // Register publisher
             _envROS.RegisterPublisher<ClockMsg>(_fullTopicName);

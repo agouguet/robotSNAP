@@ -98,18 +98,20 @@ namespace RobotSNAP
             // the leading slash of the configured topic to separate them, so a name configured without one
             // came out as `/myenvsimulation/agents`.
             _fullAgentsTopics.Clear();
-            _fullAgentsTopics.AddRange(RobotIdentity.StreamNamesFor(this, agentsTopic, prefix));
+            string baseTopic = RobotSNAPTopics.Resolve(RosTopicSlot.SimulationAgents, agentsTopic);
+            _fullAgentsTopics.AddRange(RobotIdentity.StreamNamesFor(this, baseTopic, prefix));
 
             foreach (string topic in _fullAgentsTopics)
                 _envROS.RegisterPublisher<StringMsg>(topic);
 
-            _publishInterval = 1f / publishFrequencyHz;
+            float rate = RobotSNAPTopics.ResolveFrequency(publishFrequencyHz);
+            _publishInterval = 1f / rate;
 
             if (logPublishEvents)
             {
                 Debug.Log($"[{name}] Publishing JSON strings to:\n" +
                           $"  Agents: {string.Join(", ", _fullAgentsTopics)}\n" +
-                          $"  Frequency: {publishFrequencyHz} Hz");
+                          $"  Frequency: {RobotSNAPTopics.ResolveFrequency(publishFrequencyHz)} Hz");
             }
         }
 

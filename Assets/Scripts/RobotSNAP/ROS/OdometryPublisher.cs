@@ -75,7 +75,10 @@ namespace RobotSNAP.ROS
             // Build full topic names, with the one rule the whole project joins names with and the identity
             // of the robot this odometry belongs to.
             _fullTopicNames.Clear();
-            _fullTopicNames.AddRange(RobotIdentity.StreamNamesFor(this, topicName, prefix));
+            // The name comes from the configuration in force, and the one this component was authored with
+            // is only what a configuration that names nothing falls back to.
+            string baseTopic = RobotSNAPTopics.Resolve(RosTopicSlot.Odom, topicName);
+            _fullTopicNames.AddRange(RobotIdentity.StreamNamesFor(this, baseTopic, prefix));
             
             // Register publisher
             foreach (string topic in _fullTopicNames)
@@ -113,10 +116,11 @@ namespace RobotSNAP.ROS
             // Initialize message
             InitializeMessage();
             
-            _publishInterval = 1f / publishFrequencyHz;
+            float rate = RobotSNAPTopics.ResolveFrequency(publishFrequencyHz);
+            _publishInterval = 1f / rate;
             _nextPublishTime = NextSlot(Time.fixedTime, _publishInterval);
             
-            Debug.Log($"[{name}] Publishing odometry to {string.Join(", ", _fullTopicNames)} at {publishFrequencyHz} Hz");
+            Debug.Log($"[{name}] Publishing odometry to {string.Join(", ", _fullTopicNames)} at {rate} Hz");
         }
 
         /// <summary>

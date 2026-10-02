@@ -5,12 +5,15 @@ namespace RobotSNAP.Metrics
     /// episode, the router that answers a question about it and the exporter that puts it on disk cannot
     /// disagree on a spelling.
     ///
-    /// The stream this file adds is deliberately kept out of
-    /// <see cref="RobotSNAP.ROS.RobotSNAPTopics"/>: that table is the ten-name contract a client of the
-    /// simulation already speaks, guarded by a test on both sides of the socket, and a metrics stream bolted
-    /// onto it would move a surface nobody asked to move. The episode stream is a second, additive contract -
-    /// the same JSON-over-<c>std_msgs/String</c> shape as <c>/simulation/state</c>, on its own topic - and
-    /// this file is where it is written down.
+    /// The stream this file adds is deliberately kept out of the ten-name contract of
+    /// <see cref="RobotSNAP.ROS.RobotSNAPTopics"/>: that table is what a client of the simulation already
+    /// speaks, guarded by a test on both sides of the socket, and a metrics stream bolted onto it would move
+    /// a surface nobody asked to move. The episode stream is a second, additive contract - the same
+    /// JSON-over-<c>std_msgs/String</c> shape as <c>/simulation/state</c>, on its own topic - and this file
+    /// is where it is written down.
+    ///
+    /// Its name is still taken from the one editable table of the project, so a reader who renames it in
+    /// Settings renames it here too, and the two cannot disagree.
     ///
     /// The outcome vocabulary is the project's own, the one the scenario state and the Python environment
     /// already speak: an episode ends because the robot reached its goal, because it collided, because it left
@@ -20,8 +23,11 @@ namespace RobotSNAP.Metrics
     /// </summary>
     public static class MetricsContract
     {
-        /// <summary>Topic carrying one finished episode as JSON, published by <see cref="MetricsRecorder"/>.</summary>
-        public const string EpisodeTopic = "/simulation/metrics";
+        /// <summary>
+        /// Topic carrying one finished episode as JSON, published by <see cref="MetricsRecorder"/>. It is read
+        /// from the topic table in force, so a renamed stream is renamed on both sides of the export.
+        /// </summary>
+        public static string EpisodeTopic => RobotSNAP.ROS.RobotSNAPTopics.Names.Metrics;
 
         /// <summary>Folder, under <c>StreamingAssets</c>, the exported records are written to.</summary>
         public const string ExportFolder = "metrics";

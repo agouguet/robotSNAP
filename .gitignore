@@ -119,6 +119,11 @@ InitTestScene*.unity*
 # Solution file the editor generates. The template above ignores *.sln, which does not cover it.
 *.slnx
 
+# Binaries that ended up at the root of the project - a player build and the window-decoration
+# libraries of the desktop it was built on. Native plugins belong under Assets/Plugins.
+/UnityPlayer.so
+/libdecor-*.so*
+
 # UI Toolkit schemas the editor rewrites at every version change: generated, never authored.
 /[Uu][Ii][Ee]lements[Ss]chema/
 

@@ -1,0 +1,86 @@
+scenario_info:
+  name: 'Front Approach'
+  type: Custom
+  description: 'Robot and pedestrian walking head-on in a narrow two-way corridor.'
+  version: '1.0'
+  author: RobotSNAP
+  created: '2026-09-30 17:00'
+  tags:
+    - Basic
+    - Indoor
+    - Corridor
+    - Frontal
+  map: basic/frontal
+  location: ''
+  dataset: null
+  preview: ''
+  robot_type: jackal
+  duration: 0.0
+points:
+  robot_start:
+    x: -9.0
+    y: 0.0
+    z: 0.0
+    yaw: 90.0
+    center: null
+    size: null
+  robot_goal:
+    x: 9.0
+    y: 0.0
+    z: 0.0
+    yaw: null
+    center: null
+    size: null
+  oncoming_start:
+    x: 9.5
+    y: 0.0
+    z: 0.0
+    yaw: -90.0
+    center: null
+    size: null
+  oncoming_goal:
+    x: -9.5
+    y: 0.0
+    z: 0.0
+    yaw: null
+    center: null
+    size: null
+robots:
+  - id: robot_1
+    type: jackal
+    start: robot_start
+    goal: robot_goal
+    waypoints: null
+    behavior: normal
+    speed: 1.2
+robot: null
+humans:
+  - id: oncoming
+    count: 1
+    spawn_window: 0.0
+    spawn:
+      type: point
+      ref: oncoming_start
+      position: null
+      zone: null
+      formation: null
+      formation_parameter: 0.0
+      spacing: 1.5
+      relative_to: null
+    goal:
+      type: point
+      ref: oncoming_goal
+      position: null
+      zone: null
+      target: null
+      radius: 0.0
+    goals: null
+    end_behavior: stay
+    group: null
+    movement_controller:
+      type: SFM
+      sfm_params: null
+    behavior: normal
+    speed: 1.0
+    color: null
+    personality: null

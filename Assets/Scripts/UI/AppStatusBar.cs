@@ -8,7 +8,8 @@ using UnityEngine.UIElements;
 
 /// <summary>
 /// The application bar along the bottom of the window: what the simulation is doing and for how
-/// long, how many agents are around, whether the ROS bridge is up, and the application menu.
+/// long, how many agents are around, whether the ROS bridge is up, and the power button that closes
+/// the application.
 ///
 /// The bar reads the simulation, it never drives it: the state comes from the event bus, the agent
 /// figures are counted from the scene, and the clock only advances while the simulation runs.
@@ -17,14 +18,18 @@ public sealed class AppStatusBar : IDisposable
 {
     private const float AgentCountRefresh = 0.5f;
     private const string AgentsIconPath = "Icons/agents";
+    private const string PowerIconPath = "Icons/power";
 
     private readonly Label _messageLabel;
     private readonly Label _timeLabel;
     private readonly Label _agentsLabel;
     private readonly VisualElement _rosDot;
-    private readonly Button _menuButton;
-    private readonly VisualElement _menu;
     private readonly Button _quitButton;
+    private readonly Action _quitRequested;
+    private readonly VisualElement _root;
+
+    /// <summary>The question standing in front of the close, while one is being asked.</summary>
+    private ConfirmationDialog _quitDialog;
 
     private readonly ScenarioManager _scenarioManager;
     private EnvROS _envRos;
@@ -36,8 +41,20 @@ public sealed class AppStatusBar : IDisposable
     private int _robotCount;
     private int _humanCount;
 
-    public AppStatusBar(VisualElement root)
+    public AppStatusBar(VisualElement root) : this(root, QuitApplication)
     {
+    }
+
+    /// <summary>
+    /// Builds the bar with the effect a click on the power button has. The effect is a parameter so an
+    /// edit-mode test can observe the click path without stopping Play mode or closing the editor;
+    /// the application hands it <see cref="QuitApplication"/>, which is also the default.
+    /// </summary>
+    public AppStatusBar(VisualElement root, Action quitRequested)
+    {
+        _root = root;
+        _quitRequested = quitRequested ?? QuitApplication;
+
         if (root == null)
         {
             Debug.LogWarning("[AppStatusBar] Root element is null; the application bar stays inert.");
@@ -45,9 +62,9 @@ public sealed class AppStatusBar : IDisposable
         }
 
         // The simulation view hosts a status bar of its own that reuses the same element names, so
-        // the queries are scoped to the application bar. The menu button is the anchor: it is the
+        // the queries are scoped to the application bar. The power button is the anchor: it is the
         // one piece of this bar the simulation view does not carry.
-        VisualElement bar = root.Q<Button>("AppMenuButton")?.parent;
+        VisualElement bar = root.Q<Button>("QuitAppButton")?.parent;
         if (bar == null)
         {
             Debug.LogWarning("[AppStatusBar] The application bar is missing; it stays inert.");
@@ -59,25 +76,19 @@ public sealed class AppStatusBar : IDisposable
         _agentsLabel = Query<Label>(bar, "StatusAgentsLabel");
         VisualElement agentsIcon = Query<VisualElement>(bar, "StatusAgentsIcon");
         _rosDot = Query<VisualElement>(bar, "StatusRosDot");
-        _menuButton = Query<Button>(bar, "AppMenuButton");
-        _menu = Query<VisualElement>(bar, "AppMenu");
         _quitButton = Query<Button>(bar, "QuitAppButton");
 
         if (_messageLabel == null || _timeLabel == null || _agentsLabel == null ||
-            _menuButton == null || _menu == null || _quitButton == null)
+            _quitButton == null)
         {
             Debug.LogWarning("[AppStatusBar] The application bar is incomplete; it stays inert.");
             return;
         }
 
         ApplyIcon(agentsIcon, AgentsIconPath);
+        ApplyIcon(_quitButton, PowerIconPath);
 
-        _menuButton.clicked += ToggleMenu;
-        _quitButton.clicked += Quit;
-
-        // The application menu starts closed. The class writes the same state in the inline display
-        // and in the markup class, so the two never disagree.
-        SetPopupDisplay(_menu, false);
+        _quitButton.clicked += OnQuitClicked;
 
         _scenarioManager = UnityEngine.Object.FindAnyObjectByType<ScenarioManager>();
         if (_scenarioManager != null)
@@ -105,18 +116,27 @@ public sealed class AppStatusBar : IDisposable
         if (_scenarioManager != null)
             _scenarioManager.OnScenarioApplied -= OnScenarioApplied;
 
-        if (_menuButton != null)
-            _menuButton.clicked -= ToggleMenu;
-
         if (_quitButton != null)
-            _quitButton.clicked -= Quit;
+            _quitButton.clicked -= OnQuitClicked;
+
+        _quitDialog?.RemoveFromHierarchy();
+        _quitDialog = null;
     }
 
-    /// <summary>Called every frame: it advances the mission clock and refreshes the slow figures.</summary>
+    /// <summary>
+    /// Called every frame: it refreshes the mission time and the slow figures. The time it shows comes from the
+    /// simulation clock, and only a scene that carries none leaves the bar advancing its own count.
+    /// </summary>
     public void Tick()
     {
-        if (_state == SimulationState.Running)
-            _elapsedSeconds += Time.unscaledDeltaTime;
+        // The bar shows the mission's time and the mission's time is the simulation clock's - the same counter
+        // the state snapshot publishes as sim_time_seconds - so the bar reads it instead of keeping one of its
+        // own. Counting frames here is what let the two disagree: a stopped world still looked to be moving on
+        // a bar that scaled the wall clock by the configured scale, and a run at any other speed drifted. Only
+        // a scene that carries no clock leaves the bar with nothing to read, and only then does it fall back
+        // to its own accumulator so the display keeps moving rather than freezing.
+        if (_state == SimulationState.Running && Clock.Instance == null)
+            _elapsedSeconds += SimulatedDelta(Time.unscaledDeltaTime, Time.timeScale);
 
         ApplyTime();
 
@@ -131,6 +151,30 @@ public sealed class AppStatusBar : IDisposable
     }
 
     /// <summary>
+    /// How far the fallback accumulator moves for one frame of <paramref name="unscaledDeltaSeconds"/> seconds
+    /// of wall time, at <paramref name="timeScale"/>. It is the rule the bar follows only while the scene
+    /// carries no clock to read (<see cref="DisplayedSeconds"/>), kept as a pure function so an edit-mode test
+    /// can measure it with synthetic values instead of waiting on frames: a negative delta or a negative scale
+    /// contributes nothing rather than taking time back.
+    /// </summary>
+    public static float SimulatedDelta(float unscaledDeltaSeconds, float timeScale)
+    {
+        return Mathf.Max(0f, unscaledDeltaSeconds) * Mathf.Max(0f, timeScale);
+    }
+
+    /// <summary>
+    /// The mission seconds the bar shows. The scene's clock is the mission's time - it is the counter the
+    /// state snapshot publishes as <c>sim_time_seconds</c> - so it is read whenever there is one, and the
+    /// bar and a client cannot then disagree about how far the world has moved. A scene that carries no clock
+    /// (an authored test scene, or one whose clock was orphaned) leaves the bar with nothing to read and it
+    /// falls back to <paramref name="fallbackSeconds"/>, so the display keeps time rather than standing still.
+    /// </summary>
+    public static double DisplayedSeconds(Clock clock, double fallbackSeconds)
+    {
+        return clock != null ? clock.ElapsedSeconds : fallbackSeconds;
+    }
+
+    /// <summary>
     /// Restarts the mission clock. Applying a scenario asks for it through this method, so no other
     /// path of this class ever takes the time back to zero.
     /// </summary>
@@ -140,13 +184,52 @@ public sealed class AppStatusBar : IDisposable
         ApplyTime();
     }
 
-    private void ToggleMenu() => SetPopupDisplay(_menu, !IsOpen(_menu));
-
-    private void Quit()
+    /// <summary>
+    /// What a click on the power button does: it asks the application to close. The request is its own
+    /// method so the wiring can be exercised without a click - and so a confirmation can later be put
+    /// in front of the close without touching the button.
+    /// </summary>
+    public void RequestQuit()
     {
         Debug.Log("[AppStatusBar] Quit requested.");
-        SetPopupDisplay(_menu, false);
+        _quitRequested?.Invoke();
+    }
 
+    /// <summary>
+    /// What a click on the power button does: it asks first.
+    ///
+    /// Closing ends the session, and the episodes this session recorded live only in memory - the Analysis tab
+    /// exports them, nothing keeps them by itself - so the one action of this bar that cannot be taken back is
+    /// the one that gets a question in front of it. It is the same modal the Analysis tab puts in front of its
+    /// own irreversible actions, so the two read alike.
+    /// </summary>
+    private void OnQuitClicked()
+    {
+        if (_quitDialog != null)
+            return; // Already asking; a second press must not stack a second question.
+
+        _quitDialog = new ConfirmationDialog(
+            "Quit RobotSNAP?",
+            "The simulation stops and the application closes. Episodes recorded during this session are kept "
+            + "in memory only - export them from the Analysis tab first if you want to keep them.",
+            "Quit");
+
+        _quitDialog.Confirmed += () =>
+        {
+            _quitDialog = null;
+            RequestQuit();
+        };
+        _quitDialog.Cancelled += () => _quitDialog = null;
+
+        _quitDialog.Show(_root);
+    }
+
+    /// <summary>
+    /// Closes the application. In the editor it leaves Play mode, which is what the editor can close;
+    /// a built player is asked to quit.
+    /// </summary>
+    private static void QuitApplication()
+    {
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #else
@@ -178,7 +261,7 @@ public sealed class AppStatusBar : IDisposable
     private void ApplyTime()
     {
         if (_timeLabel != null)
-            _timeLabel.text = $"Time: {FormatElapsed(_elapsedSeconds)}";
+            _timeLabel.text = $"Time: {FormatElapsed(DisplayedSeconds(Clock.Instance, _elapsedSeconds))}";
     }
 
     private void ApplyRosState()
@@ -221,16 +304,6 @@ public sealed class AppStatusBar : IDisposable
 
     private static string Plural(string noun, int count) => count == 1 ? noun : noun + "s";
 
-    private static bool IsOpen(VisualElement popup) => popup.style.display == DisplayStyle.Flex;
-
-    private static void SetPopupDisplay(VisualElement popup, bool open)
-    {
-        if (popup == null) return;
-
-        popup.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
-        popup.EnableInClassList("is-hidden", !open);
-    }
-
     private static void ApplyIcon(VisualElement element, string resourcePath)
     {
         if (element == null) return;
@@ -240,9 +313,9 @@ public sealed class AppStatusBar : IDisposable
             element.style.backgroundImage = new StyleBackground(texture);
     }
 
-    private static string FormatElapsed(float seconds)
+    private static string FormatElapsed(double seconds)
     {
-        var time = TimeSpan.FromSeconds(Mathf.Max(0f, seconds));
+        var time = TimeSpan.FromSeconds(Math.Max(0.0, seconds));
 
         return time.TotalHours >= 1
             ? $"{(int)time.TotalHours:00}:{time.Minutes:00}:{time.Seconds:00}"

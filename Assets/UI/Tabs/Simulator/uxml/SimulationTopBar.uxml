@@ -17,6 +17,12 @@
                 <ui:VisualElement name="PauseResumeIcon" class="button-icon" style="background-image: url(&quot;project://database/Assets/UI/Icons/pause.png?fileID=2800000&amp;guid=6c722e01cbb6bb3b585de31b4bd00cda&amp;type=3#pause&quot;);"/>
                 <ui:Label name="PauseResumeLabel" text="Pause" class="button-label"/>
             </ui:Button>
+            <!-- The speed of the session, next to the transport controls it belongs with. The presets are
+                 written by the controller, which reads the applied scale back from the configuration. -->
+            <ui:VisualElement name="TimeScaleGroup" style="flex-direction: row; align-items: center; margin-left: 18px; flex-shrink: 0;">
+                <ui:Label name="TimeScaleLabel" text="Speed" style="margin-right: 6px;"/>
+                <ui:DropdownField name="TimeScaleDropdown" class="view-dropdown" tooltip="Simulation speed, in multiples of real time" style="min-width: 92px; height: 40px;"/>
+            </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

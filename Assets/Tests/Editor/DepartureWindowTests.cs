@@ -21,12 +21,48 @@ namespace RobotSNAP.Tests.Editor
         private static readonly MethodInfo BuildDepartures = typeof(ScenarioApplier)
             .GetMethod("BuildDepartures", BindingFlags.Instance | BindingFlags.NonPublic);
 
+        private static readonly MethodInfo EntryHoldFor = typeof(ScenarioApplier)
+            .GetMethod("EntryHoldFor", BindingFlags.Static | BindingFlags.NonPublic);
+
         private static readonly System.Type DepartureType = typeof(ScenarioApplier)
             .GetNestedType("Departure", BindingFlags.NonPublic);
 
         [Test]
-        public void SpawnWindow_DefaultsToZero() =>
-            Assert.That(new HumanScenarioConfig().SpawnWindow, Is.EqualTo(0f));
+        public void SpawnWindow_DefaultsToNothing()
+        {
+            // Nothing is not zero: a document that never wrote the key gets the short entry window a crowd uses
+            // by default, where a document that wrote zero asked for a simultaneous entry.
+            Assert.That(new HumanScenarioConfig().SpawnWindow, Is.Null);
+            Assert.That(new HumanScenarioConfig().SpawnWindowSeconds, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void EntryHold_IsZeroWhenTheDocumentWroteAWindow()
+        {
+            // Zero is an answer, not a silence: an author who wrote it - and the editor writes it for a route
+            // that starts together - gets every agent moving on the frame the scenario is applied.
+            Assert.That(HoldOf(independent: true, spawnWindow: 0f, count: 8), Is.EqualTo(0f));
+            Assert.That(HoldOf(independent: true, spawnWindow: 5f, count: 8), Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void EntryHold_UsesTheCrowdWindowOnlyWhenTheDocumentSaidNothing()
+        {
+            Random.InitState(31337);
+
+            // A crowd that never authored a window still feeds in as a flow rather than as one rank, and the
+            // hold stays inside the bounded window the crowd policy promises.
+            for (int i = 0; i < 64; i++)
+                Assert.That(HoldOf(independent: true, spawnWindow: null, count: 20),
+                    Is.GreaterThanOrEqualTo(0f).And.LessThanOrEqualTo(6f));
+        }
+
+        [Test]
+        public void EntryHold_IsZeroForARouteThatWalksAsAFormation()
+        {
+            // A formation is one spawn unit: holding its members apart would tear the shape it was placed with.
+            Assert.That(HoldOf(independent: false, spawnWindow: null, count: 8), Is.EqualTo(0f));
+        }
 
         [Test]
         public void SpawnWindow_RoundTripsThroughYaml()
@@ -197,6 +233,9 @@ namespace RobotSNAP.Tests.Editor
 
         private static float DrawDelay(float spawnWindow) =>
             (float)DrawDepartureDelay.Invoke(null, new object[] { spawnWindow });
+
+        private static float HoldOf(bool independent, float? spawnWindow, int count) =>
+            (float)EntryHoldFor.Invoke(null, new object[] { independent, spawnWindow, count });
 
         private static IList BuildDeparturesOf(ScenarioApplier applier, int totalHumans) =>
             (IList)BuildDepartures.Invoke(applier, new object[] { totalHumans });

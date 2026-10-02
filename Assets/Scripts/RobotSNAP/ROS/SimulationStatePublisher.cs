@@ -27,6 +27,13 @@ namespace RobotSNAP.ROS
     /// changes only when a scenario is applied, so the grid is built once per applied scenario instead of
     /// once per frame and published at most once per second.
     ///
+    /// The state stream is paced in simulated seconds and the grid in wall seconds, because only the first
+    /// describes the moving world: a client that raises the session's time scale gets its state at the same
+    /// rate per simulated second it always had, while the grid keeps its bounded cost. The state stream is
+    /// also the one a client needs while nothing is moving, so it falls back to the wall clock whenever the
+    /// simulation is held at a zero time scale - a lockstep gate between two releases, a stopped session. See
+    /// <see cref="Update"/> and <see cref="FixedUpdate"/>.
+    ///
     /// Nothing here may throw when no ROS server is listening, which is how this project usually runs: the
     /// connector raises an exception on a topic that has no registered publisher, so every publish goes
     /// through <see cref="CanPublish"/> first.
@@ -40,10 +47,10 @@ namespace RobotSNAP.ROS
         [Tooltip("Prefix used when auto detection is off.")]
         [SerializeField] private string customPrefix = "";
 
-        [Tooltip("Rate of the JSON state snapshot, in Hz. Zero disables that stream.")]
+        [Tooltip("Rate of the JSON state snapshot, in snapshots per simulated second, so it follows the session's time scale. Zero disables that stream.")]
         [SerializeField] private float publishFrequencyHz = 10f;
 
-        [Tooltip("Shortest delay between two publishes of the occupancy grid, in seconds. The whole grid is serialized on every publish, so the value is floored at one second.")]
+        [Tooltip("Shortest delay between two publishes of the occupancy grid, in seconds of wall time. The whole grid is serialized on every publish and the grid does not move with the world, so this one interval deliberately does not follow the time scale; it is floored at one second.")]
         [SerializeField] private float mapIntervalSeconds = 1f;
 
         [Header("Topic Names (the EnvROS prefix is prepended)")]
@@ -78,10 +85,18 @@ namespace RobotSNAP.ROS
         private CameraController _cameraController;
         private SimulationState? _lastState;
 
-        // Pacing: wall-clock intervals, so a paused simulation clock does not stall the bridge.
+        // Pacing. The state snapshot describes the moving world, so its interval counts simulated seconds:
+        // the rate above is a rate of the simulation, and the world is sampled the same number of times per
+        // simulated second whatever the time scale is. The grid is paced on the wall instead, because it
+        // describes the applied scenario rather than the moving world and serializing it is the expensive half
+        // of this component - a session running ten times faster must not serialize ten grids a second for a
+        // grid that only changes when a scenario is applied. Neither interval stops when the simulation clock
+        // is paused: the pause freezes the agents, not Time.timeScale, so both streams keep the client current.
         private float _stateInterval;
         private float _mapInterval;
-        private float _stateTimer;
+        private float _nextStateTime;
+        private float _stoppedTimer;
+        private bool _wasRunning = true;
         private float _mapTimer;
 
         // Occupancy grid of the applied scenario, rebuilt only on application and never per frame.
@@ -103,9 +118,7 @@ namespace RobotSNAP.ROS
         {
             if (!_initialized) return;
 
-            float deltaTime = Time.unscaledDeltaTime;
-
-            _mapTimer += deltaTime;
+            _mapTimer += Time.unscaledDeltaTime;
             if (_mapPublishPending || _mapTimer >= _mapInterval)
             {
                 _mapTimer = 0f;
@@ -113,12 +126,57 @@ namespace RobotSNAP.ROS
                 PublishMap();
             }
 
-            _stateTimer += deltaTime;
-            if (_stateTimer >= _stateInterval)
+            // A stopped world is still a world a client has to be able to read. The fixed step above is where
+            // this stream belongs while the simulation moves, but it is also the loop a zero time scale stops
+            // - and a zero time scale is exactly what the pacing gate holds between two releases, and what a
+            // session left behind by a killed client keeps. A client that cannot read the state cannot tell a
+            // stopped session from a dead one, cannot place anything it is shown, and cannot ask for the
+            // scenario it needs: the stream it is waiting for is the one the stop silenced. So while the world
+            // is at a zero scale the same snapshot goes out on the wall clock, at the rate the running world
+            // would have used. The two rules never both fire: the wall one needs a zero scale and the fixed
+            // one needs a scale above zero, so the stream keeps one publisher and no doubled message.
+            // A world that stops has to say so once, at once. A client holding a lockstep session reads this
+            // stream to learn that the period it released is spent - the fixed step it would otherwise be read
+            // from is the loop the stop just ended - so a snapshot published only on the next tick makes every
+            // released period cost the publishing interval on top of the period itself: a tenth of a second of
+            // simulation, which at one times speed is a tenth of a second of wall time added to every step,
+            // and a world that visibly hitches between two decisions. The edge publish is what bounds a step
+            // by the period it asked for rather than by the rate of this stream. The wall heartbeat that
+            // follows is for a world that stays stopped - a client that has gone, a session left paused - where
+            // there is no edge left to publish on and the snapshot has to keep saying where everything is.
+            bool running = Time.timeScale > 0f;
+            if (running)
             {
-                _stateTimer = 0f;
-                PublishState();
+                _wasRunning = true;
+                _stoppedTimer = 0f;
+                return;
             }
+
+            bool justStopped = _wasRunning;
+            _wasRunning = false;
+            _stoppedTimer += Time.unscaledDeltaTime;
+            if (!justStopped && _stoppedTimer < _stateInterval) return;
+
+            _stoppedTimer = 0f;
+            PublishState();
+        }
+
+        /// <summary>
+        /// The state snapshot describes the moving world, so it is paced on the simulation clock and published
+        /// from the fixed step rather than the frame. The frame rate is what a raised time scale squeezes
+        /// first: at five times speed a 60 fps session asks for fifty snapshots per second of wall time, and a
+        /// stream published once per frame cannot answer more than sixty however fast the world is going, so
+        /// the rate a client declared would quietly fall as the session sped up. The physics loop runs several
+        /// times per frame and keeps it. The grid is not published here: it is wall-paced, see Update.
+        /// </summary>
+        private void FixedUpdate()
+        {
+            if (!_initialized) return;
+
+            if (Time.fixedTime < _nextStateTime) return;
+
+            _nextStateTime = Time.fixedTime + _stateInterval;
+            PublishState();
         }
 
         private void OnDestroy()
@@ -175,6 +233,7 @@ namespace RobotSNAP.ROS
             // a rate of zero parks its stream instead of publishing it every frame.
             _stateInterval = Interval(1f / Mathf.Max(0f, publishFrequencyHz));
             _mapInterval = Mathf.Max(1f, mapIntervalSeconds);
+            _nextStateTime = Time.fixedTime + _stateInterval;
 
             // The grid of the scenario that is already loaded goes out on the first tick of the loop.
             RebuildMapCache();
@@ -541,6 +600,8 @@ namespace RobotSNAP.ROS
         ///   scenario_applied       true while the agents of the current scenario are in the scene
         ///   sim_time_seconds       time of the simulation clock, in seconds, null without a clock
         ///   time_scale             time scale applied to the simulation clock, null without a clock
+        ///   held                   true while the world is effectively stopped (a lockstep client between
+        ///                          two releases, a frozen session), false otherwise
         ///   scenario_id            name the scenario was loaded under (its YAML file)
         ///   scenario_name          name declared inside the scenario, null when none is loaded
         ///   environment            map of the scenario, or its declared location
@@ -602,6 +663,10 @@ namespace RobotSNAP.ROS
                 { "scenario_applied", applied },
                 { "sim_time_seconds", _clock != null ? (object)_clock.CurrentTimeSeconds : null },
                 { "time_scale", _clock != null ? (object)_clock.TimeScale : null },
+                // The scale above is the one the session was configured with and stays above zero while a
+                // lockstep client holds the world stopped, so it cannot tell a client the world is not moving.
+                // This is the engine's own scale, at or below zero exactly while the world is held.
+                { "held", Time.timeScale <= 0f },
                 { "scenario_id", manager != null ? manager.CurrentScenarioId : null },
                 { "scenario_name", scenario != null ? scenario.Name : null },
                 { "environment", EnvironmentOf(scenario) },

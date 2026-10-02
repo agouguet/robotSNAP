@@ -1,5 +1,42 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <ui:VisualElement name="CentralSplit" style="flex-direction: row; flex-grow: 2;">
-        
+    <ui:Style src="project://database/Assets/UI/Tabs/Analysis/uss/AnalysisTab.uss?fileID=7433441132597879392&amp;guid=7c1f0a2b6d5e4f3190ab12cd34ef5678&amp;type=3"/>
+    <ui:Style src="project://database/Assets/UI/ConfirmationDialog.uss?fileID=7433441132597879392&amp;guid=010bb023570045b791be4fb99ca50288&amp;type=3"/>
+    <ui:VisualElement name="AnalysisPage" class="analysis-page">
+        <ui:VisualElement class="analysis-header">
+            <ui:VisualElement class="analysis-header-text">
+                <ui:Label text="Analysis" class="analysis-page-title"/>
+                <ui:Label text="Every episode this session ran, its trajectories and its metrics." class="analysis-page-subtitle"/>
+            </ui:VisualElement>
+            <ui:VisualElement class="analysis-header-actions">
+                <ui:Label name="AnalysisExportStatus" text="" class="analysis-export-status"/>
+                <ui:Button name="AnalysisExportButton" text="Export session" class="analysis-export-button"/>
+                <ui:Button name="AnalysisClearButton" text="Clear session" class="analysis-clear-button"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement class="analysis-content">
+            <ui:VisualElement name="AnalysisEpisodeListHost" class="analysis-list-host"/>
+            <ui:VisualElement name="AnalysisMapPanel" class="analysis-map-section">
+                <ui:VisualElement class="analysis-section-heading">
+                    <ui:VisualElement class="analysis-section-text">
+                        <ui:Label text="Trajectories" class="analysis-section-title"/>
+                        <ui:Label name="AnalysisMapCaption" text="No episode selected." class="analysis-section-subtitle"/>
+                    </ui:VisualElement>
+                    <ui:Label name="AnalysisMapOutcome" text="" class="analysis-outcome"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="analysis-map-body">
+                    <ui:VisualElement name="AnalysisMapCanvas" class="analysis-map-canvas">
+                        <ui:Image name="AnalysisMapImage" class="analysis-map-image"/>
+                        <ui:VisualElement name="AnalysisMapOverlayHost" picking-mode="Ignore" class="analysis-map-overlay-host"/>
+                        <ui:Label name="AnalysisMapPlaceholder" text="Select an episode to see the map it ran on." class="analysis-map-placeholder"/>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="AnalysisMapLegendList" class="analysis-legend"/>
+                </ui:VisualElement>
+                <ui:VisualElement name="AnalysisTimelineHost" class="analysis-timeline-host"/>
+            </ui:VisualElement>
+            <ui:VisualElement name="AnalysisDetailColumn" class="analysis-detail-column">
+                <ui:VisualElement name="AnalysisEpisodeDetailHost" class="analysis-episode-detail-host"/>
+                <ui:VisualElement name="AnalysisSessionSummaryHost" class="analysis-session-summary-host"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

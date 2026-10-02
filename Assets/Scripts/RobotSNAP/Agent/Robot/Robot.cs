@@ -23,6 +23,23 @@ namespace RobotSNAP.Agents
         private bool _goalReached;
 
         /// <summary>
+        /// The last point of the route a scenario handed this robot, kept apart from <see cref="_currentGoal"/>.
+        ///
+        /// <see cref="_currentGoal"/> is the waypoint being walked right now, so it moves along the route. The
+        /// mission is over when the *last* point is reached, which is why a driver who takes the robot over
+        /// and reaches the destination is judged against this, not against a waypoint the scenario would have
+        /// consumed on its way there.
+        /// </summary>
+        private Vector3 _routeFinalGoal;
+        private bool _hasRouteFinalGoal;
+
+        /// <summary>
+        /// How close, on the map plane, a robot has to be to a goal to have reached it. Shared by the scenario
+        /// driver and the arrival watch so both call "arrived" at the same distance.
+        /// </summary>
+        private const float ArrivalDistanceMetres = 0.2f;
+
+        /// <summary>
         /// What turns a velocity command into motion: the wheels of a wheeled base, or the kinematic base of
         /// a body that has none. Resolved on the first frame, so a prefab only has to carry the one it uses.
         /// </summary>
@@ -92,6 +109,12 @@ namespace RobotSNAP.Agents
 
             if (_hasGoal && _routeOwnedByScenario)
                 UpdateScenarioMovement();
+            // A robot driven by a person or a client no longer walks the route, so nothing above would ever
+            // set the flag the mission reads: the driver reaches the destination and the run still ends in a
+            // timeout. Watching the same destination here is what makes "arrived" mean the same thing whoever
+            // steered.
+            else if (!_routeOwnedByScenario && _hasRouteFinalGoal)
+                WatchManualArrival();
 
             OnMovementUpdated?.Invoke(Position, Rotation);
         }
@@ -287,7 +310,7 @@ namespace RobotSNAP.Agents
 
             SetVelocity(targetSpeed, angularSpeed);
 
-            if (distance < 0.2f)
+            if (distance < ArrivalDistanceMetres)
             {
                 if (_followingRoute && _routeGoals.Count > 0)
                 {
@@ -304,11 +327,37 @@ namespace RobotSNAP.Agents
             }
         }
 
+        /// <summary>
+        /// Latches "arrived" for a robot steered by somebody else, once its position on the map plane is at the
+        /// destination the scenario set.
+        ///
+        /// Only the destination counts, never the velocity: a driver who overshoots and comes back has still
+        /// arrived, and one who crosses the circle on the way past has arrived too - which is the rule the
+        /// scenario driver already follows. Latching is deliberate, so a robot driven away after reaching the
+        /// goal keeps the mission it completed.
+        /// </summary>
+        private void WatchManualArrival()
+        {
+            if (_goalReached)
+                return;
+
+            Vector3 here = Position;
+            float dx = _routeFinalGoal.x - here.x;
+            float dz = _routeFinalGoal.z - here.z;
+            if (dx * dx + dz * dz > ArrivalDistanceMetres * ArrivalDistanceMetres)
+                return;
+
+            _goalReached = true;
+            _hasGoal = false;
+        }
+
         public override void SetGoal(Vector3 goal)
         {
             _routeGoals.Clear();
             _followingRoute = false;
             _goalReached = false;
+            _routeFinalGoal = goal;
+            _hasRouteFinalGoal = true;
             base.SetGoal(goal);
         }
 
@@ -316,10 +365,15 @@ namespace RobotSNAP.Agents
         {
             _routeGoals.Clear();
             _goalReached = false;
+            _hasRouteFinalGoal = false;
             if (goals != null)
             {
                 foreach (Vector3 goal in goals)
+                {
                     _routeGoals.Enqueue(goal);
+                    _routeFinalGoal = goal;
+                    _hasRouteFinalGoal = true;
+                }
             }
 
             _followingRoute = _routeGoals.Count > 0;
@@ -334,6 +388,7 @@ namespace RobotSNAP.Agents
             _routeGoals.Clear();
             _followingRoute = false;
             _goalReached = false;
+            _hasRouteFinalGoal = false;
             base.ClearGoal();
         }
 

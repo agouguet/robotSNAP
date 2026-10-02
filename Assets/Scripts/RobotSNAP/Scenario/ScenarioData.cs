@@ -90,6 +90,29 @@ namespace RobotSNAP.Core.Scenario
     }
 
     /// <summary>
+    /// A value a scenario lets the run draw between two bounds instead of fixing it.
+    ///
+    /// Randomization is authored next to the value it replaces rather than on its own: a field keeps its
+    /// plain scalar, and an optional <c>*_range</c> sibling says "draw this one". A scenario written before
+    /// ranges existed carries no sibling, so it is read exactly as it always was - the run uses the scalar
+    /// and draws nothing, which is what keeps an old file replaying the same way.
+    /// </summary>
+    [YamlObject]
+    public partial class ScenarioRange
+    {
+        [YamlMember("min")] public float Min { get; set; }
+        [YamlMember("max")] public float Max { get; set; }
+
+        /// <summary>True when the two bounds describe an interval worth drawing from.</summary>
+        [YamlIgnore]
+        public bool IsUsable => Max > Min;
+
+        public ScenarioRange Clone() => new ScenarioRange { Min = Min, Max = Max };
+
+        public override string ToString() => $"[{Min:0.##}, {Max:0.##}]";
+    }
+
+    /// <summary>
     /// Point de référence - position ou zone
     /// </summary>
     [YamlObject]
@@ -223,6 +246,21 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("speed")]
         public float Speed { get; set; } = 1.2f;
+
+        /// <summary>
+        /// Speed the run draws for this robot instead of <see cref="Speed"/>. Absent means the robot drives at
+        /// the authored speed, which is what every scenario written before ranges does.
+        /// </summary>
+        [YamlMember("speed_range")]
+        public ScenarioRange SpeedRange { get; set; }
+
+        /// <summary>
+        /// Yaw, in degrees, the run draws for this robot at spawn instead of the yaw of its start point. The
+        /// start point keeps the authored heading, so a scenario with no range faces exactly where it always
+        /// did; the draw only overrides the rotation the robot is placed with.
+        /// </summary>
+        [YamlMember("start_yaw_range")]
+        public ScenarioRange StartYawRange { get; set; }
     }
 
     /// <summary>
@@ -238,15 +276,37 @@ namespace RobotSNAP.Core.Scenario
         public int Count { get; set; } = 1;
 
         /// <summary>
+        /// Number of agents the run draws for this route instead of <see cref="Count"/>. This is the value an
+        /// author randomizes most often - a crossing that carries two walkers one run and five the next - so
+        /// both bounds are included in the draw.
+        /// </summary>
+        [YamlMember("count_range")]
+        public ScenarioRange CountRange { get; set; }
+
+        /// <summary>
         /// Seconds over which the agents of this route enter the simulation, measured from the moment the
-        /// scenario is applied. Zero, the default, releases them all at once.
+        /// scenario is applied. Zero releases them all at once.
+        ///
+        /// Null is not zero: it means the document said nothing, and the applier is then free to give an
+        /// independent crowd a short entry window of its own so it feeds in as a flow rather than stepping off
+        /// the line as one rank. A scenario that writes <c>spawn_window: 0</c> asked for a simultaneous entry,
+        /// and the editor writes exactly that for a route that starts together, so the value an author sees is
+        /// the value the run obeys.
         ///
         /// The window belongs to a spawn unit rather than to an agent: a route that walks as a formation is
         /// one unit, so its members share a single delay and leave together with their shape intact, while a
         /// route that scatters draws one delay per agent and feeds in as a flow instead of a wave.
         /// </summary>
         [YamlMember("spawn_window")]
-        public float SpawnWindow { get; set; } = 0f;
+        public float? SpawnWindow { get; set; }
+
+        /// <summary>
+        /// The authored window in seconds, with an absent one read as zero. Callers that only need the delay
+        /// use this; the ones that have to tell "the document said nothing" from "the document said zero" read
+        /// <see cref="SpawnWindow"/> itself.
+        /// </summary>
+        [YamlIgnore]
+        public float SpawnWindowSeconds => Mathf.Max(0f, SpawnWindow ?? 0f);
         
         [YamlMember("spawn")]
         public SpawnConfig Spawn { get; set; }
@@ -281,6 +341,14 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("speed")]
         public float Speed { get; set; } = 1.0f;
+
+        /// <summary>Walking speed the run draws for this route instead of <see cref="Speed"/>.</summary>
+        [YamlMember("speed_range")]
+        public ScenarioRange SpeedRange { get; set; }
+
+        /// <summary>Seconds of entry window the run draws for this route instead of <see cref="SpawnWindow"/>.</summary>
+        [YamlMember("spawn_window_range")]
+        public ScenarioRange SpawnWindowRange { get; set; }
         
         [YamlMember("color")]
         public float[] Color { get; set; }
@@ -319,6 +387,10 @@ namespace RobotSNAP.Core.Scenario
         
         [YamlMember("spacing")]
         public float Spacing { get; set; } = 1.5f;
+
+        /// <summary>Metres between members the run draws for this route instead of <see cref="Spacing"/>.</summary>
+        [YamlMember("spacing_range")]
+        public ScenarioRange SpacingRange { get; set; }
         
         [YamlMember("relative_to")]
         public string RelativeTo { get; set; }

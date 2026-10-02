@@ -1,5 +1,90 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <ui:VisualElement name="CentralSplit" style="flex-direction: row; flex-grow: 2;">
-        
+    <Style src="project://database/Assets/UI/Tabs/Settings/uss/SettingsTab.uss?fileID=7433441132597879392&amp;guid=09b020caf54e21f4fae17c875bd88dca&amp;type=3#SettingsTab"/>
+    <Style src="project://database/Assets/UI/CustomControls/SlideToggle.uss?fileID=7433441132597879392&amp;guid=9cdd4c5e7488ef4da8f1627d75a681f3&amp;type=3#SlideToggle"/>
+    <ui:VisualElement name="SettingsPage" class="settings-page">
+        <ui:VisualElement class="settings-header">
+            <ui:Label name="SettingsPageTitle" text="Settings" class="settings-page-title"/>
+            <ui:Label name="SettingsPageSubtitle" text="How the application runs: display, performance and quality." class="settings-page-subtitle"/>
+        </ui:VisualElement>
+        <ui:ScrollView name="SettingsScroll" class="settings-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden">
+            <ui:VisualElement name="SettingsContent" class="settings-content">
+                <ui:VisualElement name="DisplaySection" class="settings-section">
+                    <ui:Label text="Display" class="settings-section-title"/>
+                    <ui:Label name="DisplaySectionHint" text="" class="settings-section-hint is-hidden"/>
+                    <ui:VisualElement class="settings-row">
+                        <ui:Label text="Window mode" class="settings-row-label"/>
+                        <ui:VisualElement class="settings-row-control">
+                            <ui:DropdownField name="WindowModeDropdown" class="view-dropdown settings-dropdown" tooltip="Windowed, borderless fullscreen, or exclusive fullscreen."/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="settings-row settings-row--divided">
+                        <ui:VisualElement class="settings-row-label">
+                            <ui:Label text="Resolution" class="settings-row-label"/>
+                            <ui:Label name="ResolutionDetail" text="" class="settings-row-detail"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="settings-row-control">
+                            <ui:DropdownField name="ResolutionDropdown" class="view-dropdown settings-dropdown" tooltip="Size and refresh rate the application runs at. Exclusive fullscreen follows the desktop resolution."/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="settings-row settings-row--divided">
+                        <ui:VisualElement class="settings-row-label">
+                            <ui:Label text="Frame rate limit" class="settings-row-label"/>
+                            <ui:Label name="FrameRateDetail" text="" class="settings-row-detail"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="settings-row-control">
+                            <ui:DropdownField name="FrameRateDropdown" class="view-dropdown settings-dropdown" tooltip="Upper bound on frames per second. Ignored while vertical sync is on."/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="settings-row settings-row--divided">
+                        <ui:VisualElement class="settings-row-label">
+                            <ui:Label text="Vertical sync" class="settings-row-label"/>
+                            <ui:Label text="Locks the frame rate to the refresh rate of the display." class="settings-row-detail"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="settings-row-control">
+                            <RobotSNAP.UI.SlideToggle name="VsyncToggle" class="settings-toggle"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="QualitySection" class="settings-section">
+                    <ui:Label text="Quality" class="settings-section-title"/>
+                    <ui:Label name="QualitySectionHint" text="" class="settings-section-hint is-hidden"/>
+                    <ui:VisualElement class="settings-row">
+                        <ui:VisualElement class="settings-row-label">
+                            <ui:Label text="Quality level" class="settings-row-label"/>
+                            <ui:Label text="Shadows, texture resolution and anti-aliasing, as the project defines them." class="settings-row-detail"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="settings-row-control">
+                            <ui:DropdownField name="QualityDropdown" class="view-dropdown settings-dropdown" tooltip="Quality preset the application runs at."/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="CurrentSection" class="settings-section">
+                    <ui:Label text="Current" class="settings-section-title"/>
+                    <ui:Label text="What the application is running at right now." class="settings-section-hint"/>
+                    <ui:VisualElement class="settings-state-row">
+                        <ui:VisualElement class="settings-chip">
+                            <ui:Label name="StateResolutionLabel" text="" class="settings-chip-label"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="settings-chip">
+                            <ui:Label name="StateModeLabel" text="" class="settings-chip-label"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="settings-chip">
+                            <ui:Label name="StateFrameRateLabel" text="" class="settings-chip-label"/>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="settings-chip">
+                            <ui:Label name="StateQualityLabel" text="" class="settings-chip-label"/>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:Label name="SettingsEditorNote" text="In the editor the window follows the Game view; these settings take effect in a built player." class="settings-note is-hidden"/>
+                </ui:VisualElement>
+                <ui:VisualElement class="settings-actions">
+                    <ui:VisualElement class="settings-actions-row">
+                        <ui:Button name="ResetDisplayButton" text="Reset to defaults" class="settings-button" tooltip="Prepare the display the application shipped with. Apply commits it."/>
+                        <ui:Button name="ApplySettingsButton" text="Apply" class="settings-button settings-button-accent" tooltip="Apply the settings prepared on this page."/>
+                    </ui:VisualElement>
+                    <ui:Label name="SettingsApplyHint" text="" class="settings-apply-hint"/>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:ScrollView>
     </ui:VisualElement>
 </ui:UXML>

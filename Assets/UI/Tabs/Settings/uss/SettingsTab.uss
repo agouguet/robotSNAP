@@ -1,0 +1,241 @@
+/* ================================================================
+   SETTINGS PAGE
+   How the application runs: which display mode it takes, at which
+   resolution and refresh rate, how hard it is allowed to push the
+   frame loop, and which quality level it runs at.
+
+   The page is a column of cards on the application background, so it
+   reads as the same surface as the Analysis tab. Colours come from the
+   variables MainWindow.uss declares on '*', which is why nothing here
+   names a colour of its own.
+   ================================================================ */
+
+.settings-page {
+    flex-grow: 1;
+    flex-direction: column;
+    min-height: 0;
+    background-color: var(--bg-primary);
+    padding: 20px 24px 18px 24px;
+}
+
+/* ---- header -------------------------------------------------- */
+
+.settings-header {
+    flex-shrink: 0;
+    margin-bottom: 14px;
+}
+
+.settings-page-title {
+    font-size: 24px;
+    -unity-font-style: bold;
+    color: var(--text-primary);
+    margin-bottom: 3px;
+}
+
+.settings-page-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* ---- scroll body --------------------------------------------- */
+
+.settings-scroll {
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.settings-content {
+    padding-right: 14px;
+}
+
+/* ---- cards ---------------------------------------------------- */
+
+.settings-section {
+    background-color: var(--card-bg);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+}
+
+.settings-section-title {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--text-primary);
+}
+
+.settings-section-hint {
+    font-size: 12px;
+    color: var(--text-secondary-muted);
+    margin-top: 2px;
+    margin-bottom: 10px;
+    white-space: normal;
+}
+
+.settings-section-hint.is-hidden {
+    display: none;
+}
+
+/* ---- rows ----------------------------------------------------- */
+
+/* Label on the left, control on the right, one line per row. The label keeps
+   a floor so the controls of a card line up with each other. */
+
+.settings-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 40px;
+}
+
+.settings-row--divided {
+    border-top-width: 1px;
+    border-top-color: var(--border-color);
+}
+
+.settings-row-label {
+    font-size: 14px;
+    color: var(--text-primary);
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-right: 16px;
+}
+
+.settings-row-detail {
+    font-size: 12px;
+    color: var(--text-secondary-muted);
+    margin-top: 2px;
+    white-space: normal;
+}
+
+.settings-row-control {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    width: 260px;
+}
+
+/* ---- controls ------------------------------------------------- */
+
+/* .view-dropdown already carries the project's field colours and its popup
+   arrow; this only gives it the width and the type size of a settings row. */
+.settings-dropdown {
+    width: 100%;
+    height: 34px;
+    min-width: 0;
+    font-size: 13px;
+}
+
+/* The base template styles every base-field label at 28px, which is a size
+   meant for another element; a toggle's own label has to state its own. */
+.settings-toggle .unity-base-field__label {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.settings-toggle {
+    flex-shrink: 0;
+}
+
+/* ---- current state -------------------------------------------- */
+
+.settings-state-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.settings-chip {
+    flex-direction: row;
+    align-items: center;
+    height: 22px;
+    margin-right: 8px;
+    margin-bottom: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-radius: 11px;
+    background-color: var(--button-bg);
+}
+
+.settings-chip-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.settings-note {
+    font-size: 12px;
+    color: var(--text-secondary-muted);
+    margin-top: 6px;
+    white-space: normal;
+}
+
+.settings-note.is-hidden {
+    display: none;
+}
+
+/* ---- actions -------------------------------------------------- */
+
+/* The buttons keep a row of their own, anchored to the right, and the line that names what is waiting sits
+   below it. A hint that appears and disappears on its own line cannot move the buttons, which is what the
+   old single-row layout did when the label left the flow. */
+.settings-actions {
+    flex-direction: column;
+    margin-bottom: 6px;
+}
+
+.settings-actions-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    min-height: 30px;
+}
+
+/* Names what is waiting, so the disabled Apply button above it has a reason the reader can read. It always
+   holds a sentence, so the row of buttons above never shifts. */
+.settings-apply-hint {
+    font-size: 12px;
+    color: var(--text-secondary-muted);
+    white-space: normal;
+    margin-top: 6px;
+}
+
+.settings-actions-row > .settings-button {
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.settings-button {
+    height: 30px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    background-color: var(--button-bg);
+    color: var(--text-primary);
+    border-width: 1px;
+    border-color: var(--border-color);
+}
+
+.settings-button:hover {
+    background-color: var(--button-hover);
+}
+
+/* The one button that changes the display wears the accent; with nothing waiting it reads as inert. */
+.settings-button-accent {
+    background-color: var(--accent);
+    color: rgb(255, 255, 255);
+    border-width: 0;
+}
+
+.settings-button-accent:hover {
+    background-color: var(--accent-soft);
+}
+
+.settings-button-accent:disabled {
+    background-color: var(--button-bg);
+    color: var(--text-secondary-muted);
+}

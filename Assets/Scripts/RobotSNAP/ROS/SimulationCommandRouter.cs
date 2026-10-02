@@ -6,6 +6,7 @@ using Newtonsoft.Json.Linq;
 using RobotSNAP.Agents;
 using RobotSNAP.Core;
 using RobotSNAP.Core.Scenario;
+using RobotSNAP.Metrics;
 using UnityEngine;
 
 namespace RobotSNAP.ROS
@@ -40,22 +41,34 @@ namespace RobotSNAP.ROS
         public string Robot { get; }
 
         /// <summary>
+        /// Extra document a command answers with, or null for the commands that answer with a sentence only.
+        /// The metrics commands are the reason it exists: listing a session's episodes is a question whose
+        /// answer is a document, and a document squeezed into <see cref="Message"/> would be a message no
+        /// client could parse back.
+        /// </summary>
+        public JObject Payload { get; }
+
+        /// <summary>
         /// Builds a result; a null name or message is stored as an empty string. <paramref name="unknownIds"/>
         /// carries the ids a crowd command could not find and <paramref name="robot"/> the id a robot command
         /// addressed, each left null - and therefore out of the answer - by the commands that have neither.
+        /// <paramref name="payload"/> is the document a command answers with instead of a sentence, and is left
+        /// null by every command that has none, which is what keeps the key out of their answers.
         /// </summary>
         public CommandResult(
             bool ok,
             string command,
             string message,
             IReadOnlyList<int> unknownIds = null,
-            string robot = null)
+            string robot = null,
+            JObject payload = null)
         {
             Ok = ok;
             Command = command ?? "";
             Message = message ?? "";
             UnknownIds = unknownIds;
             Robot = robot;
+            Payload = payload;
         }
     }
 
@@ -87,9 +100,11 @@ namespace RobotSNAP.ROS
         /// </summary>
         private static readonly string[] AcceptedCommands =
         {
-            "play", "pause", "toggle_pause", "reset", "load_scenario", "set_time_scale", "set_random_seed",
-            "set_robot_goal", "clear_robot_goal", "stop_robot", "set_control_mode", "set_agent_controller",
-            "humans"
+            "play", "pause", "toggle_pause", "reset", "load_scenario", "set_time_scale", "set_pacing",
+            "release_pacing", "set_random_seed",
+            "stop_simulation", "set_robot_goal", "clear_robot_goal", "stop_robot", "set_control_mode",
+            "set_agent_controller", "humans",
+            "metrics_episodes", "metrics_episode", "metrics_clear"
         };
 
         /// <summary>Control modes of the robot input controller, as this topic spells them.</summary>
@@ -145,7 +160,10 @@ namespace RobotSNAP.ROS
                 case "toggle_pause": return TogglePaused(command);
                 case "reset": return Reset(body, command);
                 case "load_scenario": return LoadScenario(body, command);
+                case "stop_simulation": return StopSimulation(command);
                 case "set_time_scale": return SetTimeScale(body, command);
+                case "set_pacing": return SetPacing(body, command);
+                case "release_pacing": return ReleasePacing(command);
                 case "set_random_seed": return SetRandomSeed(body, command);
                 case "set_robot_goal": return SetRobotGoal(body, command);
                 case "clear_robot_goal": return ClearRobotGoal(body, command);
@@ -153,6 +171,9 @@ namespace RobotSNAP.ROS
                 case "set_control_mode": return SetControlMode(body, command);
                 case "set_agent_controller": return SetAgentController(body, command);
                 case "humans": return SetHumans(body, command);
+                case "metrics_episodes": return ListEpisodes(command);
+                case "metrics_episode": return GetEpisode(body, command);
+                case "metrics_clear": return ClearEpisodes(command);
                 default:
                     return new CommandResult(false, requested,
                         $"unknown command '{requested}'; accepted commands: {string.Join(", ", AcceptedCommands)}");
@@ -196,6 +217,41 @@ namespace RobotSNAP.ROS
             supervisor.TogglePause();
 
             return new CommandResult(true, command, supervisor.IsPaused ? "simulation paused" : "simulation running");
+        }
+
+        #endregion
+
+        #region Stop
+
+        /// <summary>
+        /// Stops the session the way the red Stop button of the application does. The button does not reach
+        /// into the managers itself: it publishes a <see cref="StopSimulationCommand"/>, which the Scenario
+        /// Manager answers by pausing the clock, clearing the agents of every environment and keeping the
+        /// scenario and the map, which puts the session back in Ready.
+        ///
+        /// This command publishes that same event rather than doing the work itself, so the button and a
+        /// client on the bridge leave the session in exactly the same state. The publish is synchronous, so
+        /// the state read back here is already the one the stop reached: the answer describes what the
+        /// session became, not what was asked of it.
+        /// </summary>
+        private static CommandResult StopSimulation(string command)
+        {
+            ScenarioManager manager = ResolveScenarioManager();
+            if (manager == null)
+                return new CommandResult(false, command, "no scenario manager in the scene");
+
+            if (!manager.HasScenarioLoaded)
+                return new CommandResult(false, command, "no scenario loaded; nothing to stop");
+
+            EventBus.Instance.Publish(new StopSimulationCommand());
+
+            SimulationState state = manager.CurrentState;
+            string scenario = manager.CurrentScenarioId;
+            string kept = string.IsNullOrEmpty(scenario)
+                ? "scenario and map kept, agents cleared"
+                : $"scenario '{scenario}' and its map kept, agents cleared";
+
+            return new CommandResult(true, command, $"simulation stopped, state {state}; {kept}");
         }
 
         #endregion
@@ -315,6 +371,16 @@ namespace RobotSNAP.ROS
             if (requested <= 0f)
                 return new CommandResult(false, command, $"key 'time_scale' must be greater than zero, got {Format(requested)}");
 
+            // Two optional keys ride with the scale, because the scale alone is not what a fast session runs
+            // at. The physics step decides how much simulation one step covers, and the catch-up ceiling
+            // decides how many steps one drawn frame is allowed to pay for: a session at a hundred times
+            // speed that draws at one hertz owes a hundred seconds of simulation per frame, and the ten this
+            // project ships with would answer a tenth of it.
+            if (!TryOptionalPositiveFloat(body, "fixed_timestep", command, out float? timestep, out refusal))
+                return refusal;
+            if (!TryOptionalPositiveFloat(body, "maximum_delta_time", command, out float? ceiling, out refusal))
+                return refusal;
+
             Supervisor supervisor = Supervisor.Instance;
             SimulationConfig config = supervisor != null ? supervisor.ActiveConfig : null;
             Clock clock = ResolveClock();
@@ -323,11 +389,45 @@ namespace RobotSNAP.ROS
                 return new CommandResult(false, command, "no clock or configuration in the scene");
 
             float scale = requested;
+            float appliedTimestep = 0f;
+            float appliedCeiling = 0f;
             if (config != null)
             {
-                config.TimeScale = requested;
+                if (timestep.HasValue)
+                    config.FixedTimestep = timestep.Value;
+
+                // A session already held one control period at a time cannot run faster than the period it
+                // hands out: past that, a single frame of physics spends more simulation than the period and
+                // whatever the client asked its episode to be is over before the gate is looked at again.
+                // The step is written first because the ceiling is expressed in it.
+                SimulationPacingGate lockstep = ResolvePacingGate();
+                float usable = lockstep != null && lockstep.IsLockstep
+                    ? SimulationPacingGate.MaxScaleForStep(lockstep.StepSeconds, config.FixedTimestep)
+                    : float.PositiveInfinity;
+                config.TimeScale = Mathf.Min(requested, usable);
+
+                // Left out, the ceiling follows the scale up to ten seconds: a session that asks for ten times
+                // speed may catch up on ten seconds of simulation in one frame, which is what the project
+                // already allowed. It does not follow the ask past that, and the reason is the bridge rather
+                // than the physics: a frame let loose on a whole minute of simulation runs three thousand
+                // physics steps before the next frame, the streams paced on the simulation clock emit a
+                // message for each of them, and the connector's outgoing queue takes the session down with it.
+                // A client that wants a hundred times speed wants the pacing gate, where a frame carries one
+                // control period and not a minute. A caller that knows better can still say so with
+                // maximum_delta_time.
+                config.MaximumDeltaTime = ceiling ?? Mathf.Clamp(requested, 1f, 10f);
                 config.ApplyTimeSettings();
                 scale = config.TimeScale;
+                appliedTimestep = config.FixedTimestep;
+                appliedCeiling = config.MaximumDeltaTime;
+            }
+
+            // In lockstep the catch-up ceiling belongs to the gate, which keeps it at one control period.
+            SimulationPacingGate pacing = ResolvePacingGate();
+            if (pacing != null && pacing.IsLockstep)
+            {
+                Time.maximumDeltaTime = pacing.CatchUpCeiling;
+                appliedCeiling = Time.maximumDeltaTime;
             }
 
             if (clock != null)
@@ -335,9 +435,141 @@ namespace RobotSNAP.ROS
 
             string note = scale == requested
                 ? ""
-                : $" (requested {Format(requested)}, clamped to {Format(scale)})";
+                : $" (requested {Format(requested)}, clamped to {Format(scale)}" +
+                  (pacing != null && pacing.IsLockstep
+                      ? ": one control period of " + Format(pacing.StepSeconds) +
+                        " s holds one physics step up to that scale"
+                      : "") + ")";
 
-            return new CommandResult(true, command, $"time scale set to {Format(scale)}{note}");
+            string extra = config == null
+                ? ""
+                : $", physics step {Format(appliedTimestep)} s, catch-up ceiling {Format(appliedCeiling)} s";
+
+            return new CommandResult(true, command, $"time scale set to {Format(scale)}{note}{extra}");
+        }
+
+        /// <summary>
+        /// Chooses how the session is paced: ``free`` running, or one control period per client step. The
+        /// second is what makes a control period mean the same number of simulated seconds whatever the
+        /// machine delivers and however long the client's policy takes to answer.
+        /// </summary>
+        private static CommandResult SetPacing(JObject body, string command)
+        {
+            if (!TryRequireString(body, "mode", command, out string mode, out CommandResult refusal))
+                return refusal;
+
+            SimulationPacingGate gate = ResolvePacingGate();
+            if (gate == null)
+                return new CommandResult(false, command, "no pacing gate in the scene");
+
+            float scale = CurrentScale();
+
+            switch (mode.Trim().ToLowerInvariant())
+            {
+                case "free":
+                    gate.SetFree(scale);
+                    // Leaving lockstep gives the frame its catch-up ceiling back.
+                    Supervisor.Instance?.ActiveConfig?.ApplyTimeSettings();
+                    return new CommandResult(true, command, $"free running at scale {Format(scale)}");
+
+                case "lockstep":
+                    if (!TryRequireFloat(body, "step_seconds", command, out float step, out refusal))
+                        return refusal;
+                    if (step <= 0f)
+                        return new CommandResult(false, command,
+                            $"key 'step_seconds' must be greater than zero, got {Format(step)}");
+
+                    float usableAtStep = SimulationPacingGate.MaxScaleForStep(step, Time.fixedDeltaTime);
+                    float effective = Mathf.Min(scale, usableAtStep);
+                    SimulationConfig pacingConfig = Supervisor.Instance != null
+                        ? Supervisor.Instance.ActiveConfig
+                        : null;
+                    if (pacingConfig != null && !Mathf.Approximately(effective, scale))
+                    {
+                        // The clock and the snapshots carry this number, so it has to be the one the world
+                        // actually runs at and not the one that was asked for.
+                        pacingConfig.TimeScale = effective;
+                        pacingConfig.ApplyTimeSettings();
+                    }
+
+                    gate.SetLockstep(step, effective);
+                    string clamped = Mathf.Approximately(effective, scale)
+                        ? ""
+                        : $" (asked {Format(scale)}; a frame of {Format(Time.fixedDeltaTime)} s physics " +
+                          $"cannot spend less than {Format(Time.fixedDeltaTime * effective)} s of simulation, " +
+                          $"so {Format(step)} s of period holds {Format(effective)} times speed - raise the " +
+                          "control period to raise the scale)";
+                    return new CommandResult(true, command,
+                        $"lockstep, {Format(step)} s of simulation per release at scale {Format(effective)}" +
+                        clamped);
+
+                default:
+                    return new CommandResult(false, command,
+                        $"key 'mode' is 'free' or 'lockstep', got '{mode}'");
+            }
+        }
+
+        /// <summary>
+        /// Spend one period of the lockstep the client asked for. The answer comes back as soon as the world
+        /// has been let go, not when the period is over: the client reads the clock itself, and waiting here
+        /// would hold the acknowledgement behind a whole period of simulation.
+        /// </summary>
+        private static CommandResult ReleasePacing(string command)
+        {
+            SimulationPacingGate gate = ResolvePacingGate();
+            if (gate == null)
+                return new CommandResult(false, command, "no pacing gate in the scene");
+
+            if (!gate.IsLockstep)
+                return new CommandResult(false, command, "the session is not in lockstep pacing");
+
+            gate.Release(CurrentScale());
+            return new CommandResult(true, command, $"released {Format(gate.StepSeconds)} s");
+        }
+
+        private static SimulationPacingGate ResolvePacingGate()
+        {
+            return UnityEngine.Object.FindAnyObjectByType<SimulationPacingGate>();
+        }
+
+        /// <summary>The scale the session is configured with, or 1 when nothing carries one.</summary>
+        private static float CurrentScale()
+        {
+            Supervisor supervisor = Supervisor.Instance;
+            SimulationConfig config = supervisor != null ? supervisor.ActiveConfig : null;
+            Clock clock = ResolveClock();
+            if (config != null)
+                return config.TimeScale;
+            return clock != null ? clock.TimeScale : 1f;
+        }
+
+        /// <summary>
+        /// One optional key that has to be a positive number when it is there at all. Absent is fine and
+        /// answers ``null``, so a caller that only wants to change the scale keeps the pacing it had.
+        /// </summary>
+        private static bool TryOptionalPositiveFloat(
+            JObject body, string key, string command, out float? value, out CommandResult failure)
+        {
+            value = null;
+            failure = default;
+
+            if (!HasValue(body, key))
+                return true;
+
+            if (!TryGetFloat(body, key, out float parsed))
+            {
+                failure = new CommandResult(false, command, $"key '{key}' must be a number");
+                return false;
+            }
+
+            if (parsed <= 0f)
+            {
+                failure = new CommandResult(false, command, $"key '{key}' must be greater than zero, got {Format(parsed)}");
+                return false;
+            }
+
+            value = parsed;
+            return true;
         }
 
         /// <summary>
@@ -1037,6 +1269,86 @@ namespace RobotSNAP.ROS
         private static string Format(int value)
         {
             return value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        #endregion
+
+        #region Metrics
+
+        /// <summary>
+        /// The three questions a client asks about the episodes of the session it is driving. They read the one
+        /// store <see cref="MetricsRecorder"/> fills, so the answer a client gets and the list the dashboard
+        /// draws are the same episodes in the same order.
+        ///
+        /// Every one of them answers with a document rather than a sentence - see
+        /// <see cref="CommandResult.Payload"/> - because an episode carries a trajectory and a trajectory does
+        /// not fit in a message a client could read back. Strings stay empty rather than null on the way out: a
+        /// JSON document a client parses is easier to write against when its keys are always there.
+        /// </summary>
+        private static CommandResult ListEpisodes(string command)
+        {
+            MetricsStore store = MetricsStore.Instance;
+            var episodes = new JArray();
+            foreach (EpisodeMetrics episode in store.Episodes)
+                episodes.Add(JObject.FromObject(episode));
+
+            var payload = new JObject
+            {
+                ["session"] = store.SessionId ?? "",
+                ["started_at"] = store.StartedAt ?? "",
+                ["count"] = store.Count,
+                ["episodes"] = episodes,
+            };
+
+            string message = store.Count == 0
+                ? $"session {store.SessionId} holds no episode yet"
+                : $"{store.Count} episode(s) in session {store.SessionId}";
+            return new CommandResult(true, command, message, payload: payload);
+        }
+
+        /// <summary>
+        /// One episode by identifier. A session that does not hold it is answered, not refused: a client asking
+        /// about an episode a cleared session dropped is asking a question whose answer is "no", and an answer
+        /// of "no" must not look like a broken command.
+        /// </summary>
+        private static CommandResult GetEpisode(JObject body, string command)
+        {
+            if (!TryRequireString(body, "id", command, out string id, out CommandResult refusal))
+                return refusal;
+
+            EpisodeMetrics episode = MetricsStore.Instance.Get(id);
+            var payload = new JObject
+            {
+                ["id"] = id,
+                ["found"] = episode != null,
+                ["episode"] = episode == null ? JValue.CreateNull() : JObject.FromObject(episode),
+            };
+
+            string message = episode == null
+                ? $"no episode '{id}' in session {MetricsStore.Instance.SessionId}"
+                : $"episode '{id}' ({episode.Outcome})";
+            return new CommandResult(true, command, message, payload: payload);
+        }
+
+        /// <summary>
+        /// Empties the session store and starts a new one. The export files already on disk are deliberately
+        /// left where they are: they are the record of a session that ran, and this command clears the live
+        /// list, not the archive.
+        /// </summary>
+        private static CommandResult ClearEpisodes(string command)
+        {
+            MetricsStore store = MetricsStore.Instance;
+            int cleared = store.Clear();
+            var payload = new JObject
+            {
+                ["cleared"] = cleared,
+                ["session"] = store.SessionId ?? "",
+            };
+            return new CommandResult(
+                true,
+                command,
+                $"cleared {cleared} episode(s); session {store.SessionId} started",
+                payload: payload);
         }
 
         #endregion

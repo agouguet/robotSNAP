@@ -1,45 +1,149 @@
 scenario_info:
-  name: "Corner"
-  description: "Corner scenario with multiple pedestrians"
-  version: "1.0"
-  map: "basic/corner"
-  preview: "corner.png"
-  tags: ["Basic", "Indoor", "Corner", "Corridor"]
-
-simulation:
-  duration: 0.1
-  random_seed: 42
-  time_scale: 1.0
-  min_humans: 0
-  max_humans: 50
-
+  name: Corner
+  type: Custom
+  description: 'Blind 90-degree corner: the robot and a stream of pedestrians arrive from the two legs and must give way to each other.'
+  version: '1.0'
+  author: RobotSNAP
+  created: '2026-09-30 17:00'
+  tags:
+    - Basic
+    - Indoor
+    - Corner
+    - Corridor
+  map: basic/corner
+  location: ''
+  dataset: null
+  preview: ''
+  robot_type: freight
+  duration: 0.0
 points:
-  start_robot: {x: 9, y: 0, z: 0, yaw: -90}
-  end_robot: {x: 0, y: 0, z: -9}
-  spawn_zone:
-    center: {x: 0, y: 0, z: -9}
-    size: {x: 1.0, y: 1, z: 1.0}
-  end_zone:
-    center: {x: 9, y: 0, z: 0}
-    size: {x: 1.0, y: 1, z: 1.0}
-
-robot:
-  start: "start_robot"
-  goal: "end_robot"
-  behavior: "normal"
-  speed: 1.2
-
-humans:
-  # Groupe 1 : simples piétons spawn aléatoire dans une zone
-  - id: "pedestrians"
-    count: 3
-    spawn:
-      type: "random"
-      ref: "spawn_zone"
-    goal:
-      type: "point"
-      ref: "end_zone"
-    behavior: "normal"
+  robot_start:
+    x: 9.0
+    y: 0.0
+    z: 0.0
+    yaw: -90.0
+    center: null
+    size: null
+  robot_goal:
+    x: 0.0
+    y: 0.0
+    z: -9.0
+    yaw: null
+    center: null
+    size: null
+  corner_turn:
+    x: 1.0
+    y: 0.0
+    z: -0.5
+    yaw: 180.0
+    center: null
+    size: null
+  from_south_start:
+    x: 0.0
+    y: 0.0
+    z: -8.5
+    yaw: null
+    center: null
+    size: null
+  from_south_2_start:
+    x: 0.0
+    y: 0.0
+    z: -9.5
+    yaw: null
+    center: null
+    size: null
+  east_exit:
+    x: 8.5
+    y: 0.0
+    z: 0.0
+    yaw: null
+    center: null
+    size: null
+  corner_pass:
+    x: -0.5
+    y: 0.0
+    z: -1.0
+    yaw: null
+    center: null
+    size: null
+robots:
+  - id: robot_1
+    type: freight
+    start: robot_start
+    goal: robot_goal
+    waypoints:
+      - corner_turn
+    behavior: normal
     speed: 1.0
+robot: null
+humans:
+  - id: from_south
+    count: 1
+    spawn_window: 0.0
+    spawn:
+      type: point
+      ref: from_south_start
+      position: null
+      zone: null
+      formation: null
+      formation_parameter: 0.0
+      spacing: 1.5
+      relative_to: null
+    goal:
+      type: point
+      ref: corner_pass
+      position: null
+      zone: null
+      target: null
+      radius: 0.0
+    goals:
+      - type: point
+        ref: east_exit
+        position: null
+        zone: null
+        target: null
+        radius: 0.0
+    end_behavior: stay
+    group: null
     movement_controller:
-      type: "SFM"
+      type: SFM
+      sfm_params: null
+    behavior: normal
+    speed: 1.0
+    color: null
+    personality: null
+  - id: from_south_2
+    count: 1
+    spawn_window: 5.0
+    spawn:
+      type: point
+      ref: from_south_2_start
+      position: null
+      zone: null
+      formation: null
+      formation_parameter: 0.0
+      spacing: 1.5
+      relative_to: null
+    goal:
+      type: point
+      ref: corner_pass
+      position: null
+      zone: null
+      target: null
+      radius: 0.0
+    goals:
+      - type: point
+        ref: east_exit
+        position: null
+        zone: null
+        target: null
+        radius: 0.0
+    end_behavior: stay
+    group: null
+    movement_controller:
+      type: SFM
+      sfm_params: null
+    behavior: normal
+    speed: 0.9
+    color: null
+    personality: null

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using RobotSNAP.Agents;
+using RobotSNAP.CameraControl;
 using RobotSNAP.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -110,10 +112,17 @@ public sealed class SimulationVisualizationPanel
     private readonly VisualElement _panel;
     private readonly Button _collapseButton;
     private readonly SimulationMinimap _minimap;
+    private readonly CameraController _camera;
     private VisualizationManager _manager;
     private bool _collapsed;
     private bool _updating;
     private float _nextRefresh;
+
+    /// <summary>
+    /// Whether the panel is showing. It is shown for a selected robot and hidden otherwise, and the flag
+    /// keeps the style writes to the one moment the answer changes rather than one per tick.
+    /// </summary>
+    private bool _visible = true;
 
     /// <summary>
     /// Binds the switches of the overlay to a manager, creating one when the scene carries none. A missing
@@ -122,7 +131,10 @@ public sealed class SimulationVisualizationPanel
     /// The minimap is optional for the same reason: an environment whose view has no camera has no minimap
     /// either, and its footprint switch is then the one switch the panel leaves inert.
     /// </summary>
-    public SimulationVisualizationPanel(VisualElement root, SimulationMinimap minimap = null)
+    public SimulationVisualizationPanel(
+        VisualElement root,
+        SimulationMinimap minimap = null,
+        CameraController camera = null)
     {
         if (root == null)
         {
@@ -131,6 +143,7 @@ public sealed class SimulationVisualizationPanel
         }
 
         _minimap = minimap;
+        _camera = camera;
         _panel = Query<VisualElement>(root, "VisualizationPanel");
         _collapseButton = Query<Button>(root, "VisualizationPanelCollapseButton");
 
@@ -154,6 +167,7 @@ public sealed class SimulationVisualizationPanel
         // Folded to its tab: it floats over the shot, and a run nobody is debugging is a run that wants its
         // view back. One click opens it, and the state it holds is the one the switches show.
         SetCollapsed(true);
+        UpdateVisibility();
     }
 
     /// <summary>Re-reads the settings on a slow tick, so the panel shows what the scene is doing.</summary>
@@ -161,6 +175,8 @@ public sealed class SimulationVisualizationPanel
     {
         if (_switches.Count == 0)
             return;
+
+        UpdateVisibility();
 
         if (Time.unscaledTime < _nextRefresh)
             return;
@@ -174,6 +190,27 @@ public sealed class SimulationVisualizationPanel
     /// next tick - and for a test, which does not get the ticks of a running editor.
     /// </summary>
     public void Refresh() => SyncFromSettings();
+
+    /// <summary>
+    /// The panel belongs to the selected robot: its robot switches name that robot and nothing else, so an
+    /// overlay with no robot selected has no panel to offer. The selection is read from the camera's follow
+    /// target - the single selection the agent list and a click on a body already share - rather than kept a
+    /// second time here. A scene with no camera cannot tell what is selected, and leaves the panel as the
+    /// overlay authored it.
+    /// </summary>
+    private void UpdateVisibility()
+    {
+        if (_camera == null || _panel == null)
+            return;
+
+        Transform target = _camera.GetCurrentFollowTarget();
+        bool robotSelected = target != null && target.GetComponentInParent<Robot>() != null;
+        if (robotSelected == _visible)
+            return;
+
+        _visible = robotSelected;
+        _panel.style.display = robotSelected ? DisplayStyle.Flex : DisplayStyle.None;
+    }
 
     /// <summary>The switches, in the order the panel shows them.</summary>
     private void BuildSwitches(VisualElement root)

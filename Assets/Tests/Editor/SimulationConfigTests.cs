@@ -25,15 +25,28 @@ namespace RobotSNAP.Tests.Editor
         {
             _config.EnvironmentCount = 0;
             _config.EnvironmentSpacing = -1f;
-            _config.TimeScale = 99f;
+            _config.TimeScale = 150f;
             _config.FixedTimestep = 0f;
             _config.RosPublishFrequency = 100f;
 
             Assert.That(_config.EnvironmentCount, Is.EqualTo(1));
             Assert.That(_config.EnvironmentSpacing, Is.EqualTo(0f));
-            Assert.That(_config.TimeScale, Is.EqualTo(10f));
+            Assert.That(_config.TimeScale, Is.EqualTo(100f));
             Assert.That(_config.FixedTimestep, Is.EqualTo(0.01f));
             Assert.That(_config.RosPublishFrequency, Is.EqualTo(60f));
+        }
+
+        [Test]
+        public void TimeScale_ReachesTheTrainingCeilingAndStopsThere()
+        {
+            _config.TimeScale = 100f;
+            Assert.That(_config.TimeScale, Is.EqualTo(100f), "x100 is a training run, not a typo to be clamped away");
+
+            _config.TimeScale = 150f;
+            Assert.That(_config.TimeScale, Is.EqualTo(100f), "the ceiling still guards a value past x100");
+
+            _config.TimeScale = -5f;
+            Assert.That(_config.TimeScale, Is.EqualTo(0f), "the floor is still 0");
         }
 
         [Test]

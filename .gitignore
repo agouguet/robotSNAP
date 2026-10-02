@@ -103,8 +103,26 @@ InitTestScene*.unity*
 
 # Scratch files and screenshots taken while working on the UI.
 /[Aa]ssets/[Tt]emp/
+/[Aa]ssets/[Tt]emp.meta
 
 # Scenarios the application moves aside when they are deleted: they stay on disk for the user, and
 # they are not part of the project's history.
 /[Aa]ssets/StreamingAssets/Scenarios/DeletedScenarios/
 /[Aa]ssets/StreamingAssets/Scenarios/DeletedScenarios.meta
+
+# Player builds. The template above only ignores Build/ and Builds/; the product name of this
+# application produces build_Data/ and build.<arch> instead.
+/[Bb]uild_[Dd]ata/
+/build.[A-Za-z0-9_]*
+/*_BurstDebugInformation_DoNotShip/
+
+# Solution file the editor generates. The template above ignores *.sln, which does not cover it.
+*.slnx
+
+# UI Toolkit schemas the editor rewrites at every version change: generated, never authored.
+/[Uu][Ii][Ee]lements[Ss]chema/
+
+# Scenario sessions the application writes while it runs. This is run data the user owns, not an
+# asset of the project, and it grows by megabytes per session.
+/[Aa]ssets/StreamingAssets/metrics/
+/[Aa]ssets/StreamingAssets/metrics.meta

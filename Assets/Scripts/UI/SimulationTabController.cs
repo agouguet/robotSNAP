@@ -3,6 +3,7 @@ using RobotSNAP;
 using RobotSNAP.CameraControl;
 using RobotSNAP.Core;
 using RobotSNAP.Core.Scenario;
+using RobotSNAP.ROS;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -32,7 +33,13 @@ public class SimulationTabController : MonoBehaviour
     private Button _loadScenarioButton;
     private Button _startStopButton;
     private Button _pauseResumeButton;
+    private DropdownField _timeScaleDropdown;
     private VisualElement _cameraOverlay;
+
+    // The router holds no state between two commands, so the control and a Python client can share
+    // the same entry point without sharing a session.
+    private readonly SimulationCommandRouter _commandRouter = new SimulationCommandRouter();
+    private TimeScaleControl _timeScaleControl;
 
     private SimulationMinimap _minimap;
     private SimulationAgentPanel _agentPanel;
@@ -89,6 +96,7 @@ public class SimulationTabController : MonoBehaviour
         _loadScenarioButton = _root.Q<Button>("LoadScenarioButton");
         _startStopButton = _root.Q<Button>("StartStopButton");
         _pauseResumeButton = _root.Q<Button>("PauseResumeButton");
+        _timeScaleDropdown = _root.Q<DropdownField>("TimeScaleDropdown");
         _cameraOverlay = _root.Q<VisualElement>("CameraOverlay");
 
         if (_startStopButton == null || _pauseResumeButton == null)
@@ -118,6 +126,7 @@ public class SimulationTabController : MonoBehaviour
 
         BuildHud();
         WirePlayControls();
+        BuildTimeScaleControl();
         WireViewSelector();
         UpdateUI();
 
@@ -140,7 +149,9 @@ public class SimulationTabController : MonoBehaviour
 
         // The debug switches need no camera: they are built whenever the overlay is, so an environment whose
         // view has no controller yet still gets them.
-        _visualizationPanel = new SimulationVisualizationPanel(_root, _minimap);
+        // The panel reads the selection from the camera, the same source the agent list uses, so the robot
+        // switches always describe the robot that is actually selected.
+        _visualizationPanel = new SimulationVisualizationPanel(_root, _minimap, cameraController);
 
         if (minimapCamera != null && minimapRenderTexture != null)
         {
@@ -158,6 +169,38 @@ public class SimulationTabController : MonoBehaviour
 
         _startStopButton.clicked += OnStartStopClicked;
         _pauseResumeButton.clicked += OnPauseResumeClicked;
+    }
+
+    /// <summary>
+    /// Builds the speed control of the top bar. The scale it shows is read back from the
+    /// configuration - which is what clamps it - and the scale it sets goes through
+    /// <see cref="SimulationCommandRouter"/>, the same command a Python client sends, so the two
+    /// cannot disagree about the speed of a session. A top bar without the dropdown leaves the rest
+    /// of the view working.
+    /// </summary>
+    private void BuildTimeScaleControl()
+    {
+        if (_timeScaleDropdown == null)
+        {
+            Debug.LogWarning("[SimulationTabController] The top bar has no TimeScaleDropdown; the speed control stays out.");
+            return;
+        }
+
+        _timeScaleControl = new TimeScaleControl(_timeScaleDropdown, _commandRouter, AppliedTimeScale);
+    }
+
+    /// <summary>
+    /// The scale the session is running at: the configuration's, which is the value the router
+    /// clamps and writes, or the clock's where a scene carries no configuration.
+    /// </summary>
+    private static float? AppliedTimeScale()
+    {
+        Supervisor supervisor = Supervisor.Instance;
+        if (supervisor != null && supervisor.ActiveConfig != null)
+            return supervisor.ActiveConfig.TimeScale;
+
+        Clock clock = Clock.Instance;
+        return clock != null ? clock.TimeScale : null;
     }
 
     /// <summary>
@@ -256,6 +299,10 @@ public class SimulationTabController : MonoBehaviour
         _minimap?.Tick();
         _agentPanel?.Tick();
         _visualizationPanel?.Tick();
+
+        // A client can set the speed with nobody clicking, so the control reads the configuration
+        // rather than only answering clicks.
+        _timeScaleControl?.Refresh();
     }
 
     // ==========================================

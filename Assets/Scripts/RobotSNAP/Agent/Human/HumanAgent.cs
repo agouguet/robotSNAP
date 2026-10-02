@@ -75,6 +75,23 @@ namespace RobotSNAP.Agents
         public override Vector3 Forward => transform.forward;
         public override Vector3 Velocity => currentVelocity3D;
 
+        /// <summary>
+        /// The footprint the crowd's own physics uses, which is the one its config declares.
+        ///
+        /// The serialized radius of the base class is the prefab's default, and nothing ever copied the
+        /// config's <c>agentRadius</c> into it: the social force model, the contact guard and the yield
+        /// look-ahead all read the config, so the metric that measures a passage against the bodies has to
+        /// read the same number or it measures a body the simulator does not have.
+        /// </summary>
+        public override float Radius
+        {
+            get
+            {
+                HumanConfig config = _scenarioConfig != null ? _scenarioConfig : humanConfig;
+                return config != null ? Mathf.Max(0.05f, config.agentRadius) : base.Radius;
+            }
+        }
+
         // Propriétés pour IHumanController
         public bool HasDestination => hasDestination;
         public Vector3 CurrentGoal => _currentGoal;

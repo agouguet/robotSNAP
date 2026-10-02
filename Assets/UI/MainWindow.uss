@@ -409,6 +409,12 @@
     color: var(--dropdown-text);
 }
 
+/* The default runtime theme colours a popup field's own text for a dark panel, which leaves it
+   unreadable on the light dropdown this project draws; the value has to be the reading colour. */
+.view-dropdown .unity-popup-field__text {
+    color: var(--dropdown-text);
+}
+
 .view-dropdown .unity-popup-field__arrow {
     color: var(--dropdown-text);
     width: 16px;

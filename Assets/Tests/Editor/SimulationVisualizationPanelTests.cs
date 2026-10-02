@@ -1,4 +1,6 @@
 using NUnit.Framework;
+using RobotSNAP.Agents;
+using RobotSNAP.CameraControl;
 using RobotSNAP.UI;
 using UnityEditor;
 using UnityEngine;
@@ -171,6 +173,48 @@ namespace RobotSNAP.Tests.Editor
             }
             finally
             {
+                if (manager != null)
+                    Object.DestroyImmediate(manager.gameObject);
+            }
+        }
+
+        [Test]
+        public void ThePanelIsShownOnlyWhileARobotIsTheSelectedAgent()
+        {
+            VisualElement root = BuildOverlay();
+
+            var cameraHost = new GameObject("test-camera");
+            var camera = cameraHost.AddComponent<CameraController>();
+            var panel = new SimulationVisualizationPanel(root, null, camera);
+            VisualizationManager manager = Object.FindAnyObjectByType<VisualizationManager>();
+
+            var robotHost = new GameObject("test-robot");
+            robotHost.AddComponent<Robot>();
+
+            try
+            {
+                VisualElement panelElement = root.Q<VisualElement>("VisualizationPanel");
+                Assert.That(panelElement, Is.Not.Null, "the overlay carries the visualization panel.");
+
+                camera.CurrentFollowTarget = null;
+                panel.Tick();
+                Assert.That(panelElement.style.display.value, Is.EqualTo(DisplayStyle.None),
+                    "No robot is selected, so there is no robot panel to offer.");
+
+                camera.CurrentFollowTarget = robotHost.transform;
+                panel.Tick();
+                Assert.That(panelElement.style.display.value, Is.EqualTo(DisplayStyle.Flex),
+                    "A robot is selected, so the panel is back.");
+
+                camera.CurrentFollowTarget = null;
+                panel.Tick();
+                Assert.That(panelElement.style.display.value, Is.EqualTo(DisplayStyle.None),
+                    "Releasing the robot takes the panel away again.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(robotHost);
+                Object.DestroyImmediate(cameraHost);
                 if (manager != null)
                     Object.DestroyImmediate(manager.gameObject);
             }

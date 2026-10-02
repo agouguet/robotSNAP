@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using RobotSNAP.CameraControl;
 using RobotSNAP.Core;
 using RobotSNAP.Core.Scenario;
 using RobotSNAP.Agents;
@@ -82,13 +83,33 @@ namespace RobotSNAP.UI
         private LineRenderer _laserScanRenderer;
         private float _lastLaserUpdateTime;
         private RaycastLaserScanner _robotLaserScanner;
+        private Robot _laserScanRobot;
 
         /// <summary>Seconds between two enumerations of the robot and of the crowd.</summary>
         private const float AgentEnumerationInterval = 0.25f;
 
         /// <summary>Agents of the scene, re-enumerated at <see cref="AgentEnumerationInterval"/>.</summary>
         private HumanAgent[] _humans = System.Array.Empty<HumanAgent>();
+
+        /// <summary>
+        /// The robot the robot switches act on: the one the camera follows, which is the single selection the
+        /// agent list, a click on a body and the minimap already share. Null when the selection is a
+        /// pedestrian or nothing at all, and the robot visuals are then put down rather than drawn for a body
+        /// nobody asked about.
+        /// </summary>
         private Robot _robot;
+
+        /// <summary>
+        /// Identity of the robot whose visuals are currently in the scene. Switching the selection destroys
+        /// that robot's lines and markers before the next one is drawn, so the debug view always shows one
+        /// robot - the selected one - and never a trail left behind by the previous pick.
+        /// </summary>
+        private EntityId _visualizedRobotId;
+        private bool _hasVisualizedRobot;
+
+        /// <summary>The camera, whose follow target is the selection this manager reads.</summary>
+        private CameraController _camera;
+
         private float _nextAgentEnumeration;
 
         /// <summary>The session the state is read from, looked up once and re-looked-up if it is replaced.</summary>
@@ -291,6 +312,7 @@ namespace RobotSNAP.UI
                 && _currentState != state)
             {
                 ClearEntityVisualizations();
+                _hasVisualizedRobot = false;
                 _currentState = state;
                 Debug.Log("[VisualizationManager] Entity visualizations cleared due to state change to " + state);
             }
@@ -338,12 +360,15 @@ namespace RobotSNAP.UI
         }
 
         /// <summary>
-        /// Re-enumerates the robot and the crowd at a fixed rate.
+        /// Re-enumerates the selected robot and the crowd at a fixed rate.
         ///
         /// Both used to be looked up per agent per frame - the colour of a pedestrian is read against the
         /// robot, so a crowd cost eighty walks of the whole scene every frame on top of the two arrays the
         /// enumerations allocate. Only the *set* is cached: every position read below is still the live one,
         /// and an agent that leaves or joins is picked up within a quarter of a second.
+        ///
+        /// The robot is the camera's follow target, not "some robot the scene holds": a scenario can field
+        /// several, and a switch that always drew the first one found would answer a question nobody asked.
         /// </summary>
         private void RefreshAgents()
         {
@@ -351,9 +376,35 @@ namespace RobotSNAP.UI
                 return;
 
             _nextAgentEnumeration = Time.unscaledTime + AgentEnumerationInterval;
-            _robot = FindAnyObjectByType<Robot>();
             _humans = FindObjectsByType<HumanAgent>(FindObjectsSortMode.None);
+            ResolveSelectedRobot();
             SyncStateFromScene();
+        }
+
+        /// <summary>
+        /// Reads the selected robot from the camera, which is the one place the overlay keeps a selection, and
+        /// takes the previous robot's visuals down when the selection moves.
+        /// </summary>
+        private void ResolveSelectedRobot()
+        {
+            if (_camera == null) _camera = FindAnyObjectByType<CameraController>();
+
+            Transform target = _camera != null ? _camera.GetCurrentFollowTarget() : null;
+            Robot selected = target != null ? target.GetComponentInParent<Robot>() : null;
+
+            if (selected == null)
+            {
+                if (_hasVisualizedRobot) ClearRobotVisualizations();
+            }
+            else if (!_hasVisualizedRobot || !selected.GetEntityId().Equals(_visualizedRobotId))
+            {
+                ClearRobotVisualizations();
+                _visualizedRobotId = selected.GetEntityId();
+                _hasVisualizedRobot = true;
+                _laserScanRobot = null;
+            }
+
+            _robot = selected;
         }
         
         private void AddPositionToHistory(EntityId id, Vector3 pos)
@@ -397,8 +448,15 @@ namespace RobotSNAP.UI
             if (_currentState == SimulationState.Idle || _currentState == SimulationState.Ready)
                 return;
 
+            // The robot switches describe the selected robot and nobody else: with no robot selected there is
+            // nothing for them to draw, so whatever the last selection left is taken down.
             Robot robot = _robot;
-            if (robot == null) return;
+            if (robot == null)
+            {
+                if (_hasVisualizedRobot) ClearRobotVisualizations();
+                if (_laserScanRenderer != null) _laserScanRenderer.enabled = false;
+                return;
+            }
             
             EntityId id = robot.GetEntityId();
             Vector3 robotPos = robot.Position; // baseLink position
@@ -750,8 +808,13 @@ namespace RobotSNAP.UI
         
         private void UpdateLaserScanVisualization(Robot robot)
         {
-            if (_robotLaserScanner == null)
-                _robotLaserScanner = robot.GetComponentInChildren<RaycastLaserScanner>();
+            // The scanner is read from the selected robot, and re-read when the selection moves: caching the
+            // first one found would draw one robot's scan from where another robot stands.
+            if (_robotLaserScanner == null || _laserScanRobot != robot)
+            {
+                _laserScanRobot = robot;
+                _robotLaserScanner = robot.GetComponentInChildren<RaycastLaserScanner>(true);
+            }
             if (_robotLaserScanner == null || !_robotLaserScanner.isActiveAndEnabled
                 || _robotLaserScanner.Ranges == null)
             {
@@ -841,6 +904,45 @@ namespace RobotSNAP.UI
         #endregion
         
         #region Cleanup
+
+        /// <summary>
+        /// Takes down the lines, markers and label of the robot that was being visualized, so a switch moved
+        /// from one robot to another leaves no trace of the first. The position history is deliberately kept:
+        /// it is what lets the trajectory be drawn again when the selection comes back to that robot.
+        /// </summary>
+        private void ClearRobotVisualizations()
+        {
+            if (!_hasVisualizedRobot)
+                return;
+
+            EntityId id = _visualizedRobotId;
+            DestroyRenderer(_trajectoryRenderers, id);
+            DestroyRenderer(_pathRenderers, id);
+            DestroyRenderer(_velocityVectors, id);
+
+            if (_goalMarkers.TryGetValue(id, out GameObject marker))
+            {
+                if (marker != null) Destroy(marker);
+                _goalMarkers.Remove(id);
+            }
+
+            if (_agentIdLabels.TryGetValue(id, out TextMesh label))
+            {
+                if (label != null) Destroy(label.gameObject);
+                _agentIdLabels.Remove(id);
+            }
+
+            _hasVisualizedRobot = false;
+        }
+
+        private void DestroyRenderer(Dictionary<EntityId, LineRenderer> renderers, EntityId id)
+        {
+            if (!renderers.TryGetValue(id, out LineRenderer renderer))
+                return;
+
+            if (renderer != null) Destroy(renderer.gameObject);
+            renderers.Remove(id);
+        }
 
         /// <summary>
         /// Supprime TOUTES les visualisations liées aux entités (robot + humains)

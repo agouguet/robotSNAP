@@ -119,6 +119,27 @@ namespace RobotSNAP.Tests.Editor
         }
 
         [Test]
+        public void TheSnapshotSaysWhetherTheWorldIsHeld()
+        {
+            // A lockstep client holds the world stopped by writing a zero time scale, and that is invisible in
+            // time_scale, which keeps reporting the scale the session was configured with. The held key is what
+            // lets such a client tell a held world from one that has gone away.
+            float original = Time.timeScale;
+            try
+            {
+                Time.timeScale = 0f;
+                Assert.That((bool)Snapshot()["held"], Is.True, "a world at a zero scale is held");
+
+                Time.timeScale = 3f;
+                Assert.That((bool)Snapshot()["held"], Is.False, "a running world is not held");
+            }
+            finally
+            {
+                Time.timeScale = original;
+            }
+        }
+
+        [Test]
         public void ARobotEntryCarriesExactlyTheKeysOfTheContract()
         {
             Roster("robot_1");
@@ -211,6 +232,47 @@ namespace RobotSNAP.Tests.Editor
 
             Assert.That(robot.GoalReached, Is.True);
             Assert.That(robot.HasGoal, Is.False);
+        }
+
+        /// <summary>
+        /// A robot driven by a person or a client arrives at its goal too, and the mission has to say so.
+        ///
+        /// Only the scenario driver used to watch for arrival, and a takeover takes the route away from it:
+        /// the driver parked the robot on the goal and the episode still ran out of time, because nothing
+        /// looked at where the robot was any more. What counts is the *destination* of the route - not the
+        /// waypoint the scenario would have consumed on the way - so a driver who reaches the last point is
+        /// arriving, and a driver who stops at an intermediate waypoint is not.
+        /// </summary>
+        [Test]
+        public void AHandDrivenRobotArrivesAtTheDestinationTheScenarioSet()
+        {
+            var created = new GameObject("test-robot-manual-arrival");
+            created.SetActive(false);
+            _created.Add(created);
+
+            Robot robot = created.AddComponent<Robot>();
+
+            // A route with a waypoint and a destination, handed to the driver the moment it is applied.
+            robot.SetGoals(new[] { new Vector3(2f, 0f, 0f), new Vector3(5f, 0f, 0f) });
+            robot.SetRouteOwnedByScenario(false);
+
+            Invoke(robot, "WatchManualArrival");
+            Assert.That(robot.GoalReached, Is.False, "standing at the start is not arriving");
+
+            // Parked on the waypoint the scenario would have used on its own way through: not the arrival.
+            created.transform.position = new Vector3(2f, 0f, 0f);
+            Invoke(robot, "WatchManualArrival");
+            Assert.That(robot.GoalReached, Is.False, "an intermediate waypoint is not the destination");
+
+            created.transform.position = new Vector3(5f, 0f, 0f);
+            Invoke(robot, "WatchManualArrival");
+            Assert.That(robot.GoalReached, Is.True, "the driver reached the destination the scenario set");
+            Assert.That(robot.HasGoal, Is.False);
+
+            // Latching: driving away after the fact does not un-complete the mission.
+            created.transform.position = Vector3.zero;
+            Invoke(robot, "WatchManualArrival");
+            Assert.That(robot.GoalReached, Is.True, "an accomplished mission stays accomplished");
         }
 
         /// <summary>Runs a private method of a component the editor runs no lifecycle for.</summary>

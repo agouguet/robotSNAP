@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using RosMessageTypes.Std;
 using RobotSNAP.Core;
 using RobotSNAP.Core.Scenario;
@@ -269,7 +270,7 @@ namespace RobotSNAP.ROS
             if (this == null) return;
 
             CommandResult result = _router.Execute(message != null ? message.data : null);
-            PublishResult(result.Command, result.Ok, result.Message, result.UnknownIds, result.Robot);
+            PublishResult(result.Command, result.Ok, result.Message, result.UnknownIds, result.Robot, result.Payload);
         }
 
         #endregion
@@ -281,14 +282,17 @@ namespace RobotSNAP.ROS
         /// happened, and the simulation time it happened at. The crowd command also carries the ids the scene
         /// does not hold, so a client can spot a typo instead of waiting for a human that never moves.
         /// A robot command carries the id it addressed, so a caller can confirm which robot answered
-        /// without re-reading the snapshot.
+        /// without re-reading the snapshot. A command whose answer is a document - a metrics question - carries
+        /// it under "payload"; the others leave the key out, which is what keeps their answers the shape they
+        /// have always had.
         /// </summary>
         private void PublishResult(
             string command,
             bool ok,
             string message,
             IReadOnlyList<int> unknownIds,
-            string robot)
+            string robot,
+            JObject payload = null)
         {
             if (!CanPublish(_resultTopicName))
             {
@@ -298,7 +302,7 @@ namespace RobotSNAP.ROS
                 return;
             }
 
-            var payload = new Dictionary<string, object>
+            var response = new Dictionary<string, object>
             {
                 { "command", command ?? "" },
                 { "ok", ok },
@@ -307,12 +311,15 @@ namespace RobotSNAP.ROS
             };
 
             if (unknownIds != null)
-                payload["unknown_ids"] = unknownIds;
+                response["unknown_ids"] = unknownIds;
 
             if (!string.IsNullOrEmpty(robot))
-                payload["robot"] = robot;
+                response["robot"] = robot;
 
-            string json = JsonConvert.SerializeObject(payload, Formatting.None);
+            if (payload != null)
+                response["payload"] = payload;
+
+            string json = JsonConvert.SerializeObject(response, Formatting.None);
             _ros.Publish(_resultTopicName, new StringMsg(json));
 
             if (logPublishEvents)

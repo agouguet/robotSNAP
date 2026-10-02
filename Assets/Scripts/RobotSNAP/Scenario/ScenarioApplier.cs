@@ -38,6 +38,15 @@ namespace RobotSNAP.Core.Scenario
 
         private GameManager _gameManager;
         private ScenarioData _currentScenario;
+
+        /// <summary>
+        /// The scenario as it was authored, kept beside the one the run plays: the run replaces every range
+        /// with the value it drew, and the authored document is what the next run has to draw from again.
+        /// </summary>
+        private ScenarioData _authoredScenario;
+
+        /// <summary>What the run drew, one line per value, so an episode can say what it got.</summary>
+        private List<string> _lastRandomization = new();
         private RobotRoster _roster;
         private readonly List<Coroutine> _activeCoroutines = new();
 
@@ -113,6 +122,8 @@ namespace RobotSNAP.Core.Scenario
         private const float CrowdEntryWindow = 6f;
 
         public ScenarioData CurrentScenario => _currentScenario;
+        /// <summary>The draws of the scenario currently applied, empty when it randomizes nothing.</summary>
+        public IReadOnlyList<string> LastRandomization => _lastRandomization;
         public bool IsApplying { get; private set; }
 
         public event Action<ScenarioData> OnApplicationStarted;
@@ -152,6 +163,7 @@ namespace RobotSNAP.Core.Scenario
             }
 
             _gameManager = gameManager;
+            _authoredScenario = scenario;
             _currentScenario = scenario;
             IsApplying = true;
 
@@ -217,6 +229,18 @@ namespace RobotSNAP.Core.Scenario
 
             // 4. Apply simulation configuration (seed, time scale, duration)
             ApplySimulationConfig();
+
+            // 4a. Draw the values this run randomizes, on the seeded generator and in scenario order. The run
+            //     plays the resolved copy, so a range is drawn once per run and the authored file is left as
+            //     the author wrote it for the next one.
+            _currentScenario = ScenarioRandomization.Resolve(_authoredScenario, out List<string> drawn);
+            _lastRandomization = drawn;
+            if (drawn.Count > 0)
+            {
+                // Said out loud whatever the event log is set to: what an episode drew is part of its result,
+                // and the count of a route is nowhere else once its agents are spawned.
+                Debug.Log($"[ScenarioApplier] Randomization drew: {string.Join("; ", drawn)}");
+            }
 
             // 4b. Report which navigation the agents will use. The environment builder already built it, from
             // the same image as the floor and the walls, before anything could spawn.
@@ -542,7 +566,7 @@ namespace RobotSNAP.Core.Scenario
                         GroupId = config.Id.Trim(),
                         FirstIndex = 0,
                         Count = count,
-                        Delay = DrawDepartureDelay(config.SpawnWindow)
+                        Delay = DrawDepartureDelay(config.SpawnWindowSeconds)
                     });
                 }
                 else
@@ -555,7 +579,7 @@ namespace RobotSNAP.Core.Scenario
                             GroupId = null,
                             FirstIndex = i,
                             Count = 1,
-                            Delay = DrawDepartureDelay(config.SpawnWindow)
+                            Delay = DrawDepartureDelay(config.SpawnWindowSeconds)
                         });
                     }
                 }
@@ -838,9 +862,7 @@ namespace RobotSNAP.Core.Scenario
             // walk in formation keep exactly the speed the scenario authored, or they would pull the shape
             // apart.
             float speedFactor = independent ? CrowdSpeedVariation() : 1f;
-            // An authored departure window replaces the short hold a crowd uses by default. The two would add
-            // up, and the crowd would then still be entering after the window the scenario asked for.
-            float entryHold = independent && config.SpawnWindow <= 0f ? CrowdEntryHold(total) : 0f;
+            float entryHold = EntryHoldFor(independent, config.SpawnWindow, total);
 
             // The hold has to be set before the route, or the agent would start walking on the frame it is
             // configured and only stop later.
@@ -1047,10 +1069,24 @@ namespace RobotSNAP.Core.Scenario
         /// <summary>
         /// Entry delay of one independent agent. A crowd enters over a short window instead of stepping off the
         /// line as one rank, and the window follows the size of the crowd so the wait stays bounded however many
-        /// agents the route carries.
+        /// agents the route carries. Only a route whose document authored no window at all reaches this: an
+        /// author who wrote one - including a zero - decided the entry themselves.
         /// </summary>
         private static float CrowdEntryHold(int count) =>
             UnityEngine.Random.Range(0f, Mathf.Min(CrowdEntryWindow, Mathf.Max(1f, count * CrowdEntryGap)));
+
+        /// <summary>
+        /// Seconds an agent of a route stands still before it starts walking, beyond the departure delay the
+        /// scenario itself asks for.
+        ///
+        /// The scenario authors the entry window, so an authored value is obeyed to the letter: a document that
+        /// writes zero asked for a simultaneous entry, and adding a hold on top of it would start a route late
+        /// by an amount nothing in the file mentions. The short window a crowd uses by default is therefore
+        /// reserved for a document that says nothing at all - <paramref name="spawnWindow"/> is null - which is
+        /// what lets a crowd feed in as a flow without ever contradicting an author.
+        /// </summary>
+        private static float EntryHoldFor(bool independent, float? spawnWindow, int count) =>
+            independent && spawnWindow == null ? CrowdEntryHold(count) : 0f;
 
         private static bool IsRandomSpawn(SpawnConfig spawn)
         {

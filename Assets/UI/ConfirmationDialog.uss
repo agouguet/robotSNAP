@@ -1,0 +1,134 @@
+/* ================================================================
+   CONFIRMATION DIALOG
+   The modal shared by the actions that cannot be undone. It is
+   deliberately plain: a sentence saying what will happen, the two
+   decisions and a way out, nothing else.
+   ================================================================ */
+
+.confirmation-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background-color: rgba(15, 23, 42, 0.55);
+}
+
+.confirmation-panel {
+    width: 460px;
+    max-width: 92%;
+    flex-direction: column;
+    padding: 22px 24px 18px 24px;
+    background-color: var(--bg-secondary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 4px;
+}
+
+.confirmation-title {
+    font-size: 17px;
+    -unity-font-style: bold;
+    color: var(--text-primary);
+}
+
+.confirmation-message {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: normal;
+}
+
+.confirmation-status {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: normal;
+}
+
+.confirmation-status-error {
+    color: rgb(200, 60, 70);
+}
+
+.confirmation-body {
+    flex-direction: column;
+    margin-top: 12px;
+}
+
+.confirmation-footer {
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    margin-top: 18px;
+}
+
+.confirmation-button {
+    height: 28px;
+    padding-left: 14px;
+    padding-right: 14px;
+    margin-left: 8px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: var(--border-color);
+    background-color: transparent;
+    color: var(--text-primary);
+}
+
+.confirmation-button:hover {
+    background-color: var(--button-hover);
+}
+
+.confirmation-button-alternate {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.confirmation-button-alternate:hover {
+    background-color: var(--accent-glow);
+}
+
+.confirmation-button-confirm {
+    border-width: 0;
+    background-color: var(--accent);
+    color: rgb(255, 255, 255);
+}
+
+.confirmation-button-confirm:hover {
+    background-color: var(--accent-soft);
+}
+
+/* The irreversible decision reads in the project's collision red, never as the ordinary accent. */
+.confirmation-button-confirm.destructive {
+    background-color: rgb(200, 60, 70);
+    color: rgb(255, 255, 255);
+}
+
+.confirmation-button-confirm.destructive:hover {
+    background-color: rgb(214, 78, 88);
+}
+
+/* A caller that needs a path from the user puts a field here; it keeps the Analysis tab's field look. */
+.confirmation-field {
+    margin-top: 4px;
+    font-size: 12px;
+}
+
+.confirmation-field .unity-base-field__label {
+    color: var(--text-secondary);
+    min-width: 0;
+    margin-bottom: 4px;
+}
+
+.confirmation-field .unity-text-field__input {
+    background-color: var(--bg-primary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: var(--text-primary);
+    font-size: 12px;
+}

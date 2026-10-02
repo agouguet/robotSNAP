@@ -1,52 +1,129 @@
 scenario_info:
-  name: "Door Passing"
-  description: "Scenario with robot passing through a door with multiple pedestrians"
-  version: "1.0"
-  map: "basic/door_passing"
-  preview: "door_passing.png"
-  tags: ["Basic", "Indoor", "Narrow"]
-
-simulation:
-  duration: 0.1
-  random_seed: 42
-  time_scale: 1.0
-  min_humans: 0
-  max_humans: 50
-
+  name: 'Door Passing'
+  type: Custom
+  description: 'A one-metre doorway the robot shares with oncoming pedestrians.'
+  version: '1.0'
+  author: RobotSNAP
+  created: '2026-09-30 17:00'
+  tags:
+    - Basic
+    - Indoor
+    - Narrow
+    - Door
+  map: basic/door_passing
+  location: ''
+  dataset: null
+  preview: ''
+  robot_type: kuri
+  duration: 0.0
 points:
-  start_robot: {x: 9, y: 0, z: 0, yaw: -90}
-  end_robot: {x: 0, y: 0, z: -9}
-
-robot:
-  start: "start_robot"
-  goal: "end_robot"
-  behavior: "normal"
-  speed: 1.2
-
-humans:
-  # Groupe 1 : simples piétons spawn aléatoire dans une zone
-  - id: "pedestrians"
-    count: 1
-    spawn:
-      type: "point"
-      position: {x: 7, y: 0, z: 0}
-    goal:
-      type: "point"
-      position: {x: -7, y: 0, z: 0}
-    behavior: "normal"
+  robot_start:
+    x: -8.0
+    y: 0.0
+    z: 0.0
+    yaw: 90.0
+    center: null
+    size: null
+  robot_goal:
+    x: 8.0
+    y: 0.0
+    z: 0.0
+    yaw: null
+    center: null
+    size: null
+  oncoming_start:
+    x: 7.5
+    y: 0.0
+    z: 0.0
+    yaw: -90.0
+    center: null
+    size: null
+  oncoming_goal:
+    x: -8.5
+    y: 0.0
+    z: 0.0
+    yaw: null
+    center: null
+    size: null
+  oncoming_2_start:
+    x: 9.5
+    y: 0.0
+    z: 0.0
+    yaw: -90.0
+    center: null
+    size: null
+  oncoming_2_goal:
+    x: -8.5
+    y: 0.0
+    z: 0.0
+    yaw: null
+    center: null
+    size: null
+robots:
+  - id: robot_1
+    type: kuri
+    start: robot_start
+    goal: robot_goal
+    waypoints: null
+    behavior: normal
     speed: 1.0
+robot: null
+humans:
+  - id: oncoming
+    count: 1
+    spawn_window: 0.0
+    spawn:
+      type: point
+      ref: oncoming_start
+      position: null
+      zone: null
+      formation: null
+      formation_parameter: 0.0
+      spacing: 1.5
+      relative_to: null
+    goal:
+      type: point
+      ref: oncoming_goal
+      position: null
+      zone: null
+      target: null
+      radius: 0.0
+    goals: null
+    end_behavior: stay
+    group: null
     movement_controller:
-      type: "SFM"
-
-  # - id: "pedestrians2"
-  #   count: 1
-  #   spawn:
-  #     type: "point"
-  #     position: {x: -7, y: 0, z: 0}
-  #   goal:
-  #     type: "point"
-  #     position: {x: 7, y: 0, z: 0}
-  #   behavior: "normal"
-  #   speed: 1.0
-  #   movement_controller:
-  #     type: "SFM"
+      type: SFM
+      sfm_params: null
+    behavior: normal
+    speed: 1.0
+    color: null
+    personality: null
+  - id: oncoming_2
+    count: 1
+    spawn_window: 4.0
+    spawn:
+      type: point
+      ref: oncoming_2_start
+      position: null
+      zone: null
+      formation: null
+      formation_parameter: 0.0
+      spacing: 1.5
+      relative_to: null
+    goal:
+      type: point
+      ref: oncoming_2_goal
+      position: null
+      zone: null
+      target: null
+      radius: 0.0
+    goals: null
+    end_behavior: stay
+    group: null
+    movement_controller:
+      type: SFM
+      sfm_params: null
+    behavior: normal
+    speed: 1.1
+    color: null
+    personality: null

@@ -35,6 +35,7 @@ namespace RobotSNAP
         [SerializeField] private string agentsTopic = RobotSNAPTopics.SimulationAgents;
 
         [Header("Publishing")]
+        [Tooltip("Snapshot rate in snapshots per simulated second.")]
         [SerializeField] private float publishFrequencyHz = 10f;
 
         [Header("Debug")]
@@ -54,13 +55,19 @@ namespace RobotSNAP
 
         private void Start() => Initialize();
 
-        private void Update()
+        /// <summary>
+        /// Published from the fixed step, on the simulation clock: what the robot sees is a stream of the
+        /// moving world, and a raised time scale must not thin it out. The frame would cap it - at five times
+        /// speed a 60 fps session asks for fifty snapshots a second of wall time - while the physics loop,
+        /// which runs several times per frame, keeps the rate the field declares.
+        /// </summary>
+        private void FixedUpdate()
         {
             if (_envROS == null || !_envROS.IsInitialized) return;
-            if (Time.time >= _lastPublishTime + _publishInterval)
+            if (Time.fixedTime >= _lastPublishTime + _publishInterval)
             {
                 PublishAgents();
-                _lastPublishTime = Time.time;
+                _lastPublishTime = Time.fixedTime;
             }
         }
 

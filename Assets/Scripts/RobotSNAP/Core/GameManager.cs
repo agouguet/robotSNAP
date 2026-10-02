@@ -245,6 +245,12 @@ namespace RobotSNAP.Core
 
         /// <summary>
         /// Supprime tous les agents (robot + humains) de l'environnement, mais conserve la carte.
+        ///
+        /// Tous les robots, pas le premier trouvé : un scénario peut en aligner plusieurs, et
+        /// <c>GetComponentInChildren&lt;Robot&gt;()</c> n'en renvoyait qu'un, ce qui laissait les autres debout
+        /// après un arrêt. Le roster est vidé en même temps que les corps, sinon une ré-application dans la même
+        /// frame - un stop suivi d'un start depuis Python - réutiliserait un robot déjà détruit par
+        /// <see cref="UnityEngine.Object.Destroy"/>, qui n'agit qu'en fin de frame.
         /// </summary>
         public void ClearAgents()
         {
@@ -255,12 +261,26 @@ namespace RobotSNAP.Core
                 Debug.Log($"[GameManager:{_environmentId}] All humans returned to pool.");
             }
 
-            // 2. Détruire le robot s'il existe
-            var robot = GetComponentInChildren<Robot>();
-            if (robot != null)
+            // 2. Détruire tous les robots, et oublier leurs emplacements.
+            RobotRoster roster = GetComponentInChildren<RobotRoster>(true);
+            if (roster != null)
             {
-                Destroy(robot.gameObject);
-                Debug.Log($"[GameManager:{_environmentId}] Robot destroyed.");
+                int count = roster.Count;
+                roster.Clear();
+                Debug.Log($"[GameManager:{_environmentId}] {count} robot(s) destroyed.");
+            }
+            else
+            {
+                // A hand-built environment with no roster keeps its robots, so they are cleared by search.
+                Robot[] robots = GetComponentsInChildren<Robot>(true);
+                for (int index = 0; index < robots.Length; index++)
+                {
+                    if (robots[index] != null)
+                        Destroy(robots[index].gameObject);
+                }
+
+                if (robots.Length > 0)
+                    Debug.Log($"[GameManager:{_environmentId}] {robots.Length} robot(s) destroyed.");
             }
 
             // 3. Optionnel : réinitialiser les flags de scénario (ex: _scenarioApplied = false) géré par ScenarioManager

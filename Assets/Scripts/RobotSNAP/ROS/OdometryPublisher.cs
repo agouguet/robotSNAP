@@ -39,6 +39,9 @@ namespace RobotSNAP.ROS
         /// </summary>
         private readonly List<string> _fullTopicNames = new List<string>(2);
         private float _publishInterval;
+        // The next instant of simulation time this pose is due at, on the same physics grid the scan and the
+        // state snapshot publish on, so a client always holds poses that surround a scan stamp.
+        private float _nextPublishTime;
         // The robot moves through an ArticulationBody rather than a Rigidbody, so this is where the twist
         // comes from when there is no rigidbody to read.
         private Robot _robot;
@@ -111,11 +114,50 @@ namespace RobotSNAP.ROS
             InitializeMessage();
             
             _publishInterval = 1f / publishFrequencyHz;
-            
-            // Start publishing
-            InvokeRepeating(nameof(PublishOdometry), 1f, _publishInterval);
+            _nextPublishTime = NextSlot(Time.fixedTime, _publishInterval);
             
             Debug.Log($"[{name}] Publishing odometry to {string.Join(", ", _fullTopicNames)} at {publishFrequencyHz} Hz");
+        }
+
+        /// <summary>
+        /// Publishes the pose at the rate above, counted in simulated seconds and paced on the physics step.
+        ///
+        /// The pose has to come from the step it is stamped with, and the same step the scan of that instant
+        /// was measured on. Published from the frame instead - which is what InvokeRepeating did - the pose
+        /// was the one the last physics step had left behind while its stamp came from the frame's own
+        /// moment, and the two grids do not line up once the session runs faster than it draws: at a scale of
+        /// ten on a six hertz frame, ten poses of a whole simulated fifth of a second shared one stamp. A
+        /// client placing a scan at the pose of its stamp then had no pose around that stamp at all, fell
+        /// back on the newest one it held, and turned the lidar cloud by however much the robot had moved in
+        /// between - the walls slid round with the robot.
+        /// </summary>
+        private void FixedUpdate()
+        {
+            if (_envROS == null || !_envROS.IsInitialized)
+                return;
+
+            if (Time.fixedTime < _nextPublishTime)
+                return;
+
+            _nextPublishTime = NextSlot(Time.fixedTime, _publishInterval);
+            PublishOdometry();
+        }
+
+        /// <summary>
+        /// The first instant of the shared simulated grid that comes after <paramref name="now"/>: the next
+        /// multiple of <paramref name="interval"/> counted from zero.
+        ///
+        /// The scan of this robot is paced on that same grid, so the pose and the scan of one instant leave
+        /// in one physics step and carry one stamp. Paced apart, each stream counted its own interval from
+        /// whenever its component woke up, and a client reading a scan held no pose of that instant at all -
+        /// only poses from before it - so it placed the lidar cloud with a pose the robot had left, up to a
+        /// whole period of travel earlier.
+        /// </summary>
+        private static float NextSlot(float now, float interval)
+        {
+            return interval <= 0f
+                ? float.PositiveInfinity
+                : (Mathf.Floor(now / interval) + 1f) * interval;
         }
         
         private void InitializeCovariance()
@@ -222,11 +264,6 @@ namespace RobotSNAP.ROS
             // Publish, on every name this robot answers on.
             foreach (string topic in _fullTopicNames)
                 _envROS.Publish(topic, _message);
-        }
-        
-        private void OnDestroy()
-        {
-            CancelInvoke(nameof(PublishOdometry));
         }
         
         [ContextMenu("Test Publish")]

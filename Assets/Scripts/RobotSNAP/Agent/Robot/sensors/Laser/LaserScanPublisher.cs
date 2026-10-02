@@ -12,6 +12,7 @@ namespace RobotSNAP
         [SerializeField] private bool autoDetectPrefix = true;
         [SerializeField] private string customPrefix = "";
         [SerializeField] private string laserTopic = RobotSNAPTopics.Scan;
+        [Tooltip("Scan rate in scans per simulated second: raising the session's time scale raises the wall rate with it, so the sweep keeps describing the same distance of travel.")]
         [SerializeField] private float publishFrequencyHz = 10f;
         
         [Header("Frame ID")]
@@ -27,8 +28,18 @@ namespace RobotSNAP
         /// robot of the scenario. One robot has one name, so a crowd of robots costs no extra publish.
         /// </summary>
         private readonly List<string> _fullTopicNames = new List<string>(2);
+        // The throttle reads the simulation clock (Time.fixedTime, which advances once per physics step), not
+        // the wall: the rate above is a rate of the simulation. FixedUpdate runs timeScale times more often per
+        // second of wall time, so a 10 Hz scan stays ten scans per simulated second however fast the session
+        // runs. Pacing on Time.realtimeSinceStartup instead made the sweep sparser the faster the world went -
+        // at a scale of five the robot travelled five times further between two scans.
+        //
+        // It is published from the fixed step rather than the frame because the frame rate is what a raised
+        // time scale squeezes first: a 60 fps session at five times speed asks for fifty scans a second of
+        // wall time, and a stream published once per frame cannot answer more than sixty however fast the
+        // world is going. The physics loop runs several times per frame and keeps the rate.
         private float _publishInterval;
-        private float _previousPublishTime;
+        private float _nextPublishTime;
         private RosMessageTypes.Sensor.LaserScanMsg _message;
         
         private void Start()
@@ -85,7 +96,7 @@ namespace RobotSNAP
             InitializeMessage(prefix);
             
             _publishInterval = 1f / publishFrequencyHz;
-            _previousPublishTime = Time.realtimeSinceStartup;
+            _nextPublishTime = NextSlot(Time.fixedTime, _publishInterval);
             
             if (logPublishEvents)
             {
@@ -111,13 +122,30 @@ namespace RobotSNAP
         {
             if (_envROS == null || !_envROS.IsInitialized)
                 return;
-            
-            // Throttle publishing to desired frequency
-            if (Time.realtimeSinceStartup >= _previousPublishTime + _publishInterval)
-            {
-                PublishScan();
-                _previousPublishTime = Time.realtimeSinceStartup;
-            }
+
+            // Throttle publishing to the desired frequency, counted in simulated seconds.
+            if (Time.fixedTime < _nextPublishTime)
+                return;
+
+            _nextPublishTime = NextSlot(Time.fixedTime, _publishInterval);
+            PublishScan();
+        }
+
+        /// <summary>
+        /// The first instant of the shared simulated grid that comes after <paramref name="now"/>: the next
+        /// multiple of <paramref name="interval"/> counted from zero.
+        ///
+        /// The odometry of this robot is paced on that same grid, so a scan and the pose of the instant it
+        /// measured come out of one physics step and carry one stamp. Paced apart - each stream starting its
+        /// own interval when its component happened to wake up - they landed up to a whole period off, and a
+        /// client had no pose to place a scan with that was not the pose of a moment the robot had already
+        /// left: the lidar cloud turned with the robot instead of staying on the walls.
+        /// </summary>
+        private static float NextSlot(float now, float interval)
+        {
+            return interval <= 0f
+                ? float.PositiveInfinity
+                : (Mathf.Floor(now / interval) + 1f) * interval;
         }
         
         /// <summary>

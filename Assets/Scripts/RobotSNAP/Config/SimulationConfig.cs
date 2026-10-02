@@ -42,11 +42,20 @@ namespace RobotSNAP.Core
         #region Serialized Fields - Execution Control
 
         [Header("Execution")]
-        [Tooltip("Global time scale (1 = normal, 0.5 = half speed, 2 = double speed)")]
+        [Tooltip("Global time scale (1 = normal, 0.5 = half speed, 2 = double speed). Training runs fast - " +
+                 "tens of times real time - while inference runs at 1; past a few tens of times, the machine, " +
+                 "not this bound, is what limits the run.")]
         [SerializeField] private float _timeScale = 1f;
         
         [Tooltip("Fixed timestep for physics (seconds)")]
         [SerializeField] private float _fixedTimestep = 0.02f;
+
+        [Tooltip("Cap on how much simulation one rendered frame may catch up on, in seconds of simulated " +
+                 "time. This is what bounds a fast session when the frame rate falls: a frame that draws at " +
+                 "one hertz while the session asks for ten times speed owes ten seconds of simulation, and " +
+                 "will not do more than this one. Raised past what the machine can pay for, it is no limit " +
+                 "at all - the machine is - but a frame then runs long enough to make the editor look stuck.")]
+        [SerializeField] private float _maximumDeltaTime = 10f;
         
         [Tooltip("Random seed for reproducibility. -1 means use system time.")]
         [SerializeField] private int _randomSeed = -1;
@@ -127,13 +136,27 @@ namespace RobotSNAP.Core
         public float TimeScale 
         { 
             get => _timeScale; 
-            set => _timeScale = Mathf.Clamp(value, 0f, 10f); 
+            // The ceiling is a guard against a typo, not a speed limit: an RL session trains at tens of times
+            // real time and infers at 1, and past a few tens of times the machine is the bottleneck rather
+            // than this bound. The floor stays 0, which is what a caller asking for "no time" gets.
+            set => _timeScale = Mathf.Clamp(value, 0f, 100f); 
         }
         
         public float FixedTimestep 
         { 
             get => _fixedTimestep; 
             set => _fixedTimestep = Mathf.Clamp(value, 0.01f, 0.1f); 
+        }
+
+        /// <summary>
+        /// Most simulation one frame may catch up on, in seconds of simulated time. Left at ten by default,
+        /// which is Unity's own ceiling written into this project's settings, so a session that does not ask
+        /// for more keeps the behaviour it had.
+        /// </summary>
+        public float MaximumDeltaTime
+        {
+            get => _maximumDeltaTime;
+            set => _maximumDeltaTime = Mathf.Clamp(value, 0.02f, 600f);
         }
         
         public int RandomSeed 
@@ -201,6 +224,7 @@ namespace RobotSNAP.Core
         {
             Time.timeScale = _timeScale;
             Time.fixedDeltaTime = _fixedTimestep;
+            Time.maximumDeltaTime = _maximumDeltaTime;
         }
         
         /// <summary>
@@ -227,6 +251,7 @@ namespace RobotSNAP.Core
             target._startPaused = this._startPaused;
             target._timeScale = this._timeScale;
             target._fixedTimestep = this._fixedTimestep;
+            target._maximumDeltaTime = this._maximumDeltaTime;
             target._randomSeed = this._randomSeed;
             target._enableROS = this._enableROS;
             target._rosMasterURI = this._rosMasterURI;
@@ -293,6 +318,7 @@ namespace RobotSNAP.Core
             _startPaused = true;
             _timeScale = 1f;
             _fixedTimestep = 0.02f;
+            _maximumDeltaTime = 10f;
             _randomSeed = -1;
             _enableROS = false;
             _rosMasterURI = "http://localhost:11311";

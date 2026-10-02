@@ -157,6 +157,16 @@ namespace RobotSNAP.ROS
             }
 
             bridge.enabled = true;
+
+            // The gate that lets a client take the session one control period at a time lives beside the
+            // command channel, for the same reason: it outlives every environment, and a scenario load that
+            // replaced it mid-episode would give the world back to the clock without being asked.
+            if (!host.TryGetComponent(out RobotSNAP.Core.SimulationPacingGate pacing))
+            {
+                pacing = host.AddComponent<RobotSNAP.Core.SimulationPacingGate>();
+            }
+
+            pacing.enabled = true;
         }
         
         #endregion

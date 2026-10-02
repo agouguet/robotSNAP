@@ -58,6 +58,13 @@ public sealed class ScenarioRouteEditor
         public float FormationParameter;
         /// <summary>Seconds the agents of this route take to enter the run; 0 starts them all together.</summary>
         public float SpawnWindow;
+        // The values this route lets the run draw instead of fixing. Null means "fixed", which is what a
+        // scenario authored before ranges existed carries and what an untouched route keeps writing.
+        public ScenarioRange CountRange;
+        public ScenarioRange SpeedRange;
+        public ScenarioRange StartYawRange;
+        public ScenarioRange SpacingRange;
+        public ScenarioRange SpawnWindowRange;
         public readonly List<Vector2> Points = new();
         /// <summary>True when the whole route is scattered at spawn instead of starting on its first point.</summary>
         public bool SpawnRandom;
@@ -91,6 +98,11 @@ public sealed class ScenarioRouteEditor
         public float GroupSpacing;
         public float FormationParameter;
         public float SpawnWindow;
+        public ScenarioRange CountRange;
+        public ScenarioRange SpeedRange;
+        public ScenarioRange StartYawRange;
+        public ScenarioRange SpacingRange;
+        public ScenarioRange SpawnWindowRange;
         public List<Vector2> Points;
         public bool SpawnRandom;
         public Rect SpawnZone;
@@ -222,6 +234,13 @@ public sealed class ScenarioRouteEditor
     private readonly Button _sectionBehaviourHeader;
     private readonly Button _sectionDepartureHeader;
     private readonly FloatField _spawnWindowField;
+    /// <summary>Mode and bounds of every value this route may let the run draw, one control per value.</summary>
+    private readonly ScenarioRangeControl _robotSpeedRange;
+    private readonly ScenarioRangeControl _startYawRange;
+    private readonly ScenarioRangeControl _humanCountRange;
+    private readonly ScenarioRangeControl _humanSpeedRange;
+    private readonly ScenarioRangeControl _groupSpacingRange;
+    private readonly ScenarioRangeControl _spawnWindowRange;
     private readonly VisualElement _sectionGlobalContent;
     private readonly VisualElement _sectionGroupContent;
     private readonly VisualElement _sectionBehaviourContent;
@@ -352,6 +371,36 @@ public sealed class ScenarioRouteEditor
         {
             throw new InvalidOperationException("The scenario route editor UI is incomplete.");
         }
+
+        // One range control per value the run may draw. They are built here rather than in the UXML so the tab
+        // keeps its shape, and each sits right under the value it replaces, which is hidden while a range is
+        // being edited - the author then sees exactly one setting per value, never both at once.
+        VisualElement robotSettings = _robotSpeedField.parent.parent;
+        VisualElement humanSettings = _humanCountField.parent.parent.parent;
+        VisualElement groupSettings = _groupSpacingField.parent.parent;
+        VisualElement departureSettings = _spawnWindowField.parent.parent;
+        VisualElement humanCountRow = _humanCountField.parent.parent;
+
+        _robotSpeedRange = new ScenarioRangeControl(
+            robotSettings, _robotSpeedField.parent, _robotSpeedField.parent,
+            "Robot speed draw", "Drawn each run between these two speeds, in m/s.", 0.01f, 10f, 1f, 2f);
+        _startYawRange = new ScenarioRangeControl(
+            robotSettings, _startYawField.parent, _startYawField.parent,
+            "Robot start orientation draw", "Drawn each run between these two headings, in degrees.", -360f, 360f, -20f, 20f);
+        _humanCountRange = new ScenarioRangeControl(
+            humanSettings, humanCountRow, _humanCountField.parent,
+            "Agent count draw", "Drawn each run between these two counts; both bounds are included.", 0f, 200f, 1f, 5f);
+        _humanSpeedRange = new ScenarioRangeControl(
+            humanSettings, _humanCountRange.Row, _humanSpeedField.parent,
+            "Human speed draw", "Drawn each run between these two walking speeds, in m/s.", 0.01f, 10f, 0.8f, 1.6f);
+        _groupSpacingRange = new ScenarioRangeControl(
+            groupSettings, _groupSpacingField.parent, _groupSpacingField.parent,
+            "Spacing draw",
+            "Drawn each run between these two spacings, in metres; the minimum the selected formation can hold still applies.",
+            0.4f, 3f, 0.6f, 1.5f);
+        _spawnWindowRange = new ScenarioRangeControl(
+            departureSettings, _spawnWindowField.parent, _spawnWindowField.parent,
+            "Departure window draw", "Drawn each run between these two windows, in seconds.", 0f, 60f, 0f, 5f);
 
         _overlay = new OccupancyMapRouteOverlay();
         overlayHost.Add(_overlay);
@@ -491,6 +540,51 @@ public sealed class ScenarioRouteEditor
             PushUndo($"human-spawn-window:{_activeRouteIndex}");
             UpdateHumanDraft(draft => draft.SpawnWindow = value);
         });
+        // The range controls only carry the mode and the two bounds. They say what the run draws; the fixed
+        // field above keeps saying what it uses when no range is set, so nothing here ever overwrites it.
+        _robotSpeedRange.Changed += () =>
+        {
+            RouteDraft robot = ActiveRobotRoute;
+            if (_updatingFields || robot == null) return;
+            PushUndo($"robot-speed-range:{_activeRouteIndex}");
+            robot.SpeedRange = _robotSpeedRange.ToRange();
+            robot.RouteModified = true;
+            RefreshRouteList();
+        };
+        _startYawRange.Changed += () =>
+        {
+            RouteDraft robot = ActiveRobotRoute;
+            if (_updatingFields || robot == null) return;
+            PushUndo($"robot-yaw-range:{_activeRouteIndex}");
+            robot.StartYawRange = _startYawRange.ToRange();
+            robot.RouteModified = true;
+        };
+        _humanCountRange.Changed += () =>
+        {
+            if (_updatingFields || ActiveRoute == null || ActiveRoute.IsRobot) return;
+            PushUndo($"human-count-range:{_activeRouteIndex}");
+            UpdateHumanDraft(draft => draft.CountRange = _humanCountRange.ToRange());
+            RefreshRouteList();
+        };
+        _humanSpeedRange.Changed += () =>
+        {
+            if (_updatingFields || ActiveRoute == null || ActiveRoute.IsRobot) return;
+            PushUndo($"human-speed-range:{_activeRouteIndex}");
+            UpdateHumanDraft(draft => draft.SpeedRange = _humanSpeedRange.ToRange());
+        };
+        _groupSpacingRange.Changed += () =>
+        {
+            if (_updatingFields || ActiveRoute == null || ActiveRoute.IsRobot) return;
+            PushUndo($"human-spacing-range:{_activeRouteIndex}");
+            UpdateHumanDraft(draft => draft.SpacingRange = _groupSpacingRange.ToRange());
+            RefreshFormationPreview();
+        };
+        _spawnWindowRange.Changed += () =>
+        {
+            if (_updatingFields || ActiveRoute == null || ActiveRoute.IsRobot) return;
+            PushUndo($"human-window-range:{_activeRouteIndex}");
+            UpdateHumanDraft(draft => draft.SpawnWindowRange = _spawnWindowRange.ToRange());
+        };
         _formationParameterField.RegisterValueChangedCallback(evt =>
         {
             if (_updatingFields) return;
@@ -513,9 +607,16 @@ public sealed class ScenarioRouteEditor
 
     public int TotalHumanCount => _routes.Where(route => !route.IsRobot).Sum(route => Mathf.Max(0, route.Count));
     public int TotalObjectiveCount => _routes
-        .Where(route => route.IsRobot || route.Count > 0)
+        .Where(route => route.IsRobot || CarriesAgents(route))
         .Sum(route => Mathf.Max(0, route.Points.Count - 1));
-    public int HumanRouteCount => _routes.Count(route => !route.IsRobot && route.Count > 0);
+    public int HumanRouteCount => _routes.Count(route => !route.IsRobot && CarriesAgents(route));
+
+    /// <summary>
+    /// True when a route puts agents in the run: a fixed count above zero, or a count the run draws. A route
+    /// whose fixed count is zero but whose range is 1 to 5 does carry agents, and dropping it because of the
+    /// fixed zero would silently discard the randomization the author asked for.
+    /// </summary>
+    private static bool CarriesAgents(RouteDraft route) => route.Count > 0 || route.CountRange != null;
 
     public string RobotRouteSummary
     {
@@ -541,7 +642,7 @@ public sealed class ScenarioRouteEditor
     {
         get
         {
-            List<RouteDraft> humans = _routes.Where(route => !route.IsRobot && route.Count > 0).ToList();
+            List<RouteDraft> humans = _routes.Where(route => !route.IsRobot && CarriesAgents(route)).ToList();
             return humans.Count == 0
                 ? "No human route"
                 : $"{humans.Count} route(s), {humans.Sum(route => route.Points.Count - 1)} objective(s)";
@@ -764,6 +865,8 @@ public sealed class ScenarioRouteEditor
             IsRobot = true,
             RobotType = profile.Id,
             Speed = config.Speed > 0f ? config.Speed : profile.MaxLinearSpeed,
+            SpeedRange = config.SpeedRange?.Clone(),
+            StartYawRange = config.StartYawRange?.Clone(),
             RobotSource = config,
             RouteModified = false
         };
@@ -1041,7 +1144,7 @@ public sealed class ScenarioRouteEditor
                 }
             }
 
-            foreach (RouteDraft human in _routes.Where(route => !route.IsRobot && route.Count > 0))
+            foreach (RouteDraft human in _routes.Where(route => !route.IsRobot && CarriesAgents(route)))
             {
                 if (error != null)
                     break;
@@ -1315,6 +1418,10 @@ public sealed class ScenarioRouteEditor
             config.Type = string.IsNullOrWhiteSpace(robot.RobotType) ? RobotProfiles.DefaultId : robot.RobotType;
             config.Speed = robot.Speed > 0f ? robot.Speed : RobotProfiles.Find(config.Type).MaxLinearSpeed;
             config.Behavior = string.IsNullOrWhiteSpace(config.Behavior) ? "normal" : config.Behavior;
+            // The scalar stays the value the author fixed, and the range - when there is one - is what the run
+            // draws from. A route that fixes both values writes nulls here and keeps its old file shape.
+            config.SpeedRange = robot.SpeedRange;
+            config.StartYawRange = robot.StartYawRange;
 
             string prefix = $"robot_{index + 1}";
             string startRef = string.IsNullOrWhiteSpace(config.StartRef) ? $"{prefix}_start" : config.StartRef;
@@ -1347,12 +1454,15 @@ public sealed class ScenarioRouteEditor
 
         var humanConfigs = new List<HumanScenarioConfig>();
         int humanIndex = 1;
-        foreach (RouteDraft draft in _routes.Where(route => !route.IsRobot && route.Count > 0))
+        foreach (RouteDraft draft in _routes.Where(route => !route.IsRobot && CarriesAgents(route)))
         {
             HumanScenarioConfig config = draft.Source ?? new HumanScenarioConfig();
             config.Id = string.IsNullOrWhiteSpace(config.Id) ? $"human_route_{humanIndex}" : config.Id;
             config.Count = draft.Count;
             config.Speed = draft.Speed;
+            config.CountRange = draft.CountRange;
+            config.SpeedRange = draft.SpeedRange;
+            config.SpawnWindowRange = draft.SpawnWindowRange;
             config.EndBehavior = HumanEndBehaviorParser.ToYamlValue(draft.EndBehavior);
             // Grouping is carried by the route formation now, so the editor never writes a group id back.
             config.Group = null;
@@ -1362,6 +1472,7 @@ public sealed class ScenarioRouteEditor
                 draft.GroupSpacing,
                 GroupFormation.MinSpacing(config.Spawn.Formation),
                 3f);
+            config.Spawn.SpacingRange = draft.SpacingRange;
             config.Spawn.FormationParameter = Mathf.Max(0f, draft.FormationParameter);
             // A route that enters over time says so; one that starts together writes the zero the runtime reads
             // as "everybody at once", so a scenario never has to guess what an absent key meant.
@@ -1618,11 +1729,26 @@ public sealed class ScenarioRouteEditor
             _robotTypeDropdown.SetValueWithoutNotify(DisplayNameOf(active.RobotType));
             _robotSpeedField.SetValueWithoutNotify(active.Speed);
             _startYawField.SetValueWithoutNotify(active.StartYaw);
+            _robotSpeedRange.SetFrom(
+                active.SpeedRange,
+                Mathf.Max(0.01f, active.Speed * 0.8f),
+                Mathf.Max(0.02f, active.Speed * 1.2f));
+            _startYawRange.SetFrom(active.StartYawRange, active.StartYaw - 20f, active.StartYaw + 20f);
         }
         else
         {
             _humanCountField.SetValueWithoutNotify(active.Count);
             _humanSpeedField.SetValueWithoutNotify(active.Speed);
+            _humanCountRange.SetFrom(active.CountRange, Mathf.Max(0, active.Count), Mathf.Max(1, active.Count) + 2);
+            _humanSpeedRange.SetFrom(
+                active.SpeedRange,
+                Mathf.Max(0.01f, active.Speed * 0.8f),
+                Mathf.Max(0.02f, active.Speed * 1.2f));
+            _groupSpacingRange.SetFrom(
+                active.SpacingRange,
+                Mathf.Max(0.4f, active.GroupSpacing * 0.8f),
+                Mathf.Max(0.45f, active.GroupSpacing * 1.2f));
+            _spawnWindowRange.SetFrom(active.SpawnWindowRange, 0f, Mathf.Max(1f, active.SpawnWindow * 2f));
             SetEndBehaviorChoices();
             _endBehaviorDropdown.SetValueWithoutNotify(HumanEndBehaviorParser.ToDisplayName(active.EndBehavior));
             _movementControllerDropdown.SetValueWithoutNotify(MovementControllerToDisplay(active.MovementController));
@@ -1968,8 +2094,11 @@ public sealed class ScenarioRouteEditor
 
     private static string DescribeRoute(RouteDraft route)
     {
+        string drawn = RandomizationLabel(route);
         if (route.IsRobot)
-            return $"{route.Id} · {RobotProfiles.Find(route.RobotType).DisplayName}";
+            return drawn.Length == 0
+                ? $"{route.Id} · {RobotProfiles.Find(route.RobotType).DisplayName}"
+                : $"{route.Id} · {RobotProfiles.Find(route.RobotType).DisplayName} · {drawn}";
         int agents = Mathf.Max(0, route.Count);
         int objectives = Mathf.Max(0, route.Points.Count - 1);
         int areas = 0;
@@ -1980,7 +2109,11 @@ public sealed class ScenarioRouteEditor
         var parts = new List<string>(4)
         {
             route.Id,
-            $"{agents} agent{(agents == 1 ? string.Empty : "s")}",
+            // A route whose count is drawn does not carry one number of agents, so the list shows the span
+            // rather than the nominal fixed value the run may never use.
+            route.CountRange != null
+                ? $"{Mathf.RoundToInt(route.CountRange.Min)}-{Mathf.RoundToInt(route.CountRange.Max)} agents"
+                : $"{agents} agent{(agents == 1 ? string.Empty : "s")}",
             $"{objectives} objective{(objectives == 1 ? string.Empty : "s")}"
         };
         if (areas > 0)
@@ -1989,8 +2122,23 @@ public sealed class ScenarioRouteEditor
         // list is where an author sees at a glance which of their scenarios are spread out.
         if (route.SpawnWindow > 0f)
             parts.Add($"enters over {route.SpawnWindow:0.#} s");
+        // A route whose values are drawn does not play the same twice, which the list says at a glance.
+        if (drawn.Length > 0)
+            parts.Add(drawn);
 
         return string.Join(" · ", parts);
+    }
+
+    /// <summary>The values this route lets the run draw, named for the route list, or an empty string.</summary>
+    private static string RandomizationLabel(RouteDraft route)
+    {
+        var names = new List<string>();
+        if (route.CountRange != null) names.Add("count");
+        if (route.SpeedRange != null) names.Add("speed");
+        if (route.StartYawRange != null) names.Add("heading");
+        if (route.SpacingRange != null) names.Add("spacing");
+        if (route.SpawnWindowRange != null) names.Add("window");
+        return names.Count == 0 ? string.Empty : $"random {string.Join("/", names)}";
     }
 
     private void RebuildPointRows()
@@ -3185,6 +3333,11 @@ public sealed class ScenarioRouteEditor
             GroupSpacing = route.GroupSpacing,
             FormationParameter = route.FormationParameter,
             SpawnWindow = route.SpawnWindow,
+            CountRange = route.CountRange?.Clone(),
+            SpeedRange = route.SpeedRange?.Clone(),
+            StartYawRange = route.StartYawRange?.Clone(),
+            SpacingRange = route.SpacingRange?.Clone(),
+            SpawnWindowRange = route.SpawnWindowRange?.Clone(),
             Points = new List<Vector2>(route.Points),
             SpawnRandom = route.SpawnRandom,
             SpawnZone = route.SpawnZone,
@@ -3213,6 +3366,11 @@ public sealed class ScenarioRouteEditor
             GroupSpacing = route.GroupSpacing,
             FormationParameter = route.FormationParameter,
             SpawnWindow = route.SpawnWindow,
+            CountRange = route.CountRange?.Clone(),
+            SpeedRange = route.SpeedRange?.Clone(),
+            StartYawRange = route.StartYawRange?.Clone(),
+            SpacingRange = route.SpacingRange?.Clone(),
+            SpawnWindowRange = route.SpawnWindowRange?.Clone(),
             SpawnRandom = route.SpawnRandom,
             SpawnZone = route.SpawnZone,
             Source = route.Source,
@@ -3281,6 +3439,10 @@ public sealed class ScenarioRouteEditor
             Id = string.IsNullOrWhiteSpace(human.Id) ? $"Human route {index}" : human.Id,
             Count = Mathf.Max(0, human.Count),
             Speed = Mathf.Max(0.01f, human.Speed),
+            CountRange = human.CountRange?.Clone(),
+            SpeedRange = human.SpeedRange?.Clone(),
+            SpawnWindowRange = human.SpawnWindowRange?.Clone(),
+            SpacingRange = human.Spawn?.SpacingRange?.Clone(),
             EndBehavior = HumanEndBehaviorParser.Parse(human.EndBehavior),
             // A group id inherited from an older YAML has no representation in the editor any more,
             // so it is dropped here instead of being carried over and silently re-emitted.
@@ -3289,7 +3451,9 @@ public sealed class ScenarioRouteEditor
             Formation = string.IsNullOrWhiteSpace(human.Spawn?.Formation) ? "pair" : human.Spawn.Formation.Trim().ToLowerInvariant(),
             GroupSpacing = human.Spawn != null ? Mathf.Max(0.4f, human.Spawn.Spacing) : 1.5f,
             FormationParameter = human.Spawn != null ? Mathf.Max(0f, human.Spawn.FormationParameter) : 0f,
-            SpawnWindow = Mathf.Max(0f, human.SpawnWindow),
+            // A draft always carries a number, so a document that never wrote a window is read as the zero the
+            // field shows. Saving the scenario then writes that zero, which is a decision the author can see.
+            SpawnWindow = human.SpawnWindowSeconds,
             SpawnRandom = IsRandomSpawn(human.Spawn),
             SpawnZone = ReadZone(human.Spawn?.Zone) ?? default,
             Source = human,

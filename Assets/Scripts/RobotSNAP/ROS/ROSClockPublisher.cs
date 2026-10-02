@@ -39,14 +39,11 @@ namespace RobotSNAP.ROS
         
         private void Awake()
         {
-            // Ensure Clock exists
-            if (Clock.Instance == null)
-            {
-                var clockGO = new GameObject("Clock");
-                clockGO.AddComponent<Clock>();
-            }
-            
-            _clock = Clock.Instance;
+            // The clock the whole session stamps its streams with, created only if the loaded scenes carry
+            // none. Building one here whenever Clock.Instance is still null - the state it is in before the
+            // scene's own clock has had its Awake - is what put a second clock sixteen seconds behind the
+            // first in the scene.
+            _clock = Clock.EnsureExists();
         }
         
         private void Start()
@@ -87,6 +84,10 @@ namespace RobotSNAP.ROS
         public void Initialize()
         {
             if (_registered) return;
+
+            // Between this component's Awake and the scenario's, another clock may have become the one that
+            // holds the time: follow whichever the session stamps from.
+            _clock = Clock.Instance != null ? Clock.Instance : (_clock != null ? _clock : Clock.EnsureExists());
 
             // Find EnvROS. A destroyed one compares equal to null, so this picks up the environment a scenario
             // load has just rebuilt.

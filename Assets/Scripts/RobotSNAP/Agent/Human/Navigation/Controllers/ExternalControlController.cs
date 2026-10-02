@@ -15,10 +15,14 @@ namespace RobotSNAP.Agents.Movement.Controllers
     /// A command stays active for <see cref="CommandTimeout"/> seconds and is expected to be refreshed at the
     /// rate of the external driver. A bridge that stops sending — a crashed script, a paused loop — lets the
     /// humans stop instead of walking on forever. A timeout of zero latches the command until it changes.
+    ///
+    /// That timeout is read on the wall clock, because what it measures is the driver's own liveness and the
+    /// driver knows nothing of the simulation's scale: held at five times speed, a client refreshing at its
+    /// usual rate would otherwise look silent for five times longer than it is and the humans would stutter.
     /// </summary>
     public sealed class ExternalControlController : IMovementController
     {
-        /// <summary>How long a command stays active without being refreshed, in seconds.</summary>
+        /// <summary>How long a command stays active without being refreshed, in seconds of wall time.</summary>
         public const float DefaultCommandTimeout = 1f;
 
         private HumanConfig _config;
@@ -32,11 +36,11 @@ namespace RobotSNAP.Agents.Movement.Controllers
             CommandTimeout = Mathf.Max(0f, commandTimeout);
         }
 
-        /// <summary>Seconds a command stays active without being refreshed. Zero latches it indefinitely.</summary>
+        /// <summary>Seconds of wall time a command stays active without being refreshed. Zero latches it indefinitely.</summary>
         public float CommandTimeout { get; set; }
 
         /// <summary>True when a command was given and is still fresh.</summary>
-        public bool HasCommand => _hasCommand && IsCommandFresh(_commandTime, Time.time, CommandTimeout);
+        public bool HasCommand => _hasCommand && IsCommandFresh(_commandTime, Time.unscaledTime, CommandTimeout);
 
         /// <summary>The last velocity asked for, whether or not it is still fresh.</summary>
         public Vector2 Command => _command;
@@ -48,7 +52,7 @@ namespace RobotSNAP.Agents.Movement.Controllers
         public void SetCommand(Vector2 velocity)
         {
             _command = velocity;
-            _commandTime = Time.time;
+            _commandTime = Time.unscaledTime;
             _hasCommand = true;
         }
 

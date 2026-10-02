@@ -131,15 +131,11 @@ namespace RobotSNAP
         {
             if (_clock == null)
             {
-                _clock = FindAnyObjectByType<Clock>();
-                if (_clock == null)
-                {
-                    var clockGO = new GameObject("Clock");
-                    _clock = clockGO.AddComponent<Clock>();
-                    if (Application.isPlaying)
-                        DontDestroyOnLoad(clockGO);
-                    Debug.Log("[Supervisor] Created Clock");
-                }
+                // The lookup and the creation are one decision, taken by the clock itself: asking
+                // "is there one, and if not make one" here would race with every other component that
+                // asks the same question in the same frame, and two clocks is a session whose time is
+                // kept twice. See Clock.EnsureExists.
+                _clock = Clock.EnsureExists();
             }
         }
 

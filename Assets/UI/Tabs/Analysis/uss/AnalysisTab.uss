@@ -1,0 +1,843 @@
+/* ================================================================
+   ANALYSIS PAGE
+   The session dashboard: the episode list, the trajectory map of the
+   selected episode, and the metrics of the session and of that episode.
+
+   The page is a fixed-height layout - the window it was opened in is
+   the whole of it. Nothing here scrolls vertically: the list scrolls
+   its own rows, the map takes whatever height the row has left, and the
+   right column shows either the episode detail or the session overview.
+   ================================================================ */
+
+.analysis-page {
+    flex-grow: 1;
+    flex-direction: column;
+    min-height: 0;
+    background-color: var(--bg-primary);
+    padding: 20px 24px 18px 24px;
+}
+
+/* ---- header -------------------------------------------------- */
+
+.analysis-header {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-shrink: 0;
+    margin-bottom: 14px;
+}
+
+.analysis-header-text {
+    flex-direction: column;
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.analysis-page-title {
+    font-size: 24px;
+    -unity-font-style: bold;
+    color: var(--text-primary);
+    margin-bottom: 3px;
+}
+
+.analysis-page-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.analysis-header-actions {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: 16px;
+}
+
+.analysis-export-status {
+    max-width: 380px;
+    margin-right: 12px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: normal;
+}
+
+.analysis-export-button {
+    height: 28px;
+    padding-left: 14px;
+    padding-right: 14px;
+    background-color: var(--accent);
+    color: rgb(255, 255, 255);
+    border-width: 0;
+    border-radius: 4px;
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
+.analysis-export-button:hover {
+    background-color: var(--accent-soft);
+}
+
+/* Clearing is irreversible, so it never wears the accent an ordinary action wears. */
+.analysis-clear-button {
+    height: 28px;
+    margin-left: 8px;
+    padding-left: 14px;
+    padding-right: 14px;
+    background-color: transparent;
+    color: rgb(200, 60, 70);
+    border-width: 1px;
+    border-color: rgb(200, 60, 70);
+    border-radius: 4px;
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
+.analysis-clear-button:hover {
+    background-color: rgba(200, 60, 70, 0.12);
+}
+
+/* ---- body ---------------------------------------------------- */
+
+/* One row that fills the window: the list, the map, and the panel that describes what is
+   selected. The row is the whole height of the tab, which is what lets the map reach the
+   height of the metrics beside it. */
+.analysis-content {
+    flex-direction: row;
+    align-items: stretch;
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.analysis-list-host {
+    width: 306px;
+    flex-shrink: 0;
+    margin-right: 16px;
+    min-height: 0;
+}
+
+/* The map panel and the detail column are the two halves of one band. The divider between them
+   is the map's right edge, so the band reads as one surface rather than two cards. */
+.analysis-map-section {
+    flex-direction: column;
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    min-height: 0;
+    padding: 14px 16px 12px 16px;
+    background-color: var(--bg-secondary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-right-width: 0;
+}
+
+.analysis-map-body {
+    flex-direction: column;
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.analysis-detail-column {
+    flex-direction: column;
+    width: 420px;
+    min-width: 340px;
+    flex-shrink: 0;
+    margin-left: 16px;
+    min-height: 0;
+    background-color: var(--bg-secondary);
+    border-width: 1px;
+    border-color: var(--border-color);
+}
+
+/* With no trajectory map beside it the column is all that is left of the band, so it takes the whole of it:
+   the session overview of a multi-episode selection reads as wide as the map and the detail together were. */
+.analysis-detail-column-wide {
+    width: auto;
+    min-width: 0;
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-left: 0;
+}
+
+/* Only one of the two is shown at a time; whichever it is takes the whole column. */
+.analysis-episode-detail-host {
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.analysis-session-summary-host {
+    flex-grow: 1;
+    min-height: 0;
+}
+
+/* The whole band belongs to the overview when several episodes are checked, so its two halves read across
+   rather than down: seven tiles and an outcome mix stacked in a very wide column would each take a whole
+   line for one number. The summary and its host are the same element, which is why both classes sit on the
+   same selector here. */
+.analysis-session-summary.analysis-summary-wide {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.analysis-session-summary.analysis-summary-wide > .analysis-section {
+    flex-grow: 1;
+    flex-basis: 0;
+    border-bottom-width: 0;
+}
+
+.analysis-session-summary.analysis-summary-wide > .analysis-summary-outcomes {
+    border-left-width: 1px;
+    border-left-color: var(--border-color);
+}
+
+/* ================================================================
+   EPISODE LIST
+   ================================================================ */
+
+.analysis-list {
+    flex-grow: 1;
+    flex-direction: column;
+    min-height: 0;
+    background-color: var(--bg-secondary);
+    border-width: 1px;
+    border-color: var(--border-color);
+}
+
+.analysis-list-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    padding: 10px 12px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--border-color);
+}
+
+.analysis-list-title {
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: var(--text-primary);
+}
+
+.analysis-list-count {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* ---- list toolbar and filters -------------------------------- */
+
+.analysis-list-toolbar {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 8px 10px 0 10px;
+}
+
+.analysis-list-tool {
+    height: 22px;
+    margin-right: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+    background-color: transparent;
+    color: var(--text-secondary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 3px;
+    font-size: 10px;
+}
+
+.analysis-list-tool:hover {
+    background-color: var(--button-hover);
+    color: var(--text-primary);
+}
+
+.analysis-list-filters {
+    flex-direction: column;
+    flex-shrink: 0;
+    padding: 8px 10px 10px 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--border-color);
+}
+
+.analysis-filter-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.analysis-filter-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-bottom: 6px;
+    font-size: 11px;
+}
+
+/* A filter says what it filters by through its choices, not through a caption above it. */
+.analysis-filter-field > .unity-base-field__label {
+    display: none;
+}
+
+.analysis-filter-field > .unity-base-field__input {
+    font-size: 11px;
+    min-height: 20px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.analysis-filter-search {
+    margin-bottom: 6px;
+}
+
+.analysis-filter-search > .unity-text-input {
+    font-size: 11px;
+    min-height: 20px;
+    padding-left: 6px;
+    padding-right: 6px;
+    background-color: var(--bg-secondary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 3px;
+}
+
+.analysis-filter-intrusions {
+    flex-shrink: 0;
+    font-size: 11px;
+}
+
+.analysis-filter-intrusions > .unity-toggle__label {
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding-left: 6px;
+}
+
+.analysis-list-scroll {
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.analysis-list-rows {
+    flex-direction: column;
+    padding: 6px;
+}
+
+.analysis-episode-row {
+    flex-direction: column;
+    padding: 7px 9px;
+    margin-bottom: 4px;
+    background-color: var(--card-bg);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 4px;
+}
+
+.analysis-episode-row:hover {
+    border-color: var(--accent-soft);
+}
+
+.analysis-episode-row.selected {
+    border-color: var(--accent);
+    background-color: var(--accent-glow);
+}
+
+.analysis-episode-row.checked {
+    border-color: var(--accent-soft);
+}
+
+.analysis-row-top {
+    flex-direction: row;
+    align-items: center;
+}
+
+.analysis-row-check {
+    flex-shrink: 0;
+    margin-right: 6px;
+}
+
+.analysis-row-check > .unity-toggle__label {
+    display: none;
+}
+
+.analysis-row-label {
+    flex-grow: 1;
+    min-width: 0;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--text-primary);
+    overflow: hidden;
+    white-space: nowrap;
+    -unity-text-overflow-position: end;
+}
+
+.analysis-row-actions {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+
+/* The two things a reader does to one run, where the run is named: a glyph each, the same size,
+   so the row's width does not shift between them. */
+.analysis-row-icon {
+    width: 18px;
+    height: 18px;
+    margin-left: 4px;
+    padding: 0;
+    background-color: transparent;
+    border-width: 0;
+    border-radius: 3px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.analysis-row-icon:hover {
+    background-color: var(--button-hover);
+}
+
+.analysis-row-icon-export {
+    background-image: resource("Icons/export");
+    -unity-background-image-tint-color: var(--text-secondary);
+}
+
+.analysis-row-icon-export:hover {
+    -unity-background-image-tint-color: var(--text-primary);
+}
+
+.analysis-row-icon-delete {
+    background-image: resource("Icons/delete");
+    -unity-background-image-tint-color: rgb(200, 60, 70);
+}
+
+.analysis-row-icon-delete:hover {
+    background-color: rgba(200, 60, 70, 0.12);
+}
+
+.analysis-row-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 3px;
+}
+
+.analysis-row-meta-item {
+    margin-right: 10px;
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.analysis-empty-message {
+    padding: 14px 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: normal;
+}
+
+/* ================================================================
+   SECTIONS (map and dashboard panels)
+   ================================================================ */
+
+.analysis-section {
+    flex-direction: column;
+    padding: 14px 16px 16px 16px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--border-color);
+}
+
+.analysis-section-heading {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-shrink: 0;
+    margin-bottom: 10px;
+}
+
+.analysis-section-text {
+    flex-direction: column;
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.analysis-section-title {
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: var(--text-primary);
+}
+
+.analysis-section-subtitle {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: normal;
+}
+
+.analysis-section-body {
+    flex-direction: column;
+}
+
+/* Which episode the detail panel is about, on its own line so it keeps the width to itself. */
+.analysis-detail-subject {
+    flex-shrink: 0;
+    margin-bottom: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* ================================================================
+   OUTCOME CHIPS
+   ================================================================ */
+
+.analysis-outcome {
+    flex-shrink: 0;
+    margin-left: 12px;
+    padding: 2px 8px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    border-width: 1px;
+    border-radius: 3px;
+}
+
+.analysis-outcome-goal {
+    color: rgb(40, 160, 90);
+    border-color: rgb(40, 160, 90);
+}
+
+.analysis-outcome-collision {
+    color: rgb(200, 60, 70);
+    border-color: rgb(200, 60, 70);
+}
+
+.analysis-outcome-out-of-bounds {
+    color: rgb(200, 130, 40);
+    border-color: rgb(200, 130, 40);
+}
+
+.analysis-outcome-timeout {
+    color: rgb(150, 120, 40);
+    border-color: rgb(150, 120, 40);
+}
+
+.analysis-outcome-stopped,
+.analysis-outcome-unknown {
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+}
+
+/* The row chip carries the colour cue only; the list row is dense. */
+.analysis-row-outcome {
+    flex-shrink: 0;
+    font-size: 10px;
+    -unity-font-style: bold;
+    border-width: 0;
+    padding: 0;
+    margin-left: 6px;
+}
+
+/* ================================================================
+   TRAJECTORY MAP
+   ================================================================ */
+
+/* The canvas takes every pixel the map panel has left after its heading and its key. The image
+   inside is scale-to-fit and the overlay projects into the same fitted rect, so growing the
+   canvas grows the picture without stretching it or dropping a trajectory off the edge. */
+.analysis-map-canvas {
+    position: relative;
+    flex-grow: 1;
+    min-height: 140px;
+    overflow: hidden;
+    background-color: rgb(16, 24, 32);
+}
+
+.analysis-map-image {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.analysis-map-overlay-host {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.analysis-map-placeholder {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    -unity-text-align: middle-center;
+    font-size: 12px;
+    color: rgb(150, 165, 180);
+}
+
+.analysis-map-placeholder-hidden {
+    display: none;
+}
+
+.analysis-legend {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    flex-shrink: 0;
+    min-height: 26px;
+    padding: 6px 8px 0 8px;
+}
+
+.analysis-legend-entry {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 12px;
+    margin-top: 3px;
+}
+
+.analysis-legend-swatch {
+    width: 9px;
+    height: 9px;
+    margin-right: 6px;
+    border-radius: 5px;
+    flex-shrink: 0;
+}
+
+.analysis-legend-name {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* ---- the replay transport ------------------------------------ */
+
+/* The strip is the time axis of the lines above it, so it sits under them and shares their frame rather than
+   floating between the panels. */
+.analysis-timeline-host {
+    flex-shrink: 0;
+}
+
+.analysis-timeline {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 8px;
+    padding: 4px 8px;
+    background-color: var(--bg-primary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 4px;
+}
+
+.analysis-timeline-button {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    margin-right: 6px;
+    padding: 0;
+    border-width: 0;
+    border-radius: 3px;
+    background-color: transparent;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.analysis-timeline-button:hover {
+    background-color: var(--button-hover);
+}
+
+.analysis-timeline-rewind {
+    background-image: resource("UI/icons/arrow-rotate-left-solid");
+    -unity-background-image-tint-color: var(--text-secondary);
+}
+
+/* One button carries both halves of the transport; the glyph says which half it is right now. */
+.analysis-timeline-play {
+    background-image: resource("Icons/play");
+    -unity-background-image-tint-color: var(--text-primary);
+}
+
+.analysis-timeline-play.is-replaying {
+    background-image: resource("Icons/pause");
+}
+
+/* The two controls with no glyph of their own: a step is a length of time, so each says how long and which
+   way it goes. They share a frame so the pair reads as one stepper around the frise. */
+.analysis-timeline-step,
+.analysis-timeline-step-back {
+    width: 36px;
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--text-secondary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 3px;
+}
+
+.analysis-timeline-slider {
+    height: 18px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 80px;
+}
+
+.analysis-timeline-clock {
+    flex-shrink: 0;
+    margin-left: 10px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* ================================================================
+   METRICS DASHBOARD
+   ================================================================ */
+
+.analysis-dashboard {
+    flex-direction: column;
+}
+
+/* Session overview: the headline numbers, one tile each. */
+.analysis-tiles {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.analysis-tile {
+    flex-direction: column;
+    min-width: 132px;
+    flex-grow: 1;
+    margin: 0 8px 8px 0;
+    padding: 8px 10px;
+    background-color: var(--bg-primary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 4px;
+}
+
+.analysis-tile-value {
+    font-size: 18px;
+    -unity-font-style: bold;
+    color: var(--text-primary);
+}
+
+.analysis-tile-caption {
+    margin-top: 3px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* Outcome mix: a count and a proportional bar per outcome. */
+.analysis-distribution {
+    flex-direction: column;
+}
+
+.analysis-distribution-row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.analysis-distribution-name {
+    width: 122px;
+    flex-shrink: 0;
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
+.analysis-distribution-count {
+    width: 42px;
+    flex-shrink: 0;
+    margin-right: 10px;
+    font-size: 12px;
+    color: var(--text-primary);
+    -unity-text-align: middle-right;
+}
+
+.analysis-bar-track {
+    flex-grow: 1;
+    height: 8px;
+    background-color: var(--button-bg);
+}
+
+.analysis-bar-fill {
+    height: 8px;
+    background-color: var(--accent);
+}
+
+.analysis-bar-fill.analysis-outcome-goal {
+    background-color: rgb(40, 160, 90);
+}
+
+.analysis-bar-fill.analysis-outcome-collision {
+    background-color: rgb(200, 60, 70);
+}
+
+.analysis-bar-fill.analysis-outcome-out-of-bounds {
+    background-color: rgb(200, 130, 40);
+}
+
+.analysis-bar-fill.analysis-outcome-timeout {
+    background-color: rgb(150, 120, 40);
+}
+
+.analysis-bar-fill.analysis-outcome-stopped,
+.analysis-bar-fill.analysis-outcome-unknown {
+    background-color: var(--text-secondary-muted);
+}
+
+/* The selected episode, metric by metric. */
+.analysis-detail {
+    flex-direction: column;
+}
+
+.analysis-detail-panels {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.analysis-metric-panel {
+    flex-direction: column;
+    flex-grow: 1;
+    flex-basis: 240px;
+    min-width: 220px;
+    margin: 0 10px 10px 0;
+    padding: 10px 12px;
+    background-color: var(--bg-primary);
+    border-width: 1px;
+    border-color: var(--border-color);
+    border-radius: 4px;
+}
+
+.analysis-metric-panel-title {
+    margin-bottom: 6px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--text-primary);
+}
+
+.analysis-metric-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--border-color);
+}
+
+.analysis-metric-label {
+    flex-grow: 1;
+    min-width: 0;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.analysis-metric-value {
+    flex-shrink: 0;
+    margin-left: 10px;
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+/* The value the run ended on, kept beside the one it stands at now: a prefix of a path is only readable
+   next to the whole of it. */
+.analysis-metric-final {
+    flex-shrink: 0;
+    margin-left: 8px;
+    font-size: 10px;
+    color: var(--text-secondary);
+}

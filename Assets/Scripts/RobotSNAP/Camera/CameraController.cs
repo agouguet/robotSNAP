@@ -746,6 +746,32 @@ namespace RobotSNAP.CameraControl
         }
 
         /// <summary>
+        /// Drops every agent the view could be handed to, and releases the one it was on: what a
+        /// session leaves behind when it stops. The robots are destroyed and the pedestrians go back
+        /// to the pool, so the list is emptied rather than looked up again - a lookup at that moment
+        /// has nothing left to find, and saying so costs no scene search.
+        ///
+        /// The pivot is left where it is on purpose. The orbit has kept it on the agent for as long
+        /// as the view followed one, and a pedestrian waiting in the pool has had its position reset
+        /// to the origin of the pool: reading one last position would drag the view onto it.
+        ///
+        /// The two events this raises are what empty the agent panel and the list, and what hands the
+        /// minimap back to the camera.
+        /// </summary>
+        public void ReleaseFollowableAgents()
+        {
+            // A destroyed agent compares equal to null while the field still holds it, so the plain
+            // null test would call a released view empty and leave the dead reference in place.
+            if (_followableTargets.Count == 0 && _currentFollowTarget is null) return;
+
+            _currentFollowTarget = null;
+            _followableTargets.Clear();
+
+            OnFollowTargetChanged?.Invoke(null);
+            OnTargetsUpdated?.Invoke(_followableTargets);
+        }
+
+        /// <summary>
         /// Adds a robot of the roster. It is followed through its base_link, the moving link the camera and the
         /// scene picking both work with; the root of the prefab stays where the roster put it.
         /// </summary>
@@ -813,6 +839,16 @@ namespace RobotSNAP.CameraControl
         
         public List<Transform> GetFollowableTargets()
         {
+            // An agent the session took away - a robot destroyed by a stop, a pedestrian pooled and
+            // switched off - leaves its entry behind until something rebuilds the list. Dropping the
+            // dead ones here is what keeps a list built before that change from outliving it, even
+            // when no stop came through to say so.
+            for (int index = _followableTargets.Count - 1; index >= 0; index--)
+            {
+                if (_followableTargets[index] == null)
+                    _followableTargets.RemoveAt(index);
+            }
+
             if (_followableTargets.Count == 0) RefreshFollowableTargets();
             return new List<Transform>(_followableTargets);
         }

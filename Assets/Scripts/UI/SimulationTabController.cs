@@ -418,8 +418,25 @@ public class SimulationTabController : MonoBehaviour
 
     private void OnStateChanged(SimulationStateChangedEvent evt)
     {
+        SimulationState previous = _currentState;
         _currentState = evt.NewState;
         UpdateUI();
+
+        // Leaving a live session - a stop, or the stop that follows a pause - takes its agents away
+        // with it: the robots are destroyed and the pedestrians go back to the pool. The camera owns
+        // the cast the agent panel and the minimap read, so it is told to let go of them, and the two
+        // events it raises are what empty the list and the card.
+        //
+        // A scenario loaded and left standing is not that case: it publishes Ready too - a client asks
+        // for a scenario without the clock - and its cast is on screen, so the view keeps it. The two
+        // are told apart by the roster: a stop empties it before publishing, and an applied scenario
+        // fills it before publishing.
+        bool wasLive = previous is SimulationState.Running or SimulationState.Paused;
+        bool isLive = _currentState is SimulationState.Running or SimulationState.Paused;
+        RobotSNAP.Agents.RobotRoster roster = RobotSNAP.Agents.RobotRoster.Current;
+        bool castIsGone = roster == null || roster.Count == 0;
+        if (wasLive && !isLive && castIsGone)
+            cameraController?.ReleaseFollowableAgents();
 
         // A run is about the robot: starting one hands it the view and the selection, the way every
         // simulation tool opens on its subject. Only when nothing is selected, so a user who went
